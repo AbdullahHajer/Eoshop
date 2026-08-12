@@ -47,9 +47,13 @@ Verification covers real Laravel authentication, database-backed sessions and ra
 
 The frontend build reports a `787.63 kB` main JavaScript chunk. This is existing decomposition/performance debt and remains outside the authentication boundary of WP 1.2.
 
-## Pending before merge
+## GitHub verification
 
-- GitHub required checks and their exact run identifier after the pull request is opened.
+- Pull request: [#5](https://github.com/sas-prog1/Eoshop/pull/5).
+- Verified implementation commit: `82968e86f257a8a5813edf23b687661b9775d8e9`.
+- Required-check run: [31638392243](https://github.com/sas-prog1/Eoshop/actions/runs/31638392243).
+- `Repository safety`, `Frontend quality`, `Backend quality` and `Container integration` all completed successfully.
+- The repository-owner exception is limited to the formal GitHub approval constraint: GitHub does not allow the sole account to approve its own pull request. The independent read-only review below supplies the documented engineering approval; branch protection and all automated gates remain enforced.
 
 ## Independent review
 
