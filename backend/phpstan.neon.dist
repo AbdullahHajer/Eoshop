@@ -6,6 +6,6 @@ parameters:
     paths:
         - app
         - routes
-        - database/migrations
+        - database
     level: 5
     tmpDir: storage/framework/cache/phpstan
