@@ -9,10 +9,16 @@
 ## Work packages
 
 - [WP 0.1 — Baseline and repository hygiene](work-packages/WP-0.1-baseline.md)
+- [WP 0.2 — Single application server](work-packages/WP-0.2-single-application-server.md)
+
+## Architecture decisions
+
+- [ADR 0001 — Laravel is the single application server](decisions/ADR-0001-laravel-single-application-server.md)
 
 ## Evidence
 
 - [WP 0.1 verification — 2026-08-12](evidence/WP-0.1/verification-2026-08-12.md)
+- [WP 0.2 verification — 2026-08-12](evidence/WP-0.2/verification.md)
 
 ## Documentation rules
 

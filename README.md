@@ -6,19 +6,11 @@ Eoshop is an Arabic-first platform concept that helps small merchants create a d
 
 The repository is an **advanced product prototype under stabilization**, not a production-ready commerce platform yet.
 
-The current React interface demonstrates:
-
-- merchant onboarding and store-template selection;
-- AI-assisted store identity and starter-product generation;
-- visual store customization and responsive preview;
-- product, inventory, checkout and platform-admin experiences;
-- a proposed subdomain and store-activation flow.
-
-Some of these flows are currently simulated in the browser. Authentication, administration, store persistence, domain activation, checkout and order processing must not be treated as secure or production-capable until their corresponding modernization work packages are complete.
+The current React interface demonstrates merchant onboarding, AI-assisted store identity, visual store customization, product and inventory screens, checkout and platform administration. Some flows remain browser simulations. Authentication, store persistence, tenant activation, checkout and order processing must not be treated as secure or production-capable until their modernization work packages are complete.
 
 ## Modernization approach
 
-Eoshop will be improved incrementally. The existing product experience will be preserved while simulated browser behavior is replaced with tested server-side operations.
+Eoshop is improved incrementally. The existing product experience is preserved while simulated browser behavior is replaced with tested server-side operations.
 
 ```text
 Phase
@@ -31,25 +23,26 @@ Phase
 
 T0–T5 is a quality and assurance layer inside every Work Package; it is not a separate phase.
 
-The full plan is available in:
+Key records:
 
 - [Architecture modernization plan](docs/architecture-modernization-plan.md)
 - [Rendered HTML plan](docs/architecture-modernization-plan.html)
 - [Target architecture diagram](docs/architecture-target.svg)
 - [WP 0.1 baseline record](docs/work-packages/WP-0.1-baseline.md)
+- [WP 0.2 single-server record](docs/work-packages/WP-0.2-single-application-server.md)
 
-## Current technology map
+## Technology map
 
-| Area | Current technology | Intended responsibility |
+| Area | Technology | Responsibility |
 |---|---|---|
 | Web interface | React 19, TypeScript, Vite | Merchant, customer and platform interfaces |
-| Current preview server | Express | Legacy preview/development path to be removed as an application server |
-| Target application server | Laravel | Authentication, authorization, business rules and API |
+| Frontend development | Vite | Frontend-only development server; proxies `/api` to Laravel |
+| Application server | Laravel 12 | Single owner of API behavior and future business rules |
 | Multi-tenancy | Stancl Tenancy | Tenant resolution and PostgreSQL schema isolation |
 | Database | PostgreSQL | Central platform data and tenant operational data |
-| Edge server | Nginx | Static assets and reverse proxy |
+| Edge server | Nginx | Static assets and FastCGI gateway for `/api` and `/up` |
 | AI assistance | Gemini | Store identity and content assistance behind Laravel |
-| Local orchestration | Docker Compose | Development services; reproducibility will be repaired in WP 0.2 |
+| Local orchestration | Docker Compose | Reproducible Nginx, PHP-FPM and PostgreSQL runtime |
 
 ## Repository structure
 
@@ -57,48 +50,56 @@ The full plan is available in:
 Eoshop/
 ├─ src/                 React application
 ├─ public/              Public web assets
-├─ backend/             Laravel application skeleton
+├─ backend/             Laravel application
 ├─ docker/              PHP and Nginx container definitions
 ├─ docs/                Architecture and delivery documentation
 ├─ reports/             Existing assessment reports
-├─ docker-compose.yml   Current local service topology
-├─ package.json         Frontend and legacy preview scripts
-└─ server.ts            Legacy Express preview/API path
+├─ docker-compose.yml   Local service topology
+└─ package.json         Frontend development and build scripts
 ```
 
-## Local prerequisites
+## Prerequisites
 
-The declared toolchain currently expects:
+The Docker path is the authoritative reproducible runtime. Running components directly on the host requires:
 
-- PHP 8.4 or newer;
-- Node.js and npm compatible with the locked frontend dependencies;
-- Docker Compose for the containerized path;
+- PHP 8.4.1 or newer for Laravel;
+- Node.js 22 and npm 10 or newer for Vite;
+- Docker Compose for the containerized stack;
 - a Gemini API key only when testing AI generation.
 
 Do not place real credentials in committed files. Copy environment examples locally and supply secrets through the runtime environment or an approved secret store.
 
-## Current development commands
+## Development
 
-These commands describe the current prototype and may remain incomplete until WP 0.2 finishes the reproducible toolchain.
+Frontend development:
 
 ```powershell
-npm install
+npm ci
 npm run dev
 ```
 
-Frontend type checking:
+Vite proxies `/api` to `VITE_API_BASE_URL`, which defaults to `http://localhost:8000`. Laravel remains the only application server.
+
+Frontend gates:
 
 ```powershell
 npm run lint
+npm run build
 ```
 
-Compose configuration validation:
+Containerized startup requires local, uncommitted environment files based on their examples:
 
 ```powershell
+Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+docker compose run --rm --no-deps backend php artisan key:generate --show
 docker compose config --quiet
+docker compose up --build
 ```
 
-The current Laravel dependencies require PHP 8.4.1 or newer. A host running an older PHP version cannot execute `artisan`, even if individual PHP files pass syntax checks.
+Copy the generated key into `APP_KEY` in the local `backend/.env` before starting the stack.
+
+The web entry point defaults to `http://127.0.0.1:8000`. PostgreSQL and PHP-FPM are not published to the host.
 
 ## Safety rules
 
@@ -111,9 +112,6 @@ The current Laravel dependencies require PHP 8.4.1 or newer. A host running an o
 
 ## Immediate execution order
 
-1. Complete WP 0.1: baseline, repository hygiene and evidence.
-2. WP 0.2: establish Laravel as the single application server.
-3. WP 0.3: add repeatable CI and quality gates.
-4. Build real authentication and authorization.
-5. Repair tenant provisioning and connect the existing interface to the API.
-
+1. WP 0.3: add repeatable CI and quality gates.
+2. Build real authentication and authorization.
+3. Repair tenant provisioning and connect the existing interface to the API.
