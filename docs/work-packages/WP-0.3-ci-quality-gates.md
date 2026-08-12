@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 0 — Baseline, governance and unified operation |
 | Work Package | WP 0.3 |
-| Status | Implemented; local and GitHub gates passed |
+| Status | Complete; gates passed and `main` protection active |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-0.3-ci-gates` |
 | Base dependency | WP 0.2 / `codex/wp-0.2-single-server` |
@@ -102,6 +102,7 @@ Revert the WP commit. If branch protection has already been activated after merg
 - [x] Local commands are documented and use the same scripts.
 - [x] Evidence records exact local and GitHub results.
 - [x] Required branch-protection check names and activation sequence are documented.
+- [x] `main` protection is active and independently verified after merge.
 
 ## Local execution
 
@@ -122,4 +123,5 @@ The script owns only the supplied Compose project name and removes its temporary
 ## Evidence
 
 - [Local verification — 2026-08-12](../evidence/WP-0.3/verification.md)
+- [Branch-protection activation — 2026-08-12](../evidence/WP-0.3/branch-protection.md)
 - [GitHub Actions run 31620260312](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312)

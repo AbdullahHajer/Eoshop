@@ -58,4 +58,4 @@ All four checks passed on the implementation commit:
 - [Backend quality](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193032429): passed in 2 minutes 48 seconds.
 - [Container integration](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193862251): passed in 3 minutes 11 seconds.
 
-Branch protection must not require the new checks until this workflow exists on `main`; activation is therefore a post-merge repository task and is not claimed as complete here.
+The workflow subsequently passed on `main` in [run 31622453881](https://github.com/sas-prog1/Eoshop/actions/runs/31622453881), after which branch protection was activated. See the [branch-protection evidence](branch-protection.md).

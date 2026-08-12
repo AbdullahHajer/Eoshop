@@ -22,6 +22,7 @@
 - [WP 0.1 verification — 2026-08-12](evidence/WP-0.1/verification-2026-08-12.md)
 - [WP 0.2 verification — 2026-08-12](evidence/WP-0.2/verification.md)
 - [WP 0.3 verification — 2026-08-12](evidence/WP-0.3/verification.md)
+- [WP 0.3 branch-protection activation — 2026-08-12](evidence/WP-0.3/branch-protection.md)
 
 ## Documentation rules
 
