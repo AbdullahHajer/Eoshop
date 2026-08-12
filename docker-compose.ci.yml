@@ -1,0 +1,4 @@
+services:
+  backend:
+    environment:
+      APP_KEY: ${APP_KEY:?Set APP_KEY for the integration stack}

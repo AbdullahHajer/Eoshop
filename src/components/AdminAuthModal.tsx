@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { ShieldCheck, Lock, Mail, X, ArrowLeft, AlertCircle } from "lucide-react";
+import { authApi, AuthApiError, toUserProfile } from "../services/authApi";
+import type { UserProfile } from "./AuthGateway";
 
 interface AdminAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (user: UserProfile) => void;
 }
 
 export default function AdminAuthModal({
@@ -20,7 +22,7 @@ export default function AdminAuthModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -31,18 +33,22 @@ export default function AdminAuthModal({
 
     setLoading(true);
 
-    // Simulate Admin Credential Check
-    setTimeout(() => {
-      setLoading(false);
-      if (email === "admin@platform.com" && password === "admin") {
-        onSuccess();
-        onClose();
-      } else {
-        // Accept any valid admin login for testing convenience
-        onSuccess();
-        onClose();
+    try {
+      const authenticated = await authApi.login(email, password);
+
+      if (!authenticated.platform_roles.includes("platform_super_admin")) {
+        await authApi.logout();
+        setError("هذا الحساب لا يحمل دور مدير المنصة الأعلى.");
+        return;
       }
-    }, 500);
+
+      onSuccess(toUserProfile(authenticated));
+      onClose();
+    } catch (requestError) {
+      setError(requestError instanceof AuthApiError ? requestError.message : "تعذر الاتصال بالخادم.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,7 +92,7 @@ export default function AdminAuthModal({
               <Mail className="w-4 h-4 text-slate-500 absolute right-3.5 top-3.5" />
               <input
                 type="email"
-                placeholder="admin@platform.com"
+                placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pr-10 pl-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors dir-ltr text-right"
