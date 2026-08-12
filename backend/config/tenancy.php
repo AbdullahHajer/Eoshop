@@ -2,21 +2,26 @@
 
 declare(strict_types=1);
 
-use Stancl\Tenancy\Database\Models\Domain;
-use Stancl\Tenancy\Database\Models\Tenant;
+use App\Models\Domain;
+use App\Models\Tenant;
+use Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper;
+use Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper;
+use Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper;
+use Stancl\Tenancy\Generators\UuidGenerator;
+use Stancl\Tenancy\TenantDatabaseManagers\PostgreSQLSchemaManager;
 
 return [
-    'tenant_model' => App\Models\Tenant::class,
-    'id_generator' => Stancl\Tenancy\Generators\UuidGenerator::class,
+    'tenant_model' => Tenant::class,
+    'id_generator' => UuidGenerator::class,
 
-    'domain_model' => App\Models\Domain::class,
+    'domain_model' => Domain::class,
 
     'central_domains' => explode(',', env('CENTRAL_DOMAINS', 'localhost,127.0.0.1')),
 
     'bootstrappers' => [
-        Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
-        Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
-        Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
+        DatabaseTenancyBootstrapper::class,
+        FilesystemTenancyBootstrapper::class,
+        QueueTenancyBootstrapper::class,
     ],
 
     'database' => [
@@ -28,7 +33,7 @@ return [
         'suffix' => '',
 
         'managers' => [
-            'pgsql' => Stancl\Tenancy\TenantDatabaseManagers\PostgreSQLSchemaManager::class,
+            'pgsql' => PostgreSQLSchemaManager::class,
         ],
     ],
 

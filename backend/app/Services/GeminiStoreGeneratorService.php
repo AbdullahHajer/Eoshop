@@ -2,16 +2,19 @@
 
 namespace App\Services;
 
+use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Exception;
 use JsonException;
 
 class GeminiStoreGeneratorService
 {
     protected string $apiKey;
+
     protected string $baseUrl;
+
     protected string $model;
+
     protected int $timeout;
 
     public function __construct()
@@ -24,9 +27,7 @@ class GeminiStoreGeneratorService
 
     /**
      * Generate Store branding and products using Google Gemini API
-     * 
-     * @param string $description
-     * @return array
+     *
      * @throws Exception
      */
     public function generateStoreIdeas(string $description): array
@@ -39,7 +40,7 @@ class GeminiStoreGeneratorService
             throw new Exception('اسم نموذج Gemini غير صالح');
         }
 
-        $systemInstruction = "أنت خبير في التجارة الإلكترونية وتصميم الهويات البصرية للمتاجر السعودية والخليجية. مهمتك هي مساعدة المستخدم في توليد هوية كاملة لمتجره الإلكتروني الجديد بناءً على الوصف المقدم باللغة العربية. يجب أن ترجع النتيجة ككائن JSON ملتزم تماماً بالهيكل المطلوب، باللغة العربية الفصحى الأنيقة والجذابة للمشترين.";
+        $systemInstruction = 'أنت خبير في التجارة الإلكترونية وتصميم الهويات البصرية للمتاجر السعودية والخليجية. مهمتك هي مساعدة المستخدم في توليد هوية كاملة لمتجره الإلكتروني الجديد بناءً على الوصف المقدم باللغة العربية. يجب أن ترجع النتيجة ككائن JSON ملتزم تماماً بالهيكل المطلوب، باللغة العربية الفصحى الأنيقة والجذابة للمشترين.';
 
         $prompt = "أريد فكرة متجر وتفاصيل كاملة بناءً على هذا الوصف: \"{$description}\". قم بإنشاء اسم متجر جذاب وعصري، شعار قصير ومميز (Slogan)، ألوان متناسقة، وقائمة بـ 4 منتجات متميزة وواقعية مع أسعارها بالريال السعودي (SAR).";
 
@@ -64,30 +65,30 @@ class GeminiStoreGeneratorService
                             'price' => ['type' => 'NUMBER', 'description' => 'سعر المنتج بالريال السعودي كرقم'],
                             'description' => ['type' => 'STRING', 'description' => 'وصف تسويقي مغري وقصير'],
                             'category' => ['type' => 'STRING', 'description' => 'التصنيف الفرعي للمنتج'],
-                            'imageKeyword' => ['type' => 'STRING', 'description' => 'كلمة مفتاحية بالإنجليزية مناسبة لصورة المنتج (مثال: coffee-beans, perfume, oud-wood, smartwatch)']
-                        ]
-                    ]
-                ]
-            ]
+                            'imageKeyword' => ['type' => 'STRING', 'description' => 'كلمة مفتاحية بالإنجليزية مناسبة لصورة المنتج (مثال: coffee-beans, perfume, oud-wood, smartwatch)'],
+                        ],
+                    ],
+                ],
+            ],
         ];
 
         $payload = [
             'contents' => [
                 [
                     'parts' => [
-                        ['text' => $prompt]
-                    ]
-                ]
+                        ['text' => $prompt],
+                    ],
+                ],
             ],
             'systemInstruction' => [
                 'parts' => [
-                    ['text' => $systemInstruction]
-                ]
+                    ['text' => $systemInstruction],
+                ],
             ],
             'generationConfig' => [
                 'responseMimeType' => 'application/json',
-                'responseSchema' => $responseSchema
-            ]
+                'responseSchema' => $responseSchema,
+            ],
         ];
 
         $endpoint = "{$this->baseUrl}/models/{$this->model}:generateContent";
@@ -114,7 +115,7 @@ class GeminiStoreGeneratorService
         $responseData = $response->json();
         $textResult = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
-        if (!$textResult) {
+        if (! $textResult) {
             throw new Exception('لم يتم إرجاع أي نتائج من الذكاء الاصطناعي');
         }
 
