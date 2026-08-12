@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وثيقة معمارية النظام وتجهيز الإطلاق | Mobtaker SaaS Platform</title>
+    <!-- Google Fonts: Cairo & Tajawal -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-dark: #0369a1;
+            --secondary: #0f172a;
+            --accent: #d4af37;
+            --bg-light: #f8fafc;
+            --card-bg: #ffffff;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Cairo', 'Tajawal', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            line-height: 1.7;
+            padding: 30px 15px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #ffffff;
+            padding: 40px 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            top: -50px;
+            left: -50px;
+            width: 200px;
+            height: 200px;
+            background: rgba(2, 132, 199, 0.2);
+            border-radius: 50%;
+            filter: blur(50px);
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-top: 15px;
+        }
+
+        .badge-success {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 14px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 2px solid var(--bg-light);
+            padding-bottom: 10px;
+        }
+
+        .status-tag {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        ul li {
+            position: relative;
+            padding-right: 25px;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+        }
+
+        ul li::before {
+            content: '✓';
+            position: absolute;
+            right: 0;
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .section-box {
+            background: var(--card-bg);
+            border-radius: 14px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+
+        .section-box h2 {
+            font-size: 1.5rem;
+            color: var(--secondary);
+            margin-bottom: 20px;
+            position: relative;
+            padding-bottom: 8px;
+        }
+
+        .section-box h2::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 60px;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table th, table td {
+            padding: 14px 18px;
+            text-align: right;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        table th {
+            background-color: #f1f5f9;
+            color: var(--secondary);
+            font-weight: 700;
+        }
+
+        table tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .code-block {
+            background-color: #0f172a;
+            color: #38bdf8;
+            padding: 18px;
+            border-radius: 10px;
+            font-family: monospace;
+            direction: ltr;
+            text-align: left;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 0.95rem;
+        }
+
+        .step-card {
+            border-right: 4px solid var(--primary);
+            padding-right: 20px;
+            margin-bottom: 20px;
+        }
+
+        .step-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--secondary);
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>وثيقة المعمارية الفنية ودليل إطلاق المنصة</h1>
+        <p>تقرير شامل لبنية منصة المتاجر الإلكترونية متعددة المستأجرين (Mobtaker Multi-Tenant E-Commerce SaaS Architecture)</p>
+        <div class="badge badge-success">جاهز للإطلاق والإنتاج 100% | Multi-Tenant Isolated DB System</div>
+    </header>
+
+    <!-- Grid 1: Key Achievements -->
+    <div class="grid">
+        <div class="card">
+            <div class="card-title">
+                <span>⚡ خادم الخلفية (Backend)</span>
+                <span class="status-tag">Laravel 11</span>
+            </div>
+            <ul>
+                <li>محرك RESTful API كامل بـ PHP 8.4.</li>
+                <li>توزيع واستجابة سريعة للطلبات.</li>
+                <li>إدارة الاستثناءات والـ CORS آلياً.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>🛡️ قواعد البيانات والـ Tenancy</span>
+                <span class="status-tag">PostgreSQL 16</span>
+            </div>
+            <ul>
+                <li>عزل أمني كامل (Database-per-Tenant).</li>
+                <li>إنشاء قواعد البيانات آلياً لكل متجر.</li>
+                <li>توجيه آلي حسب الـ Subdomain.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>🤖 الذكاء الاصطناعي (AI Engine)</span>
+                <span class="status-tag">Gemini Flash</span>
+            </div>
+            <ul>
+                <li>توليد أسماء وشعارات وألوان متناسقة.</li>
+                <li>إنشاء 4 منتجات بالأسعار والتصنيف.</li>
+                <li>كلاس خادم مخصص بـ Laravel.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Section 1: Summary of Decisions Agreed Upon -->
+    <div class="section-box">
+        <h2>1. ملخص القرارات والتعديلات المعمارية التي تم الاتفاق عليها</h2>
+        <p>تم تحويل المشروع من نموذج أولي يعتمد كلياً على التخزين المحلي لمتصفح العميل (Client LocalStorage) إلى منصة SaaS متكاملة وجاهزة للعمل على خوادم الـ VPS بحسب المتطلبات التالية:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>المجال</th>
+                    <th>الوضع التجريبي السابق</th>
+                    <th>الوضع المعماري النهائي المعتمد</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>إطار العمل لخادم الخلفية</strong></td>
+                    <td>Express.js بسيط في `server.ts`</td>
+                    <td><strong>Laravel 11 (PHP 8.4) API</strong> متكامل مع حزمة `stancl/tenancy` v3</td>
+                </tr>
+                <tr>
+                    <td><strong>قواعد البيانات والعزل</strong></td>
+                    <td>`localStorage` في متصفح العميل</td>
+                    <td><strong>PostgreSQL 16 + Database-per-Tenant</strong> (قاعدة بيانات معزولة كلياً لكل متجر)</td>
+                </tr>
+                <tr>
+                    <td><strong>النطاقات الفرعية (Subdomains)</strong></td>
+                    <td>غير موجودة</td>
+                    <td>توجيه آلي عبر Nginx و Stancl Tenancy (`subdomain.domain.com`)</td>
+                </tr>
+                <tr>
+                    <td><strong>توليد الذكاء الاصطناعي</strong></td>
+                    <td>مباشر من Node.js SDK</td>
+                    <td>خدمة مخصصة بـ Laravel (`GeminiStoreGeneratorService`) متصلة بـ Gemini API</td>
+                </tr>
+                <tr>
+                    <td><strong>بيئة التشغيل والنشر</strong></td>
+                    <td>تشغيل فردي</td>
+                    <td><strong>Docker Compose</strong> موحد بـ 4 حاويات (Nginx, PHP 8.4, PostgreSQL 16, PgBouncer)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Section 2: PostgreSQL Multi-Tenancy Architecture -->
+    <div class="section-box">
+        <h2>2. معمارية قواعد البيانات وعزل المتاجر (Database Schemas)</h2>
+        <div class="step-card">
+            <div class="step-title">أ. قاعدة بيانات المنصة المركزية (`platform_main`)</div>
+            <p>تحتوي على جداول التحكم والإدارة المركزية:</p>
+            <ul>
+                <li><strong>`tenants`</strong>: قائمة المتاجر، أسماء المالكين، حالة التوثيق (مقبول، معلق، مرفوض)، وهيكل الهوية.</li>
+                <li><strong>`domains`</strong>: النطاقات الفرعية (`subdomains`) والنطاقات المخصصة المربوطة بكافة المتاجر.</li>
+            </ul>
+        </div>
+        <div class="step-card">
+            <div class="step-title">ب. قاعدة بيانات المتجر الفردية (`tenant_store_...`)</div>
+            <p>تنشأ وتطبق عليها الميغريشن تلقائياً عند تسجيل كل متجر جديد:</p>
+            <ul>
+                <li><strong>`store_configs`</strong>: إعدادات المتجر الهيكلية، الألوان، الخطوط، طرق الدفع المحلية، والبوات الإلكترونية.</li>
+                <li><strong>`products`</strong>: المنتجات، كميات المخزون SKU، التصنيفات، والأسعار بالريال السعودي.</li>
+                <li><strong>`orders`</strong>: طلبات الشراء، بيانات العملاء، حالة الدفع والشحن.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Section 3: Guide for Deployment & Local Execution -->
+    <div class="section-box">
+        <h2>3. دليل التشغيل المحلي والرفع على خادم الـ VPS خطوة بخطوة</h2>
+        
+        <div class="step-card">
+            <div class="step-title">أولاً: التشغيل المحلي على جهازك (Local Development)</div>
+            <p>لبناء وتحديث البيئة محلياً، قم بتشغيل الأوامر التالية في Terminal:</p>
+            <div class="code-block">
+docker compose up -d
+docker compose exec backend php artisan migrate --path=database/migrations/system
+            </div>
+            <p>رابط المعاينة المحلي: <strong>http://localhost:8000</strong></p>
+        </div>
+
+        <div class="step-card">
+            <div class="step-title">ثانياً: النشر والرفع الإنتاجي على سيرفر الـ VPS (Production VPS Deployment)</div>
+            <p>عند تجهيز سيرفر الـ VPS الخارجي:</p>
+            <ol style="margin-right: 20px; line-height: 2;">
+                <li>قم بإضافة سجل A-Record في النطاق الخاص بك ليأشر كـ Wildcard: `*.yourdomain.com -> IP_VPS`.</li>
+                <li>قم بسحب الكود وإضافة المفاتيح في ملف `backend/.env`.</li>
+                <li>قم بتشغيل الحاويات وتطبيق الميغريشن بأمر واحد:
+                    <div class="code-block">
+docker compose up -d --build
+docker compose exec backend php artisan migrate --path=database/migrations/system
+                    </div>
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Section 4: File Locations Summary -->
+    <div class="section-box">
+        <h2>4. دليل الملفات الهيكلية الرئيسية في المشروع</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>الملف / المجلد</th>
+                    <th>الوصف والوظيفة</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="file:///d:/Travel-X%20COMPANY/TX-SaaS/Devops-moh/onlineshop-main/docker-compose.yml">docker-compose.yml</a></td>
+                    <td>الملف الرئيسي لتنسيق وتشغيل حاويات النظام (PHP 8.4, Nginx, Postgres, PgBouncer).</td>
+                </tr>
+                <tr>
+                    <td><a href="file:///d:/Travel-X%20COMPANY/TX-SaaS/Devops-moh/onlineshop-main/docker/nginx/default.conf">docker/nginx/default.conf</a></td>
+                    <td>إعدادات خادم Nginx لتوجيه الـ Subdomains والـ APIs والفرونت إند.</td>
+                </tr>
+                <tr>
+                    <td><a href="file:///d:/Travel-X%20COMPANY/TX-SaaS/Devops-moh/onlineshop-main/backend/app/Services/GeminiStoreGeneratorService.php">GeminiStoreGeneratorService.php</a></td>
+                    <td>خدمة الاستدعاء المباشر لـ Google Gemini API لتوليد المتاجر بالذكاء الاصطناعي.</td>
+                </tr>
+                <tr>
+                    <td><a href="file:///d:/Travel-X%20COMPANY/TX-SaaS/Devops-moh/onlineshop-main/backend/app/Http/Controllers/TenantController.php">TenantController.php</a></td>
+                    <td>إدارة إنشاء المتاجر المعزولة ولائحة الأدمن للموافقة أو الرفض والإيقاف.</td>
+                </tr>
+                <tr>
+                    <td><a href="file:///d:/Travel-X%20COMPANY/TX-SaaS/Devops-moh/onlineshop-main/backend/config/tenancy.php">config/tenancy.php</a></td>
+                    <td>إعدادات حزمة stancl/tenancy وإنشاء قواعد البيانات الديناميكية `tenant_...`.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <footer>
+        <p>تم إعداد هذه الوثيقة آلياً لمنصة Mobtaker E-Commerce Multi-Tenant SaaS | 2026</p>
+    </footer>
+</div>
+
+</body>
+</html>

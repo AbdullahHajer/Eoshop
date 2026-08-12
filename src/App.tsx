@@ -1,0 +1,2051 @@
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { 
+  Store, Paintbrush, Package, Sparkles, Smartphone, Monitor, 
+  ArrowRight, ArrowLeft, Plus, Trash2, Check, ShoppingBag, 
+  X, ExternalLink, Save, RefreshCw, Eye, Code, Phone, Info,
+  ShieldCheck, LogOut, FileCheck, Sliders, Users, Settings, AlertTriangle,
+  Layout, Palette, Zap, CheckCircle2, LogIn, User
+} from "lucide-react";
+
+import { Product, StoreConfig, ELEGANT_PRESET, TECH_PRESET } from "./types";
+import StorePreview from "./components/StorePreview";
+import ControlPanel from "./components/ControlPanel";
+import RegistrationGateway from "./components/RegistrationGateway";
+import AuthGateway, { UserProfile } from "./components/AuthGateway";
+import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
+import DomainSetupModal from "./components/DomainSetupModal";
+import AdminAuthModal from "./components/AdminAuthModal";
+
+const initialMockStores: PlatformStore[] = [
+  {
+    id: "store-1",
+    storeName: "نخبة العود الفاخر",
+    ownerName: "عبدالرحمن بن خالد",
+    ownerEmail: "abdulrahman@oudlux.com",
+    businessType: "عطور وبخور",
+    socialPageUrl: "https://facebook.com/oudlux.sa",
+    docType: "حساب تجاري / سوشيال ميديا",
+    docFileName: "رابط: facebook.com/oudlux.sa",
+    docFileSize: "رقمي",
+    verificationStatus: "approved",
+    themeStyle: "elegant",
+    createdAt: "2026/07/11",
+    config: ELEGANT_PRESET
+  },
+  {
+    id: "store-2",
+    storeName: "تك زون للإلكترونيات",
+    ownerName: "ماجد المطيري",
+    ownerEmail: "majed@techzone.sa",
+    businessType: "إلكترونيات وأجهزة",
+    socialPageUrl: "https://instagram.com/techzone.sa",
+    docType: "حساب تجاري / سوشيال ميديا",
+    docFileName: "رابط: instagram.com/techzone.sa",
+    docFileSize: "رقمي",
+    verificationStatus: "pending",
+    themeStyle: "tech",
+    createdAt: "2026/07/13",
+    config: TECH_PRESET
+  },
+  {
+    id: "store-3",
+    storeName: "قهوة ومحمصة أرابيكا",
+    ownerName: "سارة الشمري",
+    ownerEmail: "sara@arabica.cafe",
+    businessType: "قهوة ومأكولات",
+    socialPageUrl: "https://tiktok.com/@arabica.coffee",
+    docType: "حساب تجاري / سوشيال ميديا",
+    docFileName: "رابط: tiktok.com/@arabica.coffee",
+    docFileSize: "رقمي",
+    verificationStatus: "suspended",
+    themeStyle: "elegant",
+    createdAt: "2026/07/07",
+    config: {
+      ...ELEGANT_PRESET,
+      storeName: "محمصة أرابيكا",
+      slogan: "القهوة المختصة والبن الفاخر المحمص بعناية",
+      logoIcon: "☕",
+      primaryColor: "#7c2d12"
+    }
+  },
+  {
+    id: "store-4",
+    storeName: "هدايا لورين ومصنوعات",
+    ownerName: "نورة القحطاني",
+    ownerEmail: "noura@loren.gifts",
+    businessType: "أخرى",
+    socialPageUrl: "https://facebook.com/loren.gifts",
+    docType: "حساب تجاري / سوشيال ميديا",
+    docFileName: "رابط: facebook.com/loren.gifts",
+    docFileSize: "رقمي",
+    verificationStatus: "approved",
+    themeStyle: "elegant",
+    createdAt: "2026/07/01",
+    config: ELEGANT_PRESET
+  }
+];
+
+export default function App() {
+  // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
+  const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard">("landing");
+  
+  // Platform Administrator States
+  const [platformStores, setPlatformStores] = useState<PlatformStore[]>([]);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState(false);
+  
+  // Customization Configuration
+  const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
+  const [activeTab, setActiveTab] = useState<"branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export">("branding");
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  
+  // Landing Page Interactive Phone Teaser Sector State
+  const [teaserSector, setTeaserSector] = useState<"perfumes" | "tech" | "coffee" | "fashion">("perfumes");
+
+  const teaserSectorsData = {
+    perfumes: {
+      id: "perfumes",
+      label: "عطور وبخور",
+      icon: "🌸",
+      storeName: "لورين للعطور",
+      tagline: "جديد صيف 2026",
+      title: "تألق بعطور العود الملوكية",
+      primaryColor: "#f59e0b",
+      bgColor: "#121110",
+      cardBg: "from-amber-950/60 to-amber-900/20",
+      cardBorder: "border-amber-500/30",
+      btnBg: "bg-amber-500 text-neutral-950 hover:bg-amber-400",
+      preset: ELEGANT_PRESET
+    },
+    tech: {
+      id: "tech",
+      label: "إلكترونيات وتقنية",
+      icon: "⚡",
+      storeName: "تك زون للإلكترونيات",
+      tagline: "عروض التكنولوجيا 2026",
+      title: "أحدث الساعات والأجهزة الذكية",
+      primaryColor: "#38bdf8",
+      bgColor: "#090d18",
+      cardBg: "from-sky-950/60 to-blue-900/20",
+      cardBorder: "border-sky-500/30",
+      btnBg: "bg-sky-500 text-slate-950 hover:bg-sky-400",
+      preset: TECH_PRESET
+    },
+    coffee: {
+      id: "coffee",
+      label: "قهوة ومحامص",
+      icon: "☕",
+      storeName: "محمصة أرابيكا",
+      tagline: "بن طازج محمص",
+      title: "مذاق القهوة المختصة الفاخرة",
+      primaryColor: "#f59e0b",
+      bgColor: "#160e0a",
+      cardBg: "from-orange-950/60 to-amber-900/20",
+      cardBorder: "border-orange-500/30",
+      btnBg: "bg-amber-600 text-white hover:bg-amber-500",
+      preset: {
+        ...ELEGANT_PRESET,
+        storeName: "محمصة أرابيكا",
+        slogan: "القهوة المختصة والبن الفاخر المحمص بعناية",
+        logoIcon: "☕",
+        primaryColor: "#7c2d12"
+      }
+    },
+    fashion: {
+      id: "fashion",
+      label: "أزياء وبوتيك",
+      icon: "👗",
+      storeName: "بوتيك لوميير",
+      tagline: "تشكيلة الموسم الجديد",
+      title: "تصميمات وعبايات حصرية راقية",
+      primaryColor: "#fb7185",
+      bgColor: "#170a12",
+      cardBg: "from-rose-950/60 to-pink-900/20",
+      cardBorder: "border-rose-500/30",
+      btnBg: "bg-rose-600 text-white hover:bg-rose-500",
+      preset: ELEGANT_PRESET
+    }
+  };
+  
+  // App-level alerts / messages
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  
+  // AI Generation States
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  
+  // Registered Merchant User Profile State
+  const [authUser, setAuthUser] = useState<UserProfile | null>(null);
+  const [isAuthGatewayOpen, setIsAuthGatewayOpen] = useState(false);
+  const [authGatewayMode, setAuthGatewayMode] = useState<"login" | "signup">("signup");
+  
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: "templates" | "ai" | "builder";
+    data?: any;
+  } | null>(null);
+
+  // Store Interactive States inside Preview (Simulating Client Store)
+  const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("الكل");
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [hasOrdered, setHasOrdered] = useState(false);
+  const [storePreviewPageOverride, setStorePreviewPageOverride] = useState<string | null>(null);
+  
+  // Template Preview before Selection State
+  const [previewingTemplate, setPreviewingTemplate] = useState<"elegant" | "tech" | null>(null);
+  const [previewingDevice, setPreviewingDevice] = useState<"desktop" | "mobile">("desktop");
+  
+  // Full screen preview modal & domain setup modal
+  const [showFullScreenPreview, setShowFullScreenPreview] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
+
+  // Local Storage persistence - load saved store & user registration if any
+  useEffect(() => {
+    const saved = localStorage.getItem("mobtaker_custom_store");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const basePreset = parsed.themeStyle === "tech" ? TECH_PRESET : ELEGANT_PRESET;
+        setConfig({
+          ...basePreset,
+          ...parsed,
+          heroBannerImage: parsed.heroBannerImage || basePreset.heroBannerImage,
+          showHeroBanner: parsed.showHeroBanner !== false
+        });
+      } catch (e) {
+        console.error("Error loading saved config", e);
+      }
+    }
+
+    const savedUser = localStorage.getItem("mobtaker_user_registration");
+    if (savedUser) {
+      try {
+        setRegisteredUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error("Error loading saved user", e);
+      }
+    }
+
+    const savedPlatformStores = localStorage.getItem("mobtaker_platform_stores");
+    if (savedPlatformStores) {
+      try {
+        setPlatformStores(JSON.parse(savedPlatformStores));
+      } catch (e) {
+        setPlatformStores(initialMockStores);
+      }
+    } else {
+      setPlatformStores(initialMockStores);
+    }
+
+    // Dedicated Admin Route Check (/admin or #admin)
+    const currentPath = window.location.pathname;
+    const currentHash = window.location.hash;
+    if (currentPath === "/admin" || currentPath.startsWith("/admin") || currentHash === "#admin") {
+      setIsAdminAuthModalOpen(true);
+    }
+  }, []);
+
+  const triggerToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // Save config to local storage
+  const saveStore = (customConfig?: StoreConfig) => {
+    const configToSave = customConfig || config;
+    localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
+    triggerToast("تم حفظ متجرك وتعديلاتك بنجاح في المتصفح! 💾", "success");
+    if (registeredUser) {
+      updateMerchantStoreInPlatformList(registeredUser, configToSave);
+    }
+  };
+
+  const updateMerchantStoreInPlatformList = (currentUser: any, currentConfig: StoreConfig) => {
+    if (!currentUser) return;
+    setPlatformStores((prev) => {
+      const userStoreIndex = prev.findIndex((s) => s.ownerEmail === currentUser.email);
+      let updatedList = [...prev];
+      if (userStoreIndex >= 0) {
+        updatedList[userStoreIndex] = {
+          ...updatedList[userStoreIndex],
+          storeName: currentConfig.storeName,
+          businessType: currentUser.businessType,
+          socialPageUrl: currentUser.socialPageUrl,
+          config: currentConfig,
+          themeStyle: currentConfig.themeStyle
+        };
+      } else {
+        updatedList.push({
+          id: `merchant-${Date.now()}`,
+          storeName: currentConfig.storeName,
+          ownerName: currentUser.fullName,
+          ownerEmail: currentUser.email,
+          businessType: currentUser.businessType,
+          socialPageUrl: currentUser.socialPageUrl,
+          docType: currentUser.docType || "حساب تجاري / سوشيال ميديا",
+          docFileName: currentUser.fileName || "رابط صفحة المالك",
+          docFileSize: currentUser.fileSize || "رقمي",
+          verificationStatus: "approved",
+          themeStyle: currentConfig.themeStyle,
+          createdAt: new Date().toLocaleDateString("ar-SA"),
+          config: currentConfig
+        });
+      }
+      localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updatedList));
+      return updatedList;
+    });
+  };
+
+  const handleAdminUpdateStatus = (storeId: string, status: PlatformStore["verificationStatus"], reason?: string) => {
+    const updated = platformStores.map((s) => {
+      if (s.id === storeId) {
+        const updatedStore: PlatformStore = { 
+          ...s, 
+          verificationStatus: status,
+          rejectionReason: reason || undefined
+        };
+        if (registeredUser && s.ownerEmail === registeredUser.email) {
+          triggerToast(`تنبيه النظام: قام المشرف بتغيير حالة متجرك إلى (${
+            status === "approved" ? "مقبول وموثّق 🛡️" : 
+            status === "rejected" ? "مرفوض ❌" : 
+            status === "suspended" ? "موقوف مؤقتاً ⚠️" : "تحت المراجعة ⏳"
+          })`, "info");
+        }
+        return updatedStore;
+      }
+      return s;
+    });
+    setPlatformStores(updated);
+    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
+  };
+
+  const handleAdminUpdateConfig = (storeId: string, updatedConfig: StoreConfig) => {
+    const updated = platformStores.map((s) => {
+      if (s.id === storeId) {
+        if (registeredUser && s.ownerEmail === registeredUser.email) {
+          setConfig(updatedConfig);
+          localStorage.setItem("mobtaker_custom_store", JSON.stringify(updatedConfig));
+          triggerToast("تنبيه: قام المشرف بتحديث إعدادات متجرك مباشرة!", "info");
+        }
+        return {
+          ...s,
+          storeName: updatedConfig.storeName,
+          config: updatedConfig
+        };
+      }
+      return s;
+    });
+    setPlatformStores(updated);
+    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
+    triggerToast("تم تحديث إعدادات المتجر بنجاح", "success");
+  };
+
+  const handleAdminDeleteStore = (storeId: string) => {
+    const storeToDelete = platformStores.find(s => s.id === storeId);
+    if (storeToDelete && registeredUser && storeToDelete.ownerEmail === registeredUser.email) {
+      setRegisteredUser(null);
+      localStorage.removeItem("mobtaker_user_registration");
+      setView("landing");
+      triggerToast("تنبيه: تم حذف متجرك من قبل إدارة المنصة.", "error");
+    }
+    const updated = platformStores.filter((s) => s.id !== storeId);
+    setPlatformStores(updated);
+    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
+    triggerToast("تم حذف المتجر بنجاح من المنصة", "success");
+  };
+
+  const handleAdminPreviewStore = (storeConfig: StoreConfig) => {
+    setConfig(storeConfig);
+    setCart([]);
+    setSelectedCategory("الكل");
+    setView("builder");
+    setIsAdminOpen(false);
+  };
+
+  const handleAdminAddStore = (newStore: PlatformStore) => {
+    const updated = [...platformStores, newStore];
+    setPlatformStores(updated);
+    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
+    triggerToast(`تمت إضافة وتأسيس متجر "${newStore.storeName}" بنجاح!`, "success");
+  };
+
+  // Reset to default
+  const resetStore = () => {
+    setIsResetConfirmOpen(true);
+  };
+
+  const executeResetStore = () => {
+    const defaultValue = config.themeStyle === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
+    setConfig(defaultValue);
+    setCart([]);
+    setSelectedCategory("الكل");
+    setIsResetConfirmOpen(false);
+    triggerToast("تمت إعادة التعيين بنجاح 🔄", "info");
+  };
+
+  // Handle template selection
+  const selectTemplate = (type: "elegant" | "tech") => {
+    if (!registeredUser) {
+      setPendingAction({ type: "templates" });
+      setIsRegisterModalOpen(true);
+      triggerToast("يرجى تعبئة بيانات المالك ورابط صفحة المتجر أولاً لتفعيل وتخصيص القوالب 🚀", "info");
+      return;
+    }
+    const defaultData = type === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
+    setConfig(defaultData);
+    setCart([]);
+    setSelectedCategory("الكل");
+    setView("builder");
+    triggerToast(`تم تفعيل ${type === "elegant" ? "قالب الأناقة العصرية ✨" : "قالب التكنولوجيا والابتكار ⚡"}! جاهز للتخصيص.`, "success");
+  };
+
+  // Check registration before taking actions
+  const checkRegistrationAndExecute = (type: "templates" | "ai" | "builder", data?: any) => {
+    if (type === "templates") {
+      setView("templates");
+    } else if (type === "builder") {
+      setView("builder");
+    } else if (type === "ai") {
+      runAiGenerationDirectly(data);
+    }
+  };
+
+  // Handler for successful registration
+  const handleRegistrationSuccess = (userData: typeof registeredUser) => {
+    if (!userData) return;
+    setRegisteredUser(userData);
+    localStorage.setItem("mobtaker_user_registration", JSON.stringify(userData));
+    setIsRegisterModalOpen(false);
+
+    // Update store Name from businessName
+    const updatedConfig = {
+      ...config,
+      storeName: userData.businessName
+    };
+    setConfig(updatedConfig);
+    updateMerchantStoreInPlatformList(userData, updatedConfig);
+
+    triggerToast("تم تقديم بريف المتجر وتأكيد بيانات المالك بنجاح! 🚀🎉", "success");
+
+    // Execute blocked actions if any
+    if (pendingAction) {
+      if (pendingAction.type === "templates") {
+        setView("templates");
+      } else if (pendingAction.type === "ai") {
+        runAiGenerationDirectly(pendingAction.data);
+      } else if (pendingAction.type === "builder") {
+        setView("builder");
+      }
+      setPendingAction(null);
+    } else {
+      setView("templates");
+    }
+  };
+
+  // Unregister / Log out merchant
+  const handleLogout = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const executeLogout = () => {
+    setRegisteredUser(null);
+    localStorage.removeItem("mobtaker_user_registration");
+    setView("landing");
+    setIsLogoutConfirmOpen(false);
+    triggerToast("تم تسجيل الخروج بنجاح وإلغاء توثيق الحساب 🛡️", "info");
+  };
+
+  // Actual backend AI Generation call
+  const runAiGenerationDirectly = async (promptText: string) => {
+    setIsAiGenerating(true);
+    triggerToast("جاري صياغة الفكرة وتصميم الهوية بالذكاء الاصطناعي... 🧠⚡", "info");
+
+    try {
+      const response = await fetch("/api/generate-store-ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: promptText }),
+      });
+
+      if (!response.ok) {
+        throw new Error("فشلت عملية التوليد. يرجى المحاولة مرة أخرى.");
+      }
+
+      const generatedData = await response.json();
+      
+      const finalConfig: StoreConfig = {
+        storeName: generatedData.storeName || "متجر مبتكر",
+        slogan: generatedData.slogan || "بوابتك لكل جديد",
+        logoIcon: generatedData.logoIcon || (generatedData.themeStyle === "tech" ? "⚡" : "🌸"),
+        primaryColor: generatedData.primaryColor || "#D4AF37",
+        secondaryColor: generatedData.secondaryColor || "#1C1917",
+        themeStyle: generatedData.themeStyle === "tech" ? "tech" : "elegant",
+        bannerText: generatedData.bannerText || "أهلاً بكم في متجرنا الجديد",
+        fontFamily: generatedData.themeStyle === "tech" ? "Tajawal" : "Cairo",
+        phone: "+966 50 111 2222",
+        currency: "ر.س",
+        products: (generatedData.products || []).map((p: any, idx: number) => ({
+          id: `ai-p-${idx}`,
+          name: p.name,
+          price: Number(p.price) || 99,
+          description: p.description,
+          category: p.category || "منتجات عامة",
+          imageKeyword: p.imageKeyword || "default"
+        }))
+      };
+
+      setConfig(finalConfig);
+      saveStore(finalConfig);
+      setCart([]);
+      setSelectedCategory("الكل");
+      setView("builder");
+      triggerToast("نجاح! تم توليد المتجر والمنتجات والألوان بالكامل بالذكاء الاصطناعي 🚀🎉", "success");
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(err.message || "عذراً، حدث خطأ أثناء التوليد. يرجى المحاولة مرة أخرى.", "error");
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  // AI Generation triggers registration verification first
+  const handleAiGeneration = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
+    checkRegistrationAndExecute("ai", aiPrompt);
+  };
+
+  // Helper inside the preview store
+  const addToCart = (product: Product) => {
+    setCart((prev) => {
+      const existing = prev.find((item) => item.product.id === product.id);
+      if (existing) {
+        return prev.map((item) =>
+          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+    triggerToast(`تمت إضافة "${product.name}" إلى السلة 🛒`, "success");
+  };
+
+  const updateQuantity = (productId: string, amount: number) => {
+    setCart((prev) => {
+      return prev
+        .map((item) => {
+          if (item.product.id === productId) {
+            const newQty = item.quantity + amount;
+            return { ...item, quantity: newQty };
+          }
+          return item;
+        })
+        .filter((item) => item.quantity > 0);
+    });
+  };
+
+  // Store customization edits
+  const handleConfigChange = (key: keyof StoreConfig, value: any) => {
+    setConfig(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // Product CRUD
+  const handleProductChange = (index: number, key: keyof Product, value: any) => {
+    const updatedProducts = [...config.products];
+    updatedProducts[index] = {
+      ...updatedProducts[index],
+      [key]: value
+    };
+    setConfig(prev => {
+      const updated = { ...prev, products: updatedProducts };
+      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const addEmptyProduct = () => {
+    const newProduct: Product = {
+      id: `custom-p-${Date.now()}`,
+      name: "منتج جديد للتعديل",
+      price: 150,
+      description: "وصف جذاب يوضح تفاصيل منتجك الجديد لتشجيع العملاء على الشراء.",
+      category: "منتجات عامة",
+      imageKeyword: "default"
+    };
+    setConfig(prev => {
+      const updated = {
+        ...prev,
+        products: [newProduct, ...prev.products]
+      };
+      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
+      return updated;
+    });
+    setSelectedCategory("الكل");
+    triggerToast("تمت إضافة المنتج بنجاح في أعلى القائمة! تم فتح شاشة التعديل الخاصة به مباشرة 📦", "success");
+  };
+
+  const deleteProduct = (id: string) => {
+    setConfig(prev => {
+      const updated = {
+        ...prev,
+        products: prev.products.filter(p => p.id !== id)
+      };
+      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
+      return updated;
+    });
+    setCart(prev => prev.filter(item => item.product.id !== id));
+    triggerToast("تم حذف المنتج بنجاح من القائمة", "info");
+  };
+
+  // Simulated Checkout
+  const handleCheckout = () => {
+    setHasOrdered(true);
+    setTimeout(() => {
+      setHasOrdered(false);
+      setCart([]);
+      setIsCartDrawerOpen(false);
+    }, 4500);
+  };
+
+  const handleOpenCheckoutPreview = () => {
+    if (cart.length === 0) {
+      if (config.products && config.products.length > 0) {
+        addToCart(config.products[0]);
+      } else {
+        addToCart({
+          id: "demo-p-1",
+          name: "منتج تجريبي للاختبار",
+          price: 120,
+          description: "منتج افتراضي لاختبار نافذة الشراء والدفع",
+          category: "عام",
+          imageKeyword: "default"
+        });
+      }
+    }
+    setStorePreviewPageOverride("checkout");
+    triggerToast("تم فتح نافذة المعاينة المباشرة لصفحة الشراء والدفع! 💳", "success");
+  };
+
+  return (
+    <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
+      {/* Dynamic Toast Alerts */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-xl border text-sm md:text-base font-semibold max-w-lg text-center ${
+              toast.type === "success" 
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+                : toast.type === "error" 
+                ? "bg-rose-50 text-rose-800 border-rose-200" 
+                : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}
+          >
+            <Sparkles className="w-5 h-5 shrink-0" />
+            <span>{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ----------------- 1. LANDING PAGE VIEW ----------------- */}
+      {view === "landing" && (
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-[#fafbfe]">
+          {/* Ambient Blurred Background Accents */}
+          <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-sky-200/40 rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-10 left-1/4 w-[600px] h-[600px] bg-amber-100/40 rounded-full blur-3xl -z-10" />
+
+          {/* Header */}
+          <header className="container mx-auto px-6 py-5 flex items-center justify-between border-b border-slate-100/80">
+            <div className="flex items-center gap-3">
+              <div className="bg-slate-900 text-white p-2.5 rounded-xl shadow-md shadow-slate-900/10">
+                <Store className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="font-display font-black text-xl tracking-tight text-slate-900">مُبتكِر</span>
+                <span className="text-[10px] block text-sky-600 font-bold -mt-1">منصة المتاجر الذكية</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setView("templates")}
+                className="hidden md:flex items-center gap-2 text-slate-600 hover:text-slate-900 transition font-semibold text-sm px-3 py-2"
+              >
+                تصفح القوالب
+              </button>
+
+              {authUser ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAuthGatewayMode("login");
+                      setIsAuthGatewayOpen(true);
+                    }}
+                    className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-2.5 rounded-xl transition font-bold text-xs shadow-2xs border border-slate-200/60"
+                  >
+                    <User className="w-4 h-4 text-sky-600" />
+                    <span>مرحباً، {(authUser?.fullName || "التاجر").split(' ')[0]} 👋</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setView("templates");
+                    }}
+                    className="bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-4 py-2.5 rounded-xl shadow-md shadow-sky-500/20 transition font-bold text-xs flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>أنشئ متجرك الآن 🚀</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAuthGatewayMode("login");
+                      setIsAuthGatewayOpen(true);
+                    }}
+                    className="bg-transparent hover:bg-slate-100 text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl transition font-bold text-xs flex items-center gap-1.5"
+                  >
+                    <LogIn className="w-4 h-4 text-slate-500" />
+                    <span>تسجيل الدخول</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setAuthGatewayMode("signup");
+                      setIsAuthGatewayOpen(true);
+                    }}
+                    className="bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl shadow-md shadow-sky-500/20 transition font-bold text-xs flex items-center gap-1.5"
+                  >
+                    <User className="w-4 h-4" />
+                    <span>إنشاء حساب جديد</span>
+                  </button>
+                </div>
+              )}
+
+            </div>
+          </header>
+
+          {/* Hero Content */}
+          <main className="flex-1 container mx-auto px-6 py-12 md:py-20 flex flex-col lg:flex-row items-center gap-16">
+            <div className="flex-1 text-right space-y-8 max-w-2xl">
+              <div className="inline-flex items-center gap-2 bg-sky-50 text-sky-700 px-4 py-1.5 rounded-full text-xs font-bold border border-sky-100">
+                <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                <span>الجيل القادم من التجارة الإلكترونية بالذكاء الاصطناعي</span>
+              </div>
+              
+              <h1 className="font-display font-extrabold text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight">
+                أنشئ متجرك الإلكتروني <span className="text-sky-600">بذكاء وسرعة</span>
+              </h1>
+              
+              <p className="text-slate-600 text-base md:text-lg leading-relaxed font-normal">
+                صمم هويتك التجارية المتكاملة واختر من بين قوالبنا الاحترافية القابلة للتعديل الفوري بدون أي حاجة لخبرة برمجية. ابدأ الآن واطلق متجرك في دقائق!
+              </p>
+
+              {/* Feature Highlights Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition duration-200 flex flex-col gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/60 flex items-center justify-center font-bold">
+                    <Layout className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">قوالب احترافية</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                      تصاميم متجاوبة وعصرية تناسب مختلف الأنشطة.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition duration-200 flex flex-col gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 border border-sky-200/60 flex items-center justify-center font-bold">
+                    <Palette className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">تخصيص كامل</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                      تحكم بمرونة في الألوان، الشعار والمنتجات.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition duration-200 flex flex-col gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center font-bold">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">انطلاق سريع</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                      انشر متجرك واستقبل عملاءك بلمح البصر.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Buttons Area */}
+              <div className="flex flex-wrap items-center gap-4">
+                <button 
+                  onClick={() => checkRegistrationAndExecute("templates")}
+                  className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-xl transition font-bold text-base shadow-xl shadow-slate-950/10 flex items-center gap-3 group"
+                >
+                  <span>ابدأ باختيار القوالب</span>
+                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition" />
+                </button>
+                <button 
+                  onClick={() => {
+                    const scrollSection = document.getElementById("how-it-works");
+                    scrollSection?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="bg-transparent border border-slate-200 text-slate-700 hover:bg-slate-50 px-6 py-4 rounded-xl transition font-semibold text-base"
+                >
+                  شرح الخطوات
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Teaser Column - Fixed Smartphone Store Showcase */}
+            <div className="flex-1 relative w-full max-w-md lg:max-w-none flex flex-col items-center">
+              {/* Smartphone Frame Container */}
+              <div className="relative mx-auto w-[310px] sm:w-[325px] h-[580px] sm:h-[600px] bg-[#181d2d] rounded-[3.2rem] p-3 shadow-2xl shadow-slate-950/50 border-[10px] border-[#181d2d] ring-1 ring-slate-700/60 hidden md:flex flex-col justify-between overflow-hidden select-none group">
+                {/* Side Physical Buttons Accents */}
+                <div className="absolute -left-[13px] top-28 w-1 h-10 bg-[#283149] rounded-l-md border-r border-slate-950" />
+                <div className="absolute -left-[13px] top-42 w-1 h-10 bg-[#283149] rounded-l-md border-r border-slate-950" />
+                <div className="absolute -right-[13px] top-32 w-1 h-14 bg-[#283149] rounded-r-md border-l border-slate-950" />
+
+                {/* iPhone / Smartphone Top Camera Notch */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-5 bg-[#0d111d] rounded-b-2xl z-30 flex items-center justify-center gap-2 border-b border-slate-800">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#1e293b] border border-slate-700 shrink-0" />
+                  <div className="w-10 h-1 rounded-full bg-[#1e293b] shrink-0" />
+                </div>
+
+                {/* Top Glass Sheen Layer */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent z-20 rounded-[2.5rem]" />
+
+                {/* Smartphone Screen Content - Fixed Light Luxury Store */}
+                <div className="w-full h-full rounded-[2.4rem] overflow-hidden flex flex-col justify-between text-slate-900 p-5 pt-8 relative bg-slate-50">
+                  {/* Header & Hero Content */}
+                  <div className="space-y-4">
+                    {/* Top Bar */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+                      <span className="font-display font-black text-base text-amber-700 tracking-tight">
+                        لورين للعطور
+                      </span>
+                      <div className="bg-amber-100/80 p-2 rounded-xl border border-amber-200 text-amber-700 shadow-2xs">
+                        <ShoppingBag className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    {/* Main Banner Card */}
+                    <div className="p-4 rounded-2xl border border-amber-300/40 bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700 text-white space-y-2 shadow-md relative overflow-hidden">
+                      <span className="text-[10px] font-black text-amber-100 uppercase tracking-wide bg-amber-900/20 px-2 py-0.5 rounded-md inline-block">
+                        جديد صيف 2026
+                      </span>
+                      <h4 className="text-sm font-black leading-snug tracking-tight text-white">
+                        تألق بعطور العود الملوكية
+                      </h4>
+                      <p className="text-[11px] text-amber-100/90 leading-relaxed">
+                        عطور شرقية فاخرة مستوحاة من العود المعتق والأصالة.
+                      </p>
+                    </div>
+
+                    {/* Mini Featured Products */}
+                    <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-2.5 flex flex-col justify-between h-24 shadow-2xs">
+                        <div>
+                          <span className="text-[9px] text-amber-700 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 inline-block">الأكثر طلباً</span>
+                          <span className="text-[11px] font-bold text-slate-800 block truncate mt-1">عطر العود الملوكي</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-xs font-black text-amber-600">180 ر.س</span>
+                          <span className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-2xs">+</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-2.5 flex flex-col justify-between h-24 shadow-2xs">
+                        <div>
+                          <span className="text-[9px] text-amber-700 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 inline-block">حصري</span>
+                          <span className="text-[11px] font-bold text-slate-800 block truncate mt-1">مسك الختام الملوكي</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-xs font-black text-amber-600">220 ر.س</span>
+                          <span className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-2xs">+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Decorative Widgets */}
+              <div className="absolute top-20 -right-4 bg-white border border-slate-100 p-4 rounded-xl shadow-xl space-y-2 hidden xl:block z-20">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-slate-800">تعديل الألوان والهوية</h5>
+                    <p className="text-[10px] text-slate-400">تغيير بنقرة واحدة</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="absolute bottom-20 -left-6 bg-white border border-slate-100 p-4 rounded-xl shadow-xl space-y-2 hidden xl:block z-20">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
+                    <Check className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-slate-800">قالب متجاوب 100%</h5>
+                    <p className="text-[10px] text-slate-400">يبدو مذهلاً على الجوال والكمبيوتر</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+
+          {/* Steps Explanation Section */}
+          <section id="how-it-works" className="bg-white border-t border-slate-100 py-16 scroll-mt-6">
+            <div className="container mx-auto px-6">
+              <div className="text-center max-w-xl mx-auto space-y-4 mb-16">
+                <h2 className="font-display font-extrabold text-2xl md:text-3xl text-slate-900">كيف تعمل منصة مبتكر؟</h2>
+                <p className="text-slate-500 text-sm md:text-base">بثلاثة خطوات بسيطة، ستتحول فكرتك التجارية إلى متجر إلكتروني متكامل جاهز للمعاينة والتخصيص.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                <div className="text-center space-y-4 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                  <div className="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                    <LogIn className="w-7 h-7" />
+                  </div>
+                  <h4 className="font-bold text-lg text-slate-900">1. تسجيل الدخول</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed">قم بتسجيل الدخول أو إنشاء حسابك الجديد للوصول إلى لوحة تحكم متجرك والبدء في تصميم متجرك مباشرة.</p>
+                </div>
+
+                <div className="text-center space-y-4 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                  <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                    <Store className="w-7 h-7" />
+                  </div>
+                  <h4 className="font-bold text-lg text-slate-900">2. اختر القالب الأساسي</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed">اختر ما بين قالب الأناقة العصرية الفاخرة، أو قالب التكنولوجيا والابتكار الحركي.</p>
+                </div>
+
+                <div className="text-center space-y-4 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                    <Paintbrush className="w-7 h-7" />
+                  </div>
+                  <h4 className="font-bold text-lg text-slate-900">3. خصص الهوية والمنتجات</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed">غير الألوان والاسم والشعار، وأضف واحذف المنتجات مع رؤية النتيجة فوراً في معاينة تفاعلية حية.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Pricing & Plans Section (الأسعار والباقات) */}
+          <section id="pricing" className="bg-slate-50 border-t border-slate-200/80 py-16 md:py-24 scroll-mt-6">
+            <div className="container mx-auto px-6">
+              <div className="text-center max-w-2xl mx-auto space-y-4 mb-16">
+                <span className="bg-amber-100/80 text-amber-900 border border-amber-300 px-4 py-1.5 rounded-full text-xs font-black tracking-wide uppercase inline-flex items-center gap-1.5 shadow-2xs">
+                  <Zap className="w-3.5 h-3.5 text-amber-600" />
+                  <span>خطط باقات مرنة تناسب طموحك</span>
+                </span>
+                <h2 className="font-display font-black text-3xl md:text-4xl text-slate-900">
+                  الأسعار والباقات 💎
+                </h2>
+                <p className="text-slate-600 text-sm md:text-base leading-relaxed">
+                  اختر الباقة المناسبة لحجم تجارتك. ابدأ مجاناً بدون أي تكاليف خفية وترقّى في أي وقت.
+                </p>
+              </div>
+
+              {/* Pricing Cards Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+                {/* Plan 1: Starter / Free */}
+                <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md hover:shadow-xl transition duration-300 p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group">
+                  <div className="space-y-6">
+                    <div>
+                      <span className="bg-slate-100 text-slate-700 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-slate-200">
+                        الباقة المبتدئة
+                      </span>
+                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">مجانية للأبد 🚀</h3>
+                      <p className="text-slate-500 text-xs mt-1 leading-relaxed">مثالية لتجربة المنصة واستكشاف الميزات وبناء أول متجر.</p>
+                    </div>
+
+                    <div className="flex items-baseline gap-1 border-y border-slate-100 py-4">
+                      <span className="font-display font-black text-4xl text-slate-900">0</span>
+                      <span className="text-sm font-extrabold text-slate-600">ر.س / شهرياً</span>
+                    </div>
+
+                    <ul className="space-y-3.5 text-xs text-slate-600">
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>إنشاء متجر إلكتروني واحد</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>تخصيص القوالب الأساسية والألوان</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>إضافة حتى 10 منتجات مع الصور</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>معاينة حية فورية للجوال والكمبيوتر</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>تصدير ملفات المتجر والبيانات (JSON)</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => checkRegistrationAndExecute("templates")}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold py-3.5 rounded-xl transition text-xs flex items-center justify-center gap-2 border border-slate-200/80 cursor-pointer active:scale-95"
+                  >
+                    <span>ابدأ مجاناً الآن</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Plan 2: Pro (Featured / Popular) */}
+                <div className="bg-white rounded-3xl border-2 border-amber-500 shadow-xl p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group transform lg:-translate-y-2">
+                  {/* Badge */}
+                  <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-[11px] text-center py-1.5 uppercase tracking-wider shadow-xs">
+                    ⭐ الأكثر شعبية واختياراً للتاجر
+                  </div>
+
+                  <div className="space-y-6 pt-4">
+                    <div>
+                      <span className="bg-amber-100 text-amber-900 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-amber-300">
+                        الباقة الاحترافية Pro
+                      </span>
+                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">نمو ومتجر موثق ✨</h3>
+                      <p className="text-slate-600 text-xs mt-1 leading-relaxed">لكافة المتاجر الراغبة بالانطلاق الرسمي والبيع المباشر.</p>
+                    </div>
+
+                    <div className="flex items-baseline gap-1.5 border-y border-slate-100 py-4">
+                      <span className="font-display font-black text-4xl text-amber-600">99</span>
+                      <span className="text-sm font-extrabold text-slate-700">ر.س / شهرياً</span>
+                    </div>
+
+                    <ul className="space-y-3.5 text-xs text-slate-700">
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span className="font-bold text-slate-900">كل مميزات الباقة المجانية +</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span>عدد منتجات غير محدود 📦</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span>توثيق المتجر الرسمي وإثبات النشاط 🛡️</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span>مساعد الذكاء الاصطناعي لكتابة وصف المنتجات 🤖</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span>تتبع أوتوماتيكي للمخزون والقطع المتاحة</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
+                        <span>ربط دومين مخصص باسم متجرك</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => checkRegistrationAndExecute("templates")}
+                    className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black py-4 rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
+                  >
+                    <span>اشترك الآن وحصّل باقتك</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Plan 3: Enterprise / Business */}
+                <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md hover:shadow-xl transition duration-300 p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group">
+                  <div className="space-y-6">
+                    <div>
+                      <span className="bg-sky-50 text-sky-700 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-sky-200">
+                        باقة الأعمال والشركات
+                      </span>
+                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">حلول متكاملة 🏢</h3>
+                      <p className="text-slate-500 text-xs mt-1 leading-relaxed">للشركات والمؤسسات التي تحتاج هويات مخصصة ودعماً متقدماً.</p>
+                    </div>
+
+                    <div className="flex items-baseline gap-1 border-y border-slate-100 py-4">
+                      <span className="font-display font-black text-4xl text-slate-900">249</span>
+                      <span className="text-sm font-extrabold text-slate-600">ر.س / شهرياً</span>
+                    </div>
+
+                    <ul className="space-y-3.5 text-xs text-slate-600">
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span className="font-bold text-slate-900">جميع مميزات الباقة الاحترافية +</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>تصميم واستشارة هويّة تجارية مخصصة</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>ربط مباشر ببوابات الدفع الإلكترونية 💳</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>ربط مع شركات الشحن والتوصيل</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>تقارير مبيعات وتحليلات أداء متقدمة 📊</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
+                        <span>مدير حساب خاص ودعم فني على مدار الساعة</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => checkRegistrationAndExecute("templates")}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95"
+                  >
+                    <span>تواصل معنا للاشتراك</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ----------------- 2. TEMPLATES SELECTOR VIEW ----------------- */}
+      {view === "templates" && (
+        <div className="flex-1 container mx-auto px-6 py-10 flex flex-col justify-center animate-fadeIn">
+          <div className="flex items-center justify-between mb-6">
+            <button 
+              onClick={() => setView("landing")}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition font-bold text-sm bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs hover:bg-slate-50"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span>العودة للرئيسية</span>
+            </button>
+
+            {registeredUser && (
+              <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl text-emerald-800 text-xs font-bold shadow-2xs animate-fadeIn">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <div className="text-right hidden sm:block">
+                  <span className="block text-slate-800 font-extrabold text-xs">{registeredUser.fullName}</span>
+                  <span className="text-[9px] text-emerald-700 block -mt-1 font-normal">مالك متجر موثق 🚀 {registeredUser.socialPageUrl ? "• صفحة معتمدة" : ""}</span>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1.5 rounded-lg transition text-[10px] font-bold border border-rose-200"
+                  title="تسجيل الخروج وإلغاء توثيق النشاط"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>تسجيل خروج</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center max-w-xl mx-auto space-y-3 mb-10">
+            <span className="bg-sky-50 text-sky-700 border border-sky-200 px-3.5 py-1 rounded-full text-xs font-extrabold tracking-wide uppercase inline-block shadow-2xs">
+              قوالب التجارة الإلكترونية العصرية 🎨
+            </span>
+            <h2 className="font-display font-black text-3xl md:text-4xl text-slate-900">اختر القالب الأنسب لتجارتك</h2>
+            <p className="text-slate-600 text-sm md:text-base leading-relaxed">
+              واجهات متجاوبة، ألوان متناغمة ومريحة للعين بدون ألوان داكنة، مصممة لعرض منتجاتك بأعلى جودة وجذب العملاء.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto w-full">
+            {/* Template 1 Card - Elegant */}
+            <div className="bg-white rounded-3xl border border-amber-200/80 shadow-lg hover:shadow-xl hover:border-amber-400 transition-all duration-300 overflow-hidden flex flex-col group">
+              {/* Light Luxury Header */}
+              <div className="bg-gradient-to-br from-amber-500/10 via-amber-100/30 to-orange-50/50 p-6 md:p-8 border-b border-amber-200/60 flex flex-col justify-between relative">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1 rounded-full text-xs font-black shadow-2xs">
+                    سلسة وفاخرة ✨
+                  </span>
+                  <span className="text-xs font-extrabold text-amber-800 bg-white/80 px-2.5 py-1 rounded-lg border border-amber-200/60">
+                    خط القاهرة (Cairo)
+                  </span>
+                </div>
+
+                <div className="space-y-2 mb-6">
+                  <h3 className="font-display font-black text-2xl text-slate-900 group-hover:text-amber-800 transition">
+                    قالب الأناقة العصرية
+                  </h3>
+                  <p className="text-slate-600 text-xs md:text-sm leading-relaxed max-w-md">
+                    مثالي للعطور الفاخرة، الأزياء والعبايات، الساعات، مستحضرات التجميل والهدايا ذات القيمة العالية.
+                  </p>
+                </div>
+
+                {/* Visual Mini Mockup Frame */}
+                <div className="bg-white rounded-2xl border border-amber-200/80 p-3 shadow-sm space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-amber-100 pb-2 text-xs">
+                    <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <span>🌸</span>
+                      <span>نخبة العود والعطور</span>
+                    </span>
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      سلة التسوق (2)
+                    </span>
+                  </div>
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-3 rounded-xl border border-amber-100/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-amber-800 font-extrabold block">تشكيلة الصيف</span>
+                      <span className="text-xs font-black text-slate-900 block">عطر مسك الغزال الملكي</span>
+                    </div>
+                    <span className="bg-amber-600 text-white font-black text-xs px-2.5 py-1 rounded-lg shadow-2xs">
+                      180 ر.س
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-6 md:p-8 flex-1 flex flex-col justify-between space-y-6">
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-slate-900 text-xs md:text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>مميزات القالب البصرية:</span>
+                  </h4>
+                  <ul className="space-y-2.5 text-slate-600 text-xs">
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>تخطيط يعتمد على المساحات المريحة لعرض فخامة وشبكة المنتجات</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>تناسق ألوان دافئ وهادئ (ذهبـي ناعم وقرفة مع خلفية فاتحة)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>قوائم تصفية سلسة وسلة تسوق جانبية منبثقة تفاعلية</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Color Swatch Palette Preview */}
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+                  <span className="text-slate-500 font-bold">لوحة الألوان:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-[#D4AF37] border border-white shadow-2xs" title="ذهبي ناعم" />
+                    <span className="w-5 h-5 rounded-full bg-[#7c2d12] border border-white shadow-2xs" title="قرفة فاخرة" />
+                    <span className="w-5 h-5 rounded-full bg-[#fafbfe] border border-slate-300 shadow-2xs" title="خلفية فاتحة" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    onClick={() => setPreviewingTemplate("elegant")}
+                    className="w-full sm:w-1/2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-extrabold py-3.5 rounded-xl transition shadow-2xs flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-4 h-4 text-amber-700" />
+                    <span>معاينة القالب 👁️</span>
+                  </button>
+                  <button
+                    onClick={() => selectTemplate("elegant")}
+                    className="w-full sm:w-1/2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-extrabold py-3.5 rounded-xl transition shadow-md flex items-center justify-center gap-2 group-hover:shadow-amber-600/20"
+                  >
+                    <span>تفعيل القالب</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Template 2 Card - Tech */}
+            <div className="bg-white rounded-3xl border border-sky-200/80 shadow-lg hover:shadow-xl hover:border-sky-400 transition-all duration-300 overflow-hidden flex flex-col group">
+              {/* Light Tech Header */}
+              <div className="bg-gradient-to-br from-sky-500/10 via-blue-100/30 to-indigo-50/50 p-6 md:p-8 border-b border-sky-200/60 flex flex-col justify-between relative">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="bg-sky-100 text-sky-900 border border-sky-300 px-3 py-1 rounded-full text-xs font-black shadow-2xs">
+                    مستقبلي وعصري ⚡
+                  </span>
+                  <span className="text-xs font-extrabold text-sky-800 bg-white/80 px-2.5 py-1 rounded-lg border border-sky-200/60">
+                    خط تجول (Tajawal)
+                  </span>
+                </div>
+
+                <div className="space-y-2 mb-6">
+                  <h3 className="font-display font-black text-2xl text-slate-900 group-hover:text-sky-800 transition">
+                    قالب الابتكار والأجهزة العصرية
+                  </h3>
+                  <p className="text-slate-600 text-xs md:text-sm leading-relaxed max-w-md">
+                    مظهر جديد بالكامل ناصع ومشرق، مخصص للإلكترونيات والأجهزة الذكية، الملحقات عالية الكفاءة، والألعاب.
+                  </p>
+                </div>
+
+                {/* Visual Mini Mockup Frame */}
+                <div className="bg-white rounded-2xl border border-sky-200/80 p-3 shadow-sm space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-sky-100 pb-2 text-xs">
+                    <span className="font-bold text-sky-900 flex items-center gap-1.5">
+                      <span>⚡</span>
+                      <span>تِك فيو للأجهزة الذكية</span>
+                    </span>
+                    <span className="bg-sky-100 text-sky-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      ضمان سنتين 🛡️
+                    </span>
+                  </div>
+                  <div className="bg-gradient-to-r from-sky-50 to-blue-50 p-3 rounded-xl border border-sky-100/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-sky-800 font-extrabold block">سماعات ملحقة</span>
+                      <span className="text-xs font-black text-slate-900 block">سماعة Pulse Pro ANC اللاسلكية</span>
+                    </div>
+                    <span className="bg-sky-600 text-white font-black text-xs px-2.5 py-1 rounded-lg shadow-2xs">
+                      340 ر.س
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-6 md:p-8 flex-1 flex flex-col justify-between space-y-6">
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-slate-900 text-xs md:text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-sky-600" />
+                    <span>مميزات الهوية والتصميم الجديد:</span>
+                  </h4>
+                  <ul className="space-y-2.5 text-slate-600 text-xs">
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>تصميم ناصع عصري خالٍ من الأكواد الرمادية، يعتمد الواجهات الذكية البسيطة</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>عرض واضح ومفصل لمواصفات المنتجات والضمان مع بطاقات شراء سريعة</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5" />
+                      <span>لوحة ألوان زرقاء حيوية مع خلفية زجاجية مريحة للعين</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Color Swatch Palette Preview */}
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+                  <span className="text-slate-500 font-bold">لوحة الألوان:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-[#0284c7] border border-white shadow-2xs" title="أزرق سماوي" />
+                    <span className="w-5 h-5 rounded-full bg-[#0f172a] border border-white shadow-2xs" title="كحلي تقني" />
+                    <span className="w-5 h-5 rounded-full bg-[#f8fafc] border border-slate-300 shadow-2xs" title="خلفية ناصعة" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    onClick={() => setPreviewingTemplate("tech")}
+                    className="w-full sm:w-1/2 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-300 font-extrabold py-3.5 rounded-xl transition shadow-2xs flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-4 h-4 text-sky-700" />
+                    <span>معاينة القالب 👁️</span>
+                  </button>
+                  <button
+                    onClick={() => selectTemplate("tech")}
+                    className="w-full sm:w-1/2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-extrabold py-3.5 rounded-xl transition shadow-md flex items-center justify-center gap-2 group-hover:shadow-sky-600/20"
+                  >
+                    <span>تفعيل القالب</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Landing Page Footer */}
+          <footer className="bg-slate-900 text-slate-400 py-10 border-t border-slate-800 mt-20 shrink-0">
+            <div className="container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-sky-500 text-slate-950 p-2 rounded-xl font-bold shadow-md shadow-sky-500/20">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div className="text-right">
+                  <span className="font-display font-black text-white text-base">مُبتكِر</span>
+                  <span className="text-[10px] block text-slate-400">منصة المتاجر الذكية متعددة المستأجرين © 2026</span>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                جميع الحقوق محفوظة منصة مبتكر للمتاجر السحابية
+              </div>
+            </div>
+          </footer>
+        </div>
+      )}
+
+      {/* ----------------- 3. BUILDER / CUSTOMIZER VIEW ----------------- */}
+      {view === "builder" && (
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+          {/* Sub Header for controls */}
+          <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setView("templates")}
+                className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500"
+                title="الرجوع للقوالب"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="font-bold text-lg text-slate-900 flex items-center gap-2">
+                  <span>لوحة تعديل متجر:</span>
+                  <span className="text-sky-600 bg-sky-50 px-3 py-1 rounded-full text-xs font-bold border border-sky-100">
+                    {config.storeName}
+                  </span>
+                </h1>
+                <p className="text-xs text-slate-400">خصص المحتوى والهوية البصرية ثم عاين التغييرات الحية بالجانب المقابل.</p>
+              </div>
+            </div>
+
+            {/* Merchant Badge */}
+            {registeredUser && (
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl text-emerald-800 text-xs font-bold shadow-sm select-none">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="text-right">
+                  <span className="block text-slate-800 font-extrabold text-[11px]">{registeredUser.fullName} (مالك المتجر)</span>
+                  <span className="text-[9px] text-emerald-600 block -mt-0.5 font-normal">
+                    {registeredUser.socialPageUrl ? `الصفحة: ${registeredUser.socialPageUrl}` : "بريف متقدم بدون سجل تجاري"}
+                  </span>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="mr-2 bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded-lg transition text-[10px] font-bold border border-rose-200 flex items-center gap-1"
+                  title="تسجيل الخروج وإلغاء توثيق النشاط"
+                >
+                  <LogOut className="w-3 h-3 text-rose-500" />
+                  <span>خروج</span>
+                </button>
+              </div>
+            )}
+
+            {/* Quick Actions (Finished Customization, Save, Reset, Export, Fullscreen) */}
+            <div className="flex items-center flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  saveStore();
+                  setIsDomainModalOpen(true);
+                }}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-md hover:shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer ring-2 ring-emerald-400/30"
+                title="إنهاء التخصيص واختيار الدومين والاستضافة لمتجرك"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>تم الانتهاء من التخصيص 🚀</span>
+              </button>
+
+              <button
+                onClick={() => saveStore()}
+                className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+                title="حفظ الهوية الحالية بالمتصفح"
+              >
+                <Save className="w-4 h-4 text-emerald-600" />
+                <span>حفظ التعديلات</span>
+              </button>
+
+              <button
+                onClick={resetStore}
+                className="bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                title="إعادة التعيين للإعدادات الافتراضية"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>إعادة ضبط</span>
+              </button>
+
+
+
+              <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                  isSidebarCollapsed 
+                    ? "bg-sky-600 hover:bg-sky-700 text-white shadow" 
+                    : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                }`}
+                title={isSidebarCollapsed ? "إظهار لوحة التعديل الجانبية" : "إخفاء لوحة التعديل لمعاينة المتجر كزبون حقيقي بملء الشاشة"}
+              >
+                {isSidebarCollapsed ? (
+                  <>
+                    <Sliders className="w-3.5 h-3.5 text-white" />
+                    <span>إظهار التعديل ⚙️</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-slate-500" />
+                    <span>وضع العميل (كامل الشاشة) 👁️</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowFullScreenPreview(true)}
+                className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md"
+                title="رؤية كشاشة كاملة مستقلة"
+              >
+                <Eye className="w-4 h-4" />
+                <span>شاشة كاملة</span>
+              </button>
+            </div>
+          </header>
+
+          {/* Platform Merchant Status Warning/Alert Banners */}
+          {registeredUser && (() => {
+            const currentPlatformStore = platformStores.find(s => s.ownerEmail === registeredUser.email);
+            if (!currentPlatformStore) return null;
+
+            if (currentPlatformStore.verificationStatus === "pending") {
+              return (
+                <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-amber-800 font-bold select-none animate-fadeIn shrink-0">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-amber-500 animate-spin shrink-0" style={{ animationDuration: "3s" }} />
+                    <span>وثائق متجرك قيد التدقيق والمراجعة من قبل مشرف المنصة حالياً. ستظهر هويتك الموثقة فور قبولها! ⏳</span>
+                  </div>
+                  <span className="text-[10px] text-amber-600 font-bold uppercase shrink-0">قيد المراجعة</span>
+                </div>
+              );
+            }
+
+            if (currentPlatformStore.verificationStatus === "rejected") {
+              return (
+                <div className="bg-rose-500/10 border-b border-rose-500/20 px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-rose-800 font-bold select-none animate-fadeIn shrink-0">
+                  <div className="flex items-start sm:items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
+                    <div>
+                      <span>تم رفض وثيقة إثبات التجارة المرفقة لمتجرك! ❌ </span>
+                      <span className="font-normal block sm:inline text-[11px] text-slate-600">سبب الرفض: <span className="font-bold text-rose-700">{currentPlatformStore.rejectionReason || "تاريخ الصلاحية منتهي أو الملف غير واضح."}</span></span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsRegisterModalOpen(true)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-lg text-[11px] font-black transition w-fit shrink-0 shadow-sm"
+                  >
+                    إعادة رفع الوثائق وتحديث الطلب 🔄
+                  </button>
+                </div>
+              );
+            }
+
+            if (currentPlatformStore.verificationStatus === "suspended") {
+              return (
+                <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-300 font-bold select-none animate-fadeIn shrink-0">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>تم إيقاف متجرك مؤقتاً بقرار من إدارة المنصة. يرجى مراجعة الدعم الفني لحل الإشكال ⚠️</span>
+                  </div>
+                  <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px] shrink-0">موقوف مؤقتاً</span>
+                </div>
+              );
+            }
+
+            return (
+              <div className="bg-emerald-500/5 border-b border-emerald-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-emerald-800 font-bold select-none animate-fadeIn shrink-0">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>تهانينا! تم التحقق من وثائقك واعتمد متجرك رسمياً ككيان تجاري موثق على المنصة 🛡️🎉</span>
+                </div>
+                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shrink-0">تاجر موثق معتمد</span>
+              </div>
+            );
+          })()}
+
+          {/* Builder Workplace (Two Columns: controls & preview) */}
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0 bg-slate-100 overflow-hidden h-full">
+            {/* COLUMN 1: CONTROLS PANEL */}
+            {!isSidebarCollapsed && (
+              <aside className="w-full lg:w-[460px] h-[50vh] lg:h-full flex flex-col border-l border-slate-200 bg-white shrink-0 animate-fadeIn min-h-0 overflow-hidden shadow-xs">
+                {/* Tab navigation headers with mobile touch scroll */}
+                <div className="flex items-center overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50/80 text-xs divide-x divide-x-reverse divide-slate-200/80 scrollbar-none touch-pan-x">
+                  <button
+                    onClick={() => setActiveTab("branding")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "branding" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>الاسم والشعار</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("design")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "design" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>الهوية والألوان 🎨</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("products")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "products" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>المنتجات المعروضة</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("inventory")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "inventory" ? "border-amber-600 text-amber-900 bg-amber-50 shadow-2xs" : "border-transparent text-amber-800 hover:text-amber-950 font-black"
+                    }`}
+                  >
+                    <span>المخزون 📦</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("checkout")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "checkout" ? "border-emerald-600 text-emerald-900 bg-emerald-50 shadow-2xs" : "border-transparent text-emerald-800 hover:text-emerald-950 font-black"
+                    }`}
+                  >
+                    <span>الدفع والطلب 💳</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("pages")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "pages" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <span>تعديل الصفحات 📄</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("ai")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "ai" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <span>مساعد المحتوى ✨</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("export")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                      activeTab === "export" ? "border-emerald-600 text-emerald-800 bg-emerald-50 shadow-2xs" : "border-transparent text-emerald-700 hover:text-emerald-900 font-bold"
+                    }`}
+                  >
+                    <span>طلب اعتماد ونشر المتجر 🚀</span>
+                  </button>
+                </div>
+
+                {/* Render dynamic ControlPanel with states - Independent Scrolling */}
+                <div className="flex-1 min-h-0 overflow-hidden h-full">
+                  <ControlPanel 
+                    config={config}
+                    handleConfigChange={handleConfigChange}
+                    handleProductChange={handleProductChange}
+                    addEmptyProduct={addEmptyProduct}
+                    deleteProduct={deleteProduct}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    previewDevice={previewDevice}
+                    setPreviewDevice={setPreviewDevice}
+                    onOpenCheckoutPreview={handleOpenCheckoutPreview}
+                    onOpenDomainModal={() => setIsDomainModalOpen(true)}
+                  />
+                </div>
+              </aside>
+            )}
+
+            {/* COLUMN 2: SIMULATED PREVIEW STAGE */}
+            <main className={`flex-1 flex items-center justify-center overflow-hidden bg-slate-100 relative transition-all duration-300 min-h-0 h-[55vh] lg:h-full ${
+              isSidebarCollapsed && previewDevice === "desktop" ? "p-0" : "p-3 lg:p-6"
+            }`}>
+              {/* Device container wrap */}
+              <div 
+                className={`transition-all duration-300 bg-white shadow-2xl relative flex flex-col border border-slate-200 overflow-hidden max-h-full ${
+                  previewDevice === "mobile" 
+                    ? "w-[360px] h-[660px] rounded-[3rem] border-[10px] border-[#181d2d] bg-[#181d2d] shrink-0 shadow-2xl ring-1 ring-slate-800" 
+                    : isSidebarCollapsed 
+                      ? "w-full h-full max-w-full rounded-none border-none shadow-none" 
+                      : "w-full h-full max-w-7xl rounded-2xl"
+                }`}
+              >
+                {/* Mobile top camera Notch */}
+                {previewDevice === "mobile" && (
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#0d111d] h-5 w-32 rounded-b-xl z-30 flex items-center justify-center gap-2 border-b border-slate-800">
+                    <div className="w-2 h-2 rounded-full bg-slate-800" />
+                    <div className="w-8 h-1 rounded-full bg-slate-800" />
+                  </div>
+                )}
+
+                {/* Inner simulated Store Component */}
+                <StorePreview
+                  config={config}
+                  cart={cart}
+                  addToCart={addToCart}
+                  updateQuantity={updateQuantity}
+                  calculateTotal={() => {}}
+                  isCartDrawerOpen={isCartDrawerOpen}
+                  setIsCartDrawerOpen={setIsCartDrawerOpen}
+                  hasOrdered={hasOrdered}
+                  handleCheckout={handleCheckout}
+                  selectedCategory={selectedCategory}
+                  setSelectedCategory={setSelectedCategory}
+                  externalPage={storePreviewPageOverride || undefined}
+                  onResetExternalPage={() => setStorePreviewPageOverride(null)}
+                />
+              </div>
+            </main>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- 4. FULL SCREEN MODAL PREVIEW ----------------- */}
+      <AnimatePresence>
+        {showFullScreenPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-6xl h-full max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+              style={{ fontFamily: config.fontFamily === "Tajawal" ? "Tajawal, sans-serif" : "Cairo, sans-serif" }}
+            >
+              {/* Toolbar Header */}
+              <div className="bg-slate-100 text-slate-900 border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 select-none">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-100 text-amber-800 p-2 rounded-xl border border-amber-200">
+                    <Store className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm md:text-base text-slate-900">{config.storeName} (عرض المعاينة الكاملة)</span>
+                    <span className="text-[10px] text-slate-500 font-bold block -mt-0.5">تصميم وحفظ عبر منصة مبتكر الذكية</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="hidden md:flex bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-bold text-slate-700 shadow-2xs">
+                    قالب: {config.themeStyle === "elegant" ? "الأناقة والفخامة" : "التكنولوجيا والابتكار"}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const jsonString = JSON.stringify(config, null, 2);
+                      navigator.clipboard.writeText(jsonString);
+                      triggerToast("تم نسخ مواصفات وملف المتجر بصيغة JSON لترسله لأي شخص! 📋", "success");
+                    }}
+                    className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-2xs cursor-pointer touch-manipulation min-h-[38px]"
+                    title="تصدير كود المتجر"
+                  >
+                    <span>تصدير كود JSON 📦</span>
+                  </button>
+                  <button
+                    onClick={() => setShowFullScreenPreview(false)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white p-2 rounded-xl transition shadow-2xs cursor-pointer touch-manipulation"
+                    title="إغلاق المعاينة"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Inside Fullscreen Preview Body */}
+              <div className="flex-1 overflow-hidden relative">
+                <StorePreview
+                  config={config}
+                  cart={cart}
+                  addToCart={addToCart}
+                  updateQuantity={updateQuantity}
+                  calculateTotal={() => {}}
+                  isCartDrawerOpen={isCartDrawerOpen}
+                  setIsCartDrawerOpen={setIsCartDrawerOpen}
+                  hasOrdered={hasOrdered}
+                  handleCheckout={handleCheckout}
+                  selectedCategory={selectedCategory}
+                  setSelectedCategory={setSelectedCategory}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Interactive Template Preview Modal before selection */}
+      <AnimatePresence>
+        {previewingTemplate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[999] flex flex-col"
+            dir="rtl"
+          >
+            {/* Template Preview Top Bar */}
+            <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-2.5 flex items-center justify-between gap-2 shadow-sm shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-8 h-8 md:w-9 md:h-9 rounded-xl text-white font-extrabold text-xs md:text-sm flex items-center justify-center shrink-0 ${
+                  previewingTemplate === "elegant" ? "bg-amber-600 shadow-amber-600/20 shadow-md" : "bg-sky-600 shadow-sky-600/20 shadow-md"
+                }`}>
+                  {previewingTemplate === "elegant" ? "✨" : "⚡"}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-extrabold text-slate-900 text-xs md:text-base truncate">معاينة تفاعلية:</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-black border truncate ${
+                      previewingTemplate === "elegant" 
+                        ? "bg-amber-100 text-amber-900 border-amber-300" 
+                        : "bg-sky-100 text-sky-900 border-sky-300"
+                    }`}>
+                      {previewingTemplate === "elegant" ? "قالب الأناقة العصرية" : "قالب التكنولوجيا والابتكار"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 hidden md:block -mt-0.5">
+                    يمكنك تصفح المنتجات والفئات وتجربة السلة مباشرة للتأكد من ملاءمة القالب لمشروعك.
+                  </p>
+                </div>
+              </div>
+
+              {/* View mode buttons: Desktop vs Mobile (Visible on desktop viewports) */}
+              <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  onClick={() => setPreviewingDevice("desktop")}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
+                    previewingDevice === "desktop" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>سطح المكتب</span>
+                </button>
+                <button
+                  onClick={() => setPreviewingDevice("mobile")}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition ${
+                    previewingDevice === "mobile" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>الجوال</span>
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button
+                  onClick={() => setPreviewingTemplate(null)}
+                  className="px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition text-xs font-bold flex items-center gap-1"
+                  title="إغلاق المعاينة"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="hidden sm:inline">إغلاق</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const templateToSelect = previewingTemplate;
+                    setPreviewingTemplate(null);
+                    selectTemplate(templateToSelect);
+                  }}
+                  className={`px-3 sm:px-4 py-2 text-white font-black rounded-xl transition shadow-md flex items-center gap-1.5 text-xs ${
+                    previewingTemplate === "elegant"
+                      ? "bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 shadow-amber-600/20"
+                      : "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 shadow-sky-600/20"
+                  }`}
+                >
+                  <span>اعتماد القالب ⚡</span>
+                  <ArrowLeft className="w-4 h-4 hidden sm:inline" />
+                </button>
+              </div>
+            </div>
+
+            {/* Template Live Store Body */}
+            <div className="flex-1 overflow-auto bg-slate-200/90 p-1 sm:p-4 flex justify-center items-start">
+              <div 
+                className={`bg-white shadow-2xl overflow-hidden transition-all duration-300 w-full ${
+                  previewingDevice === "mobile" 
+                    ? "max-w-full sm:max-w-[390px] rounded-none sm:rounded-[32px] border-0 sm:border-[8px] sm:border-slate-800 my-0 sm:my-2 min-h-full sm:min-h-[720px] shadow-2xl" 
+                    : "max-w-7xl rounded-none sm:rounded-2xl border-0 sm:border border-slate-300 min-h-full sm:min-h-[85vh]"
+                }`}
+              >
+                <StorePreview
+                  config={previewingTemplate === "elegant" ? ELEGANT_PRESET : TECH_PRESET}
+                  cart={cart}
+                  addToCart={addToCart}
+                  updateQuantity={updateQuantity}
+                  calculateTotal={() => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)}
+                  isCartDrawerOpen={isCartDrawerOpen}
+                  setIsCartDrawerOpen={setIsCartDrawerOpen}
+                  hasOrdered={hasOrdered}
+                  handleCheckout={handleCheckout}
+                  selectedCategory={selectedCategory}
+                  setSelectedCategory={setSelectedCategory}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Platform Administration Dashboard */}
+      <AnimatePresence>
+        {isAdminOpen && (
+          <AdminDashboard
+            stores={platformStores}
+            onUpdateStoreStatus={handleAdminUpdateStatus}
+            onUpdateStoreConfig={handleAdminUpdateConfig}
+            onDeleteStore={handleAdminDeleteStore}
+            onPreviewStore={handleAdminPreviewStore}
+            onAddStoreManually={handleAdminAddStore}
+            onClose={() => setIsAdminOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Registration & Business Documents Verification Gateway */}
+      <AnimatePresence>
+        {isRegisterModalOpen && (
+          <RegistrationGateway
+            isOpen={isRegisterModalOpen}
+            onClose={() => {
+              setIsRegisterModalOpen(false);
+              setPendingAction(null);
+            }}
+            onSuccess={handleRegistrationSuccess}
+            initialStoreName={config.storeName !== "متجر عطور لورين" && config.storeName !== "متجر تك برو" ? config.storeName : ""}
+            currentUser={registeredUser}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Custom Logout Confirmation Modal */}
+      <AnimatePresence>
+        {isLogoutConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-right font-sans"
+              dir="rtl"
+            >
+              <div className="flex items-center gap-3 mb-4 text-rose-600">
+                <div className="p-2.5 bg-rose-50 rounded-xl">
+                  <LogOut className="w-6 h-6" />
+                </div>
+                <h3 className="font-extrabold text-lg text-slate-900">تسجيل الخروج من الحساب</h3>
+              </div>
+
+              <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                هل أنت متأكد من تسجيل الخروج وإلغاء تفعيل حسابك التجاري مؤقتاً؟ سيتم حفظ متجرك وسيظل بإمكانك الدخول مجدداً باستخدام بياناتك في أي وقت.
+              </p>
+
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setIsLogoutConfirmOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition text-sm font-bold"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={executeLogout}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition text-sm font-bold shadow-lg shadow-rose-600/10"
+                >
+                  نعم، تسجيل الخروج
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Reset Store Confirmation Modal */}
+      <AnimatePresence>
+        {isResetConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-right font-sans"
+              dir="rtl"
+            >
+              <div className="flex items-center gap-3 mb-4 text-amber-600">
+                <div className="p-2.5 bg-amber-50 rounded-xl">
+                  <RefreshCw className="w-6 h-6 text-amber-600 animate-spin-slow" />
+                </div>
+                <h3 className="font-extrabold text-lg text-slate-900">إعادة تعيين المتجر</h3>
+              </div>
+
+              <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                هل أنت متأكد من إعادة تعيين المتجر إلى الإعدادات الافتراضية؟ ستفقد كافة التعديلات والتغييرات التي قمت بها على هذا القالب بشكل نهائي.
+              </p>
+
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setIsResetConfirmOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition text-sm font-bold"
+                >
+                  إلغاء التراجع
+                </button>
+                <button
+                  onClick={executeResetStore}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition text-sm font-bold shadow-lg shadow-amber-600/10"
+                >
+                  نعم، إعادة تعيين
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Subdomain & Tenant Activation Modal */}
+      <DomainSetupModal
+        isOpen={isDomainModalOpen}
+        onClose={() => setIsDomainModalOpen(false)}
+        storeName={config.storeName}
+        onSaveDomain={(domain) => {
+          triggerToast(`تم حجز الدومين الفرعي (${domain}) وإرسال طلب الاعتماد وإنشاء قاعدة البيانات بنجاح! 🚀🎉`, "success");
+        }}
+      />
+
+      {/* Modern Auth & Merchant Profile Gateway */}
+      <AuthGateway
+        isOpen={isAuthGatewayOpen}
+        onClose={() => setIsAuthGatewayOpen(false)}
+        currentUser={authUser}
+        initialMode={authGatewayMode}
+        onLoginSuccess={(user) => {
+          setAuthUser(user);
+          triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
+        }}
+        onLogout={() => {
+          setAuthUser(null);
+          triggerToast("تم تسجيل الخروج من الحساب بنجاح", "info");
+        }}
+        onStartStoreCreation={() => {
+          setView("templates");
+        }}
+      />
+
+      {/* Super Admin Protected Auth Gate */}
+      <AdminAuthModal
+        isOpen={isAdminAuthModalOpen}
+        onClose={() => setIsAdminAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsAdminOpen(true);
+          triggerToast("مرحباً بك في لوحة الإدارة المركزية لمالكي المنصة 🔒⚡", "success");
+        }}
+      />
+    </div>
+  );
+}

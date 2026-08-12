@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">مخطط البنية المستهدفة لمنصة Eoshop</title>
+  <desc id="desc">واجهة React تتصل عبر Nginx بخادم Laravel واحد، ثم PostgreSQL المركزي وبيانات المستأجرين وRedis والتخزين والذكاء الاصطناعي.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#081425"/>
+      <stop offset="0.55" stop-color="#10243d"/>
+      <stop offset="1" stop-color="#07111f"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7dd3fc"/>
+    </marker>
+    <style>
+      .title { font: 800 38px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 500 19px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #a8bed5; }
+      .box-title { font: 800 21px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #f8fafc; }
+      .box-copy { font: 500 14px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #cbd5e1; }
+      .label { font: 700 13px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #7dd3fc; }
+      .note-title { font: 800 18px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #fde68a; }
+      .note { font: 500 14px 'Segoe UI', Tahoma, Arial, sans-serif; fill: #dbeafe; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" rx="32" fill="url(#bg)"/>
+  <circle cx="190" cy="80" r="170" fill="#0ea5e9" opacity="0.08"/>
+  <circle cx="1280" cy="760" r="260" fill="#f59e0b" opacity="0.06"/>
+
+  <text x="720" y="65" text-anchor="middle" direction="rtl" class="title">البنية المستهدفة لمنصة Eoshop</text>
+  <text x="720" y="98" text-anchor="middle" direction="rtl" class="subtitle">تطوير تدريجي حول المنتج الحالي — Laravel مصدر الحقيقة وReact واجهة المستخدم</text>
+
+  <!-- Users -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="205" width="230" height="225" rx="25" fill="#14263d" stroke="#36536f" stroke-width="2"/>
+    <circle cx="175" cy="258" r="28" fill="#243e59" stroke="#7dd3fc" stroke-width="2"/>
+    <path d="M160 259a15 15 0 1 0 30 0a15 15 0 1 0-30 0 M143 307c7-23 57-23 64 0" fill="none" stroke="#7dd3fc" stroke-width="5" stroke-linecap="round"/>
+    <text x="175" y="346" text-anchor="middle" direction="rtl" class="box-title">المستخدمون</text>
+    <text x="175" y="378" text-anchor="middle" direction="rtl" class="box-copy">التاجر · مدير المنصة</text>
+    <text x="175" y="402" text-anchor="middle" direction="rtl" class="box-copy">العميل والزائر</text>
+  </g>
+
+  <!-- Frontend -->
+  <g filter="url(#shadow)">
+    <rect x="385" y="205" width="270" height="225" rx="25" fill="url(#primary)"/>
+    <rect x="446" y="246" width="148" height="93" rx="10" fill="#082f49" opacity="0.88"/>
+    <rect x="460" y="260" width="120" height="62" rx="5" fill="#e0f2fe"/>
+    <path d="M485 360h70 M520 339v21" stroke="#e0f2fe" stroke-width="7" stroke-linecap="round"/>
+    <text x="520" y="392" text-anchor="middle" direction="rtl" class="box-title">React + Vite</text>
+    <text x="520" y="416" text-anchor="middle" direction="rtl" class="box-copy">واجهة وتجربة المستخدم فقط</text>
+  </g>
+
+  <!-- Gateway -->
+  <g filter="url(#shadow)">
+    <rect x="750" y="205" width="215" height="225" rx="25" fill="#172b42" stroke="#38bdf8" stroke-width="2"/>
+    <path d="M817 264h80 M817 288h80 M817 312h80" stroke="#7dd3fc" stroke-width="8" stroke-linecap="round"/>
+    <text x="857" y="360" text-anchor="middle" class="box-title">Nginx</text>
+    <text x="857" y="391" text-anchor="middle" direction="rtl" class="box-copy">Static + Reverse Proxy</text>
+    <text x="857" y="415" text-anchor="middle" direction="rtl" class="box-copy">TLS · Headers · Routing</text>
+  </g>
+
+  <!-- Laravel -->
+  <g filter="url(#shadow)">
+    <rect x="1060" y="170" width="320" height="295" rx="29" fill="url(#gold)"/>
+    <path d="M1140 244l80-45l80 45v92l-80 45l-80-45z" fill="#451a03" opacity="0.84"/>
+    <path d="M1181 257h78v71h-78z M1200 240v106 M1240 240v106" fill="none" stroke="#fef3c7" stroke-width="5"/>
+    <text x="1220" y="410" text-anchor="middle" class="box-title">Laravel API</text>
+    <text x="1220" y="438" text-anchor="middle" direction="rtl" class="box-copy">الخادم الوحيد · قواعد العمل · الأمان</text>
+  </g>
+
+  <!-- Main arrows -->
+  <path d="M290 318h78" stroke="#7dd3fc" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+  <text x="329" y="296" text-anchor="middle" direction="rtl" class="label">تجربة آمنة</text>
+  <path d="M655 318h78" stroke="#7dd3fc" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+  <text x="694" y="296" text-anchor="middle" direction="rtl" class="label">HTTPS</text>
+  <path d="M965 318h78" stroke="#7dd3fc" stroke-width="5" fill="none" marker-end="url(#arrow)"/>
+  <text x="1004" y="296" text-anchor="middle" direction="rtl" class="label">/api</text>
+
+  <!-- Services -->
+  <g filter="url(#shadow)">
+    <rect x="105" y="575" width="245" height="170" rx="23" fill="#152d34" stroke="#34d399" stroke-width="2"/>
+    <ellipse cx="227" cy="620" rx="55" ry="17" fill="#064e3b" stroke="#6ee7b7" stroke-width="3"/>
+    <path d="M172 620v47c0 10 25 18 55 18s55-8 55-18v-47" fill="#064e3b" stroke="#6ee7b7" stroke-width="3"/>
+    <text x="227" y="714" text-anchor="middle" direction="rtl" class="box-title">PostgreSQL المركزي</text>
+    <text x="227" y="737" text-anchor="middle" direction="rtl" class="box-copy">الهوية · المستأجرون · الاشتراكات</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="400" y="575" width="245" height="170" rx="23" fill="#152d34" stroke="#34d399" stroke-width="2"/>
+    <rect x="453" y="605" width="138" height="73" rx="12" fill="#064e3b" stroke="#6ee7b7" stroke-width="3"/>
+    <path d="M474 626h96 M474 646h96 M474 666h96" stroke="#a7f3d0" stroke-width="4"/>
+    <text x="522" y="714" text-anchor="middle" direction="rtl" class="box-title">Tenant Schemas</text>
+    <text x="522" y="737" text-anchor="middle" direction="rtl" class="box-copy">المنتجات · المخزون · الطلبات</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="695" y="575" width="205" height="170" rx="23" fill="#301b2a" stroke="#fb7185" stroke-width="2"/>
+    <path d="M752 625c25-22 67-22 92 0c-25 22-67 22-92 0z M764 646c19 16 49 16 68 0" fill="none" stroke="#fda4af" stroke-width="6" stroke-linecap="round"/>
+    <text x="797" y="714" text-anchor="middle" class="box-title">Redis</text>
+    <text x="797" y="737" text-anchor="middle" direction="rtl" class="box-copy">Queue · Cache · Sessions</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="950" y="575" width="205" height="170" rx="23" fill="#20233d" stroke="#a78bfa" stroke-width="2"/>
+    <path d="M1010 661h85c22 0 32-29 14-42c-6-24-39-31-55-12c-23-8-47 12-44 34c-20 6-18 20 0 20z" fill="#4c1d95" stroke="#c4b5fd" stroke-width="4"/>
+    <text x="1052" y="714" text-anchor="middle" direction="rtl" class="box-title">Object Storage</text>
+    <text x="1052" y="737" text-anchor="middle" direction="rtl" class="box-copy">الصور · الوثائق · الأصول</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1205" y="575" width="175" height="170" rx="23" fill="#312b18" stroke="#facc15" stroke-width="2"/>
+    <path d="M1292 603l10 28l29 10l-29 10l-10 28l-10-28l-29-10l29-10z" fill="#fde047"/>
+    <text x="1292" y="714" text-anchor="middle" class="box-title">Gemini</text>
+    <text x="1292" y="737" text-anchor="middle" direction="rtl" class="box-copy">محتوى مساعد مضبوط</text>
+  </g>
+
+  <!-- Fan-out -->
+  <path d="M1220 465v62H227v32" stroke="#7dd3fc" stroke-width="4" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+  <path d="M1220 527H522v32" stroke="#7dd3fc" stroke-width="4" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+  <path d="M1220 527H797v32" stroke="#7dd3fc" stroke-width="4" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+  <path d="M1220 527H1052v32" stroke="#7dd3fc" stroke-width="4" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+  <path d="M1220 465v94" stroke="#7dd3fc" stroke-width="4" fill="none" marker-end="url(#arrow)" opacity="0.85"/>
+
+  <!-- Footer note -->
+  <rect x="105" y="800" width="1275" height="62" rx="18" fill="#10253b" stroke="#334e68"/>
+  <text x="720" y="826" text-anchor="middle" direction="rtl" class="note-title">قاعدة التطوير: نستبدل المحاكاة بخدمات حقيقية تدريجيًا، ونحافظ على الواجهة والقيمة الموجودة</text>
+  <text x="720" y="850" text-anchor="middle" direction="rtl" class="note">Git + CI + Tests + Evidence تحيط بكل Work Package قبل الدمج</text>
+</svg>
+

@@ -1,0 +1,6 @@
+{
+  "name": "منشئ المتاجر",
+  "description": "منصة مبتكرة لإنشاء وتخصيص المتاجر الإلكترونية عبر اختيار وتعديل قوالب احترافية تناسب هويتك التجارية.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

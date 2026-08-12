@@ -1,0 +1,80 @@
+services:
+  # Laravel 11 API Backend (PHP 8.4)
+  backend:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: mobtaker_backend
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: backend
+      SERVICE_TAGS: dev
+    volumes:
+      - ./backend:/var/www/backend
+    networks:
+      - mobtaker_network
+    depends_on:
+      - db
+
+  # Nginx Web Server / Reverse Proxy
+  web:
+    image: nginx:alpine
+    container_name: mobtaker_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/backend
+      - ./dist:/usr/share/nginx/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - mobtaker_network
+    depends_on:
+      - backend
+
+  # Main PostgreSQL Database Instance (Platform Core + Tenant DBs)
+  db:
+    image: postgres:16-alpine
+    container_name: mobtaker_postgres
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: platform_main
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret_postgres_password
+    volumes:
+      - mobtaker_pgdata:/var/lib/postgresql/data
+    networks:
+      - mobtaker_network
+
+  # PgBouncer Connection Pooler for Database-Per-Tenant Scalability
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: mobtaker_pgbouncer
+    restart: unless-stopped
+    ports:
+      - "6432:6432"
+    environment:
+      DB_USER: postgres
+      DB_PASSWORD: secret_postgres_password
+      DB_HOST: db
+      DB_PORT: 5432
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 25
+    networks:
+      - mobtaker_network
+    depends_on:
+      - db
+
+networks:
+  mobtaker_network:
+    driver: bridge
+
+volumes:
+  mobtaker_pgdata:
+    driver: local

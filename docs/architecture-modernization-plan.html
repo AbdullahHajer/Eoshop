@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="خطة تثبيت وتطوير البنية المعمارية لمنصة Eoshop دون إعادة بنائها من الصفر">
+  <title>خطة تثبيت وتطوير بنية Eoshop</title>
+  <style>
+    :root {
+      --ink: #10243d;
+      --muted: #5f7187;
+      --line: #dce5ee;
+      --paper: #ffffff;
+      --canvas: #eef4f8;
+      --blue: #087bb9;
+      --blue-soft: #eaf7fd;
+      --gold: #b76c07;
+      --gold-soft: #fff7df;
+      --green: #087a5b;
+      --green-soft: #e9f9f3;
+      --danger: #b43a49;
+      --shadow: 0 18px 45px rgba(15, 35, 55, .10);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(14,165,233,.13), transparent 28rem),
+        radial-gradient(circle at 90% 18%, rgba(245,158,11,.10), transparent 26rem),
+        var(--canvas);
+      font-family: "Tahoma", "Segoe UI", Arial, sans-serif;
+      line-height: 1.9;
+    }
+    a { color: var(--blue); }
+    .hero {
+      background: linear-gradient(135deg, #071524 0%, #102b48 62%, #0d1d31 100%);
+      color: #fff;
+      padding: 72px 24px 64px;
+      border-bottom: 5px solid #e4a122;
+    }
+    .hero-inner, main { max-width: 1180px; margin: 0 auto; }
+    .eyebrow {
+      display: inline-block;
+      padding: 5px 12px;
+      border: 1px solid rgba(125,211,252,.45);
+      color: #bfe9fb;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(14,165,233,.10);
+    }
+    h1 { margin: 18px 0 12px; font-size: clamp(34px, 5vw, 58px); line-height: 1.25; }
+    .lead { max-width: 920px; color: #d4e2ef; font-size: 19px; margin: 0; }
+    .meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+    .meta span { padding: 7px 12px; background: rgba(255,255,255,.08); border-radius: 10px; font-size: 13px; color: #e5edf5; }
+    main { padding: 42px 22px 80px; }
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: clamp(22px, 4vw, 42px);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    h2 { margin: 0 0 18px; font-size: 28px; line-height: 1.4; }
+    h3 { margin: 28px 0 10px; font-size: 21px; color: #163d60; }
+    h4 { margin: 20px 0 7px; color: var(--gold); font-size: 16px; }
+    p { margin: 9px 0 16px; }
+    ul, ol { margin: 8px 0 18px; padding-right: 24px; }
+    li { margin: 5px 0; }
+    .callout {
+      border-right: 5px solid var(--gold);
+      background: var(--gold-soft);
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-weight: 700;
+    }
+    .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 14px; }
+    .principle { padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: #fbfdff; }
+    .principle strong { display: block; color: var(--blue); margin-bottom: 4px; }
+    .diagram {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin: 24px auto 10px;
+      border-radius: 20px;
+      box-shadow: 0 20px 45px rgba(8,20,37,.2);
+      background: #081425;
+    }
+    .caption { text-align: center; color: var(--muted); font-size: 13px; }
+    .phase { border-top: 5px solid var(--blue); }
+    .phase-number {
+      display: inline-flex;
+      min-width: 48px;
+      height: 48px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      color: white;
+      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      margin-left: 10px;
+      font-weight: 900;
+    }
+    .wp { margin-top: 22px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fbfdff; }
+    .wp h3 { margin-top: 0; }
+    .grid-two { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    .gate { background: var(--green-soft); border: 1px solid #b9e9d8; border-radius: 14px; padding: 15px 18px; }
+    .gate strong { color: var(--green); }
+    code, pre { direction: ltr; text-align: left; font-family: Consolas, "Courier New", monospace; }
+    code { background: #edf3f7; padding: 2px 6px; border-radius: 6px; }
+    pre { overflow-x: auto; background: #081425; color: #dbeafe; padding: 20px; border-radius: 15px; line-height: 1.65; }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 13px; text-align: right; vertical-align: top; }
+    th { background: #eaf4fa; color: #123b5d; }
+    .sequence { counter-reset: item; list-style: none; padding: 0; }
+    .sequence li { counter-increment: item; position: relative; padding: 12px 56px 12px 16px; border-bottom: 1px solid var(--line); }
+    .sequence li::before {
+      content: counter(item);
+      position: absolute;
+      right: 5px;
+      top: 8px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--ink);
+      color: white;
+      font-weight: 800;
+    }
+    .footer { max-width: 1180px; margin: 0 auto; padding: 0 22px 42px; color: var(--muted); text-align: center; font-size: 13px; }
+    @media (max-width: 760px) {
+      .grid-two { grid-template-columns: 1fr; }
+      .hero { padding-top: 48px; }
+      section { border-radius: 16px; }
+      table { display: block; overflow-x: auto; }
+    }
+    @media print {
+      body { background: white; }
+      .hero { padding: 34px 24px; }
+      section { box-shadow: none; break-inside: avoid; }
+      .phase { break-inside: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <span class="eyebrow">وثيقة معمارية وتنفيذية</span>
+      <h1>خطة تثبيت وتطوير بنية Eoshop</h1>
+      <p class="lead">تطوير وإصلاح تدريجي للنظام القائم، مع الحفاظ على الفكرة والواجهة الحالية، وتحويل العمليات المحاكية إلى خدمات حقيقية آمنة وقابلة للتوسع.</p>
+      <div class="meta">
+        <span>النهج: لا إعادة بناء من الصفر</span>
+        <span>التنظيم: Phase → Work Package</span>
+        <span>الضمان: T0–T5 داخل كل WP</span>
+        <span>السوق المحوري: المتاجر الصغيرة واليمن</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>الملخص التنفيذي</h2>
+      <p>نجحت النسخة الحالية في تحويل فكرة Eoshop إلى تجربة مرئية غنية. يمكن للتاجر اختيار قالب، توليد هوية بالذكاء الاصطناعي، تخصيص متجره ومعاينته. المطلوب الآن ليس هدم هذا العمل، بل بناء عمود فقري هندسي موثوق حوله.</p>
+      <div class="callout">القرار الحاكم: نحافظ على الواجهة والقيمة الحالية، ونستبدل المحاكاة بوظائف حقيقية تدريجيًا، عبر حزم عمل صغيرة قابلة للاختبار والتراجع.</div>
+      <pre>Phase
+└─ Work Package
+   ├─ Implementation
+   ├─ Gates
+   ├─ Evidence
+   └─ Commit / PR / CI / Merge</pre>
+    </section>
+
+    <section>
+      <h2>رؤية المنتج</h2>
+      <p>تمكين صاحب المتجر الصغير—خصوصًا في اليمن والأسواق ذات التبني الرقمي المحدود—من الانتقال من البيع عبر التواصل الاجتماعي إلى متجر رقمي منظم، دون تعقيد المنصات العملاقة.</p>
+      <div class="principles">
+        <div class="principle"><strong>انطلاق بسيط</strong>خطوات عربية مفهومة دون خبرة تقنية.</div>
+        <div class="principle"><strong>ذكاء اصطناعي مساعد</strong>هوية ومحتوى ومنتجات أولية ضمن ضوابط واضحة.</div>
+        <div class="principle"><strong>تشغيل محلي واقعي</strong>الدفع عند الاستلام والتحويل والمحافظ المحلية.</div>
+        <div class="principle"><strong>قابلية قياس اجتماعية</strong>ربط المنتج بمنشوره وإعلانه وتتبع الطلبات لاحقًا.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>البنية المستهدفة</h2>
+      <img class="diagram" src="architecture-target.svg" alt="مخطط البنية المستهدفة لمنصة Eoshop">
+      <p class="caption">صورة SVG مستقلة عالية الدقة ومناسبة للعرض والطباعة.</p>
+      <div class="grid-two">
+        <div>
+          <h3>العمود الفقري</h3>
+          <ul>
+            <li>React وVite للواجهة فقط.</li>
+            <li>Nginx للتقديم والتوجيه والحماية الطرفية.</li>
+            <li>Laravel API خادم وحيد ومصدر الحقيقة.</li>
+            <li>PostgreSQL مركزي مع Schema مستقل لكل متجر في MVP.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>الخدمات المساندة</h3>
+          <ul>
+            <li>Redis للصفوف والكاش والجلسات.</li>
+            <li>Object Storage للصور والوثائق.</li>
+            <li>Gemini خلف Laravel مع حدود ومراقبة.</li>
+            <li>Node أداة بناء، وليس خادم أعمال موازيًا.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>المبادئ الحاكمة</h2>
+      <div class="principles">
+        <div class="principle"><strong>لا Big Bang Rewrite</strong>التغيير تدريجي ويحافظ على المنتج العامل.</div>
+        <div class="principle"><strong>الخادم مصدر الحقيقة</strong>الهوية والأسعار والمخزون والصلاحيات لا تُحسم في المتصفح.</div>
+        <div class="principle"><strong>أصغر تغيير مكتمل</strong>كل WP محدود وقابل للإثبات والتراجع.</div>
+        <div class="principle"><strong>التوافق قبل التفكيك</strong>Adapters وواجهات API قبل تقسيم المكونات الكبيرة.</div>
+        <div class="principle"><strong>لا دمج دون دليل</strong>Gates وEvidence وCI شروط وليست إضافات.</div>
+        <div class="principle"><strong>الصحة قبل التوسع</strong>نثبت العمليات أولًا ثم نحسن الأداء.</div>
+      </div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">0</span>خط الأساس والتشغيل الموحد</h2>
+      <div class="wp"><h3>WP 0.1 — Baseline آمن</h3><p><strong>Implementation:</strong> إدخال المشروع تحت Git، ضبط الاستثناءات، فحص الأسرار، إنشاء Baseline Commit وREADME.</p><div class="gate"><strong>Gate:</strong> مستودع نظيف قابل للرجوع، بلا أسرار أو اعتمادات أو جلسات مولدة.</div><p><strong>Evidence:</strong> Git status، نتيجة فحص الأسرار، قائمة الملفات المتتبعة ومعرف الـCommit.</p></div>
+      <div class="wp"><h3>WP 0.2 — خادم واحد</h3><p><strong>Implementation:</strong> Laravel API هو الخادم الوحيد؛ توحيد Gemini داخله؛ Node للبناء فقط؛ تثبيت الإصدارات وتوحيد `/api` في كل البيئات.</p><div class="gate"><strong>Gate:</strong> لا ازدواج في قواعد العمل، ونفس السلوك في التطوير والإنتاج.</div></div>
+      <div class="wp"><h3>WP 0.3 — CI وبوابة الجودة</h3><p>فحص TypeScript وPHP، اختبارات أساسية، تدقيق الاعتمادات، Docker والمهاجرات، ومنع الدمج عند فشل CI.</p></div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">1</span>الهوية والمصادقة والصلاحيات</h2>
+      <div class="wp"><h3>WP 1.1 — الهوية المركزية</h3><p>إنشاء المستخدمين والأدوار والصلاحيات وعلاقة المستخدم بالمتجر وسجل العمليات الإدارية.</p></div>
+      <div class="wp"><h3>WP 1.2 — مصادقة التاجر</h3><p>تسجيل ودخول وخروج واستعادة كلمة المرور بجلسة آمنة، ودمج حالات المستخدم المتكررة في مصدر واحد.</p></div>
+      <div class="wp"><h3>WP 1.3 — حماية الإدارة</h3><p>إزالة الدخول الوهمي، حماية المسارات، Policies وسجل تدقيق للقبول والرفض والتعليق والتعديل.</p><div class="gate"><strong>Gates:</strong> غير المسجل يحصل على 401، وغير المخول على 403، ولا يمكن صناعة Admin من المتصفح.</div></div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">2</span>دورة حياة المتجر والمستأجر</h2>
+      <div class="wp"><h3>WP 2.1 — Tenancy والترحيلات</h3><p>تسجيل مسارات المستأجر فعليًا، توحيد صيغة النطاق، ربط migrations المركزية والخاصة بالمستأجر، وتوثيق Schema-per-tenant.</p></div>
+      <div class="wp"><h3>WP 2.2 — Provisioning احترافي</h3><p>نقل التهيئة إلى Job قابل لإعادة المحاولة وIdempotent، مع سجل خطوات وتعويض آمن عند الفشل.</p><pre>draft → submitted → approved → provisioning → active
+                    ↘ rejected
+active → suspended
+provisioning → failed → retrying</pre></div>
+      <div class="wp"><h3>WP 2.3 — النطاق والباقات</h3><p>تحقق وحجز حقيقيان، ربط الباقة بالمستأجر، وفصل طلب النشر عن اكتمال التفعيل.</p><div class="gate"><strong>Gate:</strong> اختبار End-to-End ينشئ متجرًا ويهاجر بياناته ويفتحه من نطاقه الصحيح، ويثبت نجاح retry عند الفشل.</div></div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">3</span>توصيل الواجهة بالخلفية</h2>
+      <div class="wp"><h3>WP 3.1 — API Client موحد</h3><p>عقود وDTOs وTypes ومعالجة مركزية للأخطاء والجلسة وإعادة المحاولة.</p></div>
+      <div class="wp"><h3>WP 3.2 — استبدال localStorage</h3><ol><li>الهوية والجلسة.</li><li>بيانات المتجر.</li><li>إعدادات التصميم.</li><li>المنتجات والمخزون.</li><li>لوحة الإدارة.</li><li>النطاق والاشتراك.</li></ol></div>
+      <div class="wp"><h3>WP 3.3 — الحفاظ على تجربة الواجهة</h3><p>Adapters وFeature Flags دون إعادة تصميم الشاشات أثناء تحويل العمليات.</p><div class="gate"><strong>Gate:</strong> البيانات نفسها تظهر للمستخدم المصرح له من جهاز آخر، والإدارة ترى المتاجر الحقيقية.</div></div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">4</span>نواة التجارة والطلبات</h2>
+      <div class="grid-two">
+        <div class="wp"><h3>WP 4.1 — المنتجات والأسعار</h3><p>SKU، حالة نشر، عملة، سعر أساسي وعرض وصور مخزنة بطريقة سليمة.</p></div>
+        <div class="wp"><h3>WP 4.2 — المخزون</h3><p>Inventory movements، حماية التزامن، منع السالب وسجل كامل للحركات.</p></div>
+        <div class="wp"><h3>WP 4.3 — الطلبات</h3><p>يعيد الخادم حساب السعر والخصم والشحن والرسوم، ويستخدم Snapshot وIdempotency وسجل حالات.</p></div>
+        <div class="wp"><h3>WP 4.4 — السوق المحلي</h3><p>الدفع عند الاستلام، التحويل البنكي، المحافظ المحلية، إثبات التحويل وإشعارات واتساب.</p></div>
+      </div>
+      <div class="gate"><strong>Gates:</strong> لا يمكن تغيير السعر من المتصفح، ولا تكرار الطلب، ولا بيع مخزون غير متاح عند التزامن.</div>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">5</span>التفكيك المنظم للواجهة</h2>
+      <p>لا Refactor شامل. كل ملف نلمسه لتنفيذ وظيفة حقيقية نفصل منه الجزء المرتبط بهذه الوظيفة فقط.</p>
+      <pre>src/
+├─ app/
+├─ features/
+│  ├─ auth/
+│  ├─ store-builder/
+│  ├─ catalog/
+│  ├─ inventory/
+│  ├─ checkout/
+│  ├─ tenancy/
+│  └─ platform-admin/
+├─ components/
+├─ api/
+├─ hooks/
+├─ schemas/
+└─ types/</pre>
+    </section>
+
+    <section class="phase">
+      <h2><span class="phase-number">6</span>التشغيل والأداء والتوسع</h2>
+      <div class="principles">
+        <div class="principle"><strong>Redis وWorkers</strong>مهام التهيئة والذكاء الاصطناعي والإشعارات.</div>
+        <div class="principle"><strong>Storage وCDN</strong>صور ووثائق وأصول قابلة للتوسع.</div>
+        <div class="principle"><strong>Observability</strong>Logs وMetrics وAlerts وCorrelation IDs.</div>
+        <div class="principle"><strong>الاستمرارية</strong>نسخ احتياطية واستعادة مجربة واختبارات تحميل.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>الربط المستقبلي بالإعلانات الاجتماعية</h2>
+      <p>يُنفذ كـBounded Context مستقل بعد استقرار المنتجات والطلبات:</p>
+      <pre>Product
+└─ Social Listing
+   ├─ Platform
+   ├─ Post / Ad URL
+   ├─ Campaign Metadata
+   ├─ Tracking Code
+   ├─ Landing Link
+   └─ Attribution / Orders</pre>
+      <ol>
+        <li>رابط منتج سريع وصالح للمشاركة.</li>
+        <li>رابط متتبع لكل منشور أو إعلان.</li>
+        <li>توليد نص وصورة مقترحين بالذكاء الاصطناعي.</li>
+        <li>نشر يدوي منظم أولًا.</li>
+        <li>قياس الزيارات والطلبات المنسوبة.</li>
+        <li>تكامل مباشر مع APIs المنصات لاحقًا.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>طبقة الضمان T0–T5</h2>
+      <table>
+        <thead><tr><th>المستوى</th><th>الغرض</th><th>المخرجات</th></tr></thead>
+        <tbody>
+          <tr><td>T0 — Scope &amp; Baseline</td><td>تحديد النطاق والحالة ومعايير القبول</td><td>Baseline، مخاطر، Acceptance Criteria</td></tr>
+          <tr><td>T1 — Design</td><td>تصميم التغيير قبل التنفيذ</td><td>ADR، عقود، بيانات، Threat Model، Rollback</td></tr>
+          <tr><td>T2 — Implementation</td><td>أصغر تغيير مكتمل</td><td>كود محدود وتوافق أو Feature Flag</td></tr>
+          <tr><td>T3 — Verification</td><td>إثبات صحة الوظيفة</td><td>Unit، Integration، Feature، Negative Tests</td></tr>
+          <tr><td>T4 — Operational Gate</td><td>الأمن والتشغيل والبيانات</td><td>Security، migrations، rollback، performance</td></tr>
+          <tr><td>T5 — Release Evidence</td><td>تجهيز الإصدار والدمج</td><td>Evidence، توثيق، CI، PR ومراجعة</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>ترتيب التنفيذ الإلزامي</h2>
+      <ol class="sequence">
+        <li>Baseline وGit.</li>
+        <li>تثبيت Laravel كخادم واحد.</li>
+        <li>CI وبوابات الجودة.</li>
+        <li>الهوية والصلاحيات.</li>
+        <li>Tenancy ودورة حياة المتجر.</li>
+        <li>ربط الواجهة بالخادم.</li>
+        <li>الطلبات والتسعير والمخزون.</li>
+        <li>التفكيك التدريجي أثناء العمل.</li>
+        <li>الأداء والتوسع والتشغيل المتقدم.</li>
+        <li>الربط الاجتماعي بعد استقرار المنتج وقابلية التتبع.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>تعريف النجاح</h2>
+      <p>تنجح الخطة عندما يتحول Eoshop من نموذج يعمل داخل متصفح واحد إلى منتج موثوق دون خسارة تجربة المستخدم الحالية أو إيقاف التطوير طويلًا.</p>
+      <ul>
+        <li>هوية وصلاحيات لا يمكن تجاوزها من المتصفح.</li>
+        <li>متجر يُنشأ ويُفعّل ويُستعاد بطريقة قابلة للتدقيق.</li>
+        <li>بيانات متسقة من أي جهاز مصرح له.</li>
+        <li>طلب لا يمكن التلاعب بسعره أو مخزونه.</li>
+        <li>كل تغيير يمر عبر Gates وEvidence وCI.</li>
+        <li>أساس يسمح بالربط الاجتماعي والدفع والتوسع دون إعادة هدم النظام.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="footer">Eoshop — خطة تطوير تدريجي تحافظ على الفكرة وتبني حولها نظامًا احترافيًا.</footer>
+</body>
+</html>
