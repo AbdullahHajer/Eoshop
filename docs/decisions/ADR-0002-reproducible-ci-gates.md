@@ -33,7 +33,9 @@ Third-party and official Actions are pinned to full commit SHAs. Tool containers
 - `Backend quality`
 - `Container integration`
 
-After this workflow exists on `main`, branch protection must require all four names and at least one approving review before merging. Protection is intentionally activated only after the workflow is present on `main`; enabling it earlier would block the prerequisite WP 0.2 pull request because that branch cannot emit the new checks.
+After this workflow exists on `main`, branch protection must require all four names and the pull-request workflow. While the repository has only one maintainer, the approval count is zero so the owner is not permanently locked out of merging a green pull request. When a second trusted maintainer receives write access, the policy should be raised to one independent approval and last-push approval separation. Protection is intentionally activated only after the workflow is present on `main`; enabling it earlier would block the prerequisite WP 0.2 pull request because that branch cannot emit the new checks.
+
+Protection was activated on 2026-08-12 after WP 0.2 and WP 0.3 were merged and all four checks passed on `main`.
 
 ## Migration boundary
 
@@ -53,7 +55,7 @@ CI executes central/system migrations against a new PostgreSQL volume. Tenant mi
 
 - The first uncached PHP container build is relatively expensive.
 - Dependency audits can expose upstream advisories that require an explicit remediation decision.
-- Branch protection remains a post-merge repository setting and cannot be fully expressed by a workflow file alone.
+- Branch protection is a repository setting outside Git history, so its verified state is recorded as operational evidence.
 
 ## Rollback
 
