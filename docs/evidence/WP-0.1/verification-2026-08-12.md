@@ -117,4 +117,19 @@ No Git metadata outside `Eoshop` was modified. Because the Codex sandbox account
 | PHP syntax | Passed |
 | Compose syntax | Passed |
 | Repository boundary and remote | Passed |
-| Baseline Git commit and remote push | Pending |
+| Baseline Git commit | Passed — `c38c34a0cf29700ca5510d8fc363aa0b1bf21291` |
+| Remote push | Passed — `main` created on `origin` |
+| Local/remote SHA comparison | Passed — exact match |
+| Branch tracking | Passed — local `main` tracks `origin/main` |
+
+## Remote verification
+
+After the authorized push, the following values were verified:
+
+```text
+LOCAL_SHA=c38c34a0cf29700ca5510d8fc363aa0b1bf21291
+REMOTE_SHA=c38c34a0cf29700ca5510d8fc363aa0b1bf21291
+MATCH=True
+```
+
+The remote is `https://github.com/sas-prog1/Eoshop.git`, and the verified branch is `main`.

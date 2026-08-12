@@ -4,8 +4,9 @@
 |---|---|
 | Phase | Phase 0 — Baseline, governance and unified operation |
 | Work Package | WP 0.1 |
-| Status | In progress — verification complete; baseline commit and push pending |
+| Status | Complete |
 | Started | 2026-08-12 |
+| Completed | 2026-08-12 |
 | Behavioral change | None intended |
 
 ## Objective
@@ -127,7 +128,7 @@ These constraints are recorded as evidence, not treated as application defects. 
 | Real environment files excluded | Passed by rule | `.env` patterns exclude root and nested real environment files |
 | Dependencies/build/runtime files excluded | Passed by rule | Node, PHP, dist and Laravel runtime patterns added |
 | Baseline can be committed without files outside project scope | Passed | Independent `.git` initialized inside `Eoshop`; `origin` configured |
-| Working tree clean after baseline commit | Pending | Requires the baseline commit |
+| Working tree clean after baseline commit | Passed | Local `main` clean and tracking `origin/main` |
 
 ## T5 — Release evidence
 
@@ -145,11 +146,12 @@ These constraints are recorded as evidence, not treated as application defects. 
 
 - [Verification record — 2026-08-12](../evidence/WP-0.1/verification-2026-08-12.md)
 
-### Pending release actions
+### Completed release actions
 
-1. Create the baseline commit and optional tag.
-2. Push `main` to `origin`.
-3. Record commit ID, remote verification and final clean status in this document.
+1. Created baseline commit `c38c34a0cf29700ca5510d8fc363aa0b1bf21291`.
+2. Pushed `main` to `origin` at `https://github.com/sas-prog1/Eoshop.git`.
+3. Verified the remote `refs/heads/main` SHA exactly matched the local SHA.
+4. Verified local `main` tracks `origin/main` with no uncommitted application changes after the baseline commit.
 
 ## Acceptance criteria
 
@@ -160,9 +162,9 @@ These constraints are recorded as evidence, not treated as application defects. 
 - [x] No application behavior was intentionally changed.
 - [x] Repository boundary is explicitly decided.
 - [x] Proposed tracked files pass the baseline secret-signature check.
-- [ ] Baseline commit exists.
-- [ ] CI or equivalent baseline checks are recorded.
+- [x] Baseline commit exists and is present on the remote.
+- [x] Equivalent baseline checks are recorded; automated CI creation remains WP 0.3.
 
 ## Exit decision
 
-WP 0.2 design work may be prepared, but code changes that remove the Node/Laravel duplication should begin only after the WP 0.1 baseline commit is safely established.
+WP 0.1 is complete. WP 0.2 may now begin the controlled removal of the Node/Laravel application-server duplication.
