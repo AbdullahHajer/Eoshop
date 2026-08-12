@@ -19,9 +19,8 @@
 ## Verified rules
 
 - Pull requests are required; direct pushes are not an accepted change path.
-- One approving review is required.
-- Stale approvals are dismissed when code changes.
-- The author of the latest push cannot provide the decisive approval.
+- Pull requests currently require zero approvals because `sas-prog1` is the repository's only collaborator.
+- Stale-approval dismissal remains enabled for the future multi-maintainer policy.
 - Review conversations must be resolved before merge.
 - Branches must be up to date before merging (`strict` status checks).
 - Rules are enforced for repository administrators.
@@ -34,4 +33,6 @@
 - `Backend quality`
 - `Container integration`
 
-The API readback returned `protected: true` for `main`, all four check contexts, one required approval, administrator enforcement, and disabled force pushes and deletion.
+The API readback returned `protected: true` for `main`, all four check contexts, zero required approvals, administrator enforcement, and disabled force pushes and deletion. The pull-request requirement remains active; only the impossible independent-approval condition is disabled for the sole maintainer.
+
+When another trusted collaborator receives write access, raise `required_approving_review_count` to one and enable `require_last_push_approval`.
