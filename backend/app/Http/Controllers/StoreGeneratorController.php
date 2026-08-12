@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\GeminiStoreGeneratorService;
 use Exception;
+use Illuminate\Http\Request;
 
 class StoreGeneratorController extends Controller
 {
@@ -25,10 +25,11 @@ class StoreGeneratorController extends Controller
 
         try {
             $storeData = $this->geminiService->generateStoreIdeas($request->input('description'));
+
             return response()->json($storeData);
         } catch (Exception $e) {
             return response()->json([
-                'error' => $e->getMessage() ?: 'فشل توليد الأفكار، يرجى المحاولة لاحقاً'
+                'error' => $e->getMessage() ?: 'فشل توليد الأفكار، يرجى المحاولة لاحقاً',
             ], 500);
         }
     }

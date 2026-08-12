@@ -40,6 +40,40 @@ RUN composer install \
     --optimize-autoloader \
     --prefer-dist
 
+FROM php-base AS quality
+
+ENV APP_ENV=testing \
+    APP_DEBUG=false \
+    LOG_CHANNEL=stderr \
+    CACHE_STORE=array \
+    QUEUE_CONNECTION=sync \
+    SESSION_DRIVER=array
+
+COPY backend/composer.json backend/composer.lock ./
+
+RUN --mount=type=cache,target=/tmp/composer-cache \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache composer install \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --prefer-dist
+
+COPY backend/ ./
+
+RUN set -eux; \
+    mkdir -p \
+        storage/app/private \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache; \
+    composer dump-autoload --optimize --no-interaction
+
+CMD ["composer", "check"]
+
 FROM php-base AS app
 
 ENV APP_ENV=production \

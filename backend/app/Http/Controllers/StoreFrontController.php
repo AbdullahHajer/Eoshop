@@ -15,7 +15,7 @@ class StoreFrontController extends Controller
     {
         $configRecord = DB::table('store_configs')->latest()->first();
 
-        if (!$configRecord) {
+        if (! $configRecord) {
             return response()->json(['error' => 'إعدادات المتجر غير موجودة'], 404);
         }
 

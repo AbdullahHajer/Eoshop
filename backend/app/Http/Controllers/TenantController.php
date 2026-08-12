@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Tenant;
 use App\Models\Domain;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
+use App\Models\Tenant;
 use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TenantController extends Controller
 {
@@ -31,7 +31,7 @@ class TenantController extends Controller
             DB::beginTransaction();
 
             $subdomain = Str::slug($validated['subdomain']);
-            $tenantId = 'store-' . Str::random(8);
+            $tenantId = 'store-'.Str::random(8);
 
             // 1. Create Tenant record in Central Platform Database
             $tenant = Tenant::create([
@@ -45,7 +45,7 @@ class TenantController extends Controller
             ]);
 
             // 2. Attach Subdomain Domain
-            $domainName = $subdomain . '.' . parse_url(config('app.url'), PHP_URL_HOST);
+            $domainName = $subdomain.'.'.parse_url(config('app.url'), PHP_URL_HOST);
             $tenant->domains()->create([
                 'domain' => $subdomain,
             ]);
@@ -69,8 +69,9 @@ class TenantController extends Controller
 
         } catch (Exception $e) {
             DB::rollBack();
+
             return response()->json([
-                'error' => 'فشل إنشاء المتجر: ' . $e->getMessage()
+                'error' => 'فشل إنشاء المتجر: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -81,6 +82,7 @@ class TenantController extends Controller
     public function listStores()
     {
         $stores = Tenant::with('domains')->latest()->get();
+
         return response()->json($stores);
     }
 

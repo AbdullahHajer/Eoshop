@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Repository safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate repository invariants
+        shell: pwsh
+        run: ./scripts/ci/repository-gate.ps1
+
+      - name: Lint GitHub Actions workflow
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo"
+          --workdir /repo
+          rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+          -color
+
+      - name: Scan Git history for secrets
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --no-banner --redact --exit-code 1 /repo
+
+  frontend:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+          package-manager-cache: false
+
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run frontend quality gates
+        run: npm run check
+
+      - name: Audit frontend dependencies
+        run: npm run audit
+
+  backend:
+    name: Backend quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build backend quality image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          target: quality
+          load: true
+          push: false
+          tags: eoshop/backend-quality:ci
+          cache-from: type=gha,scope=eoshop-backend-quality
+          cache-to: type=gha,mode=max,scope=eoshop-backend-quality
+
+      - name: Run Composer, Pint, Larastan and PHPUnit gates
+        run: >-
+          docker run --rm
+          eoshop/backend-quality:ci
+          sh -lc "composer validate --strict --no-check-publish
+          && composer audit --locked
+          && composer check"
+
+  integration:
+    name: Container integration
+    needs:
+      - repository
+      - frontend
+      - backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build backend production image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          target: app
+          load: true
+          push: false
+          tags: eoshop/backend:ci
+          cache-from: type=gha,scope=eoshop-backend
+          cache-to: type=gha,mode=max,scope=eoshop-backend
+
+      - name: Build web production image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          load: true
+          push: false
+          tags: eoshop/web:ci
+          cache-from: type=gha,scope=eoshop-web
+          cache-to: type=gha,mode=max,scope=eoshop-web
+
+      - name: Run clean migrations and HTTP smoke tests
+        shell: pwsh
+        run: ./scripts/ci/integration-gate.ps1 -ProjectName "eoshop-ci-${{ github.run_id }}-${{ github.run_attempt }}"

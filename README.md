@@ -30,6 +30,7 @@ Key records:
 - [Target architecture diagram](docs/architecture-target.svg)
 - [WP 0.1 baseline record](docs/work-packages/WP-0.1-baseline.md)
 - [WP 0.2 single-server record](docs/work-packages/WP-0.2-single-application-server.md)
+- [WP 0.3 CI and automated gates](docs/work-packages/WP-0.3-ci-quality-gates.md)
 
 ## Technology map
 
@@ -83,9 +84,11 @@ Vite proxies `/api` to `VITE_API_BASE_URL`, which defaults to `http://localhost:
 Frontend gates:
 
 ```powershell
-npm run lint
-npm run build
+npm run check
+npm run audit
 ```
+
+Repository and container integration gates are documented in the [WP 0.3 record](docs/work-packages/WP-0.3-ci-quality-gates.md). Pull requests run four automated checks: repository safety, frontend quality, backend quality and container integration.
 
 Containerized startup requires local, uncommitted environment files based on their examples:
 

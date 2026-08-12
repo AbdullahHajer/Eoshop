@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\StoreGeneratorController;
 use App\Http\Controllers\TenantController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
