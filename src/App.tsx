@@ -16,6 +16,8 @@ import AuthGateway, { UserProfile } from "./components/AuthGateway";
 import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
 import DomainSetupModal from "./components/DomainSetupModal";
 import AdminAuthModal from "./components/AdminAuthModal";
+import ResetPasswordGateway from "./components/ResetPasswordGateway";
+import { authApi, toUserProfile } from "./services/authApi";
 
 const initialMockStores: PlatformStore[] = [
   {
@@ -205,7 +207,7 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
 
-  // Local Storage persistence - load saved store & user registration if any
+  // Local storage persists only store drafts. Authentication is restored from Laravel's session.
   useEffect(() => {
     const saved = localStorage.getItem("mobtaker_custom_store");
     if (saved) {
@@ -223,14 +225,10 @@ export default function App() {
       }
     }
 
-    const savedUser = localStorage.getItem("mobtaker_user_registration");
-    if (savedUser) {
-      try {
-        setRegisteredUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Error loading saved user", e);
-      }
-    }
+    localStorage.removeItem("mobtaker_user_registration");
+    authApi.session()
+      .then((user) => setAuthUser(user ? toUserProfile(user) : null))
+      .catch(() => setAuthUser(null));
 
     const savedPlatformStores = localStorage.getItem("mobtaker_platform_stores");
     if (savedPlatformStores) {
@@ -391,6 +389,14 @@ export default function App() {
 
   // Handle template selection
   const selectTemplate = (type: "elegant" | "tech") => {
+    if (!authUser) {
+      setPendingAction({ type: "templates" });
+      setAuthGatewayMode("login");
+      setIsAuthGatewayOpen(true);
+      triggerToast("سجّل الدخول أولاً لحفظ المتجر باسم حسابك.", "info");
+      return;
+    }
+
     if (!registeredUser) {
       setPendingAction({ type: "templates" });
       setIsRegisterModalOpen(true);
@@ -407,6 +413,21 @@ export default function App() {
 
   // Check registration before taking actions
   const checkRegistrationAndExecute = (type: "templates" | "ai" | "builder", data?: any) => {
+    if (!authUser) {
+      setPendingAction({ type, data });
+      setAuthGatewayMode("login");
+      setIsAuthGatewayOpen(true);
+      triggerToast("سجّل الدخول أولاً للمتابعة بحساب موثوق.", "info");
+      return;
+    }
+
+    if (!registeredUser) {
+      setPendingAction({ type, data });
+      setIsRegisterModalOpen(true);
+      triggerToast("أكمل بريف المتجر لربط بيانات النشاط بحسابك.", "info");
+      return;
+    }
+
     if (type === "templates") {
       setView("templates");
     } else if (type === "builder") {
@@ -420,7 +441,6 @@ export default function App() {
   const handleRegistrationSuccess = (userData: typeof registeredUser) => {
     if (!userData) return;
     setRegisteredUser(userData);
-    localStorage.setItem("mobtaker_user_registration", JSON.stringify(userData));
     setIsRegisterModalOpen(false);
 
     // Update store Name from businessName
@@ -453,12 +473,19 @@ export default function App() {
     setIsLogoutConfirmOpen(true);
   };
 
-  const executeLogout = () => {
+  const executeLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      triggerToast("تعذر إنهاء الجلسة على الخادم. تحقق من الاتصال ثم حاول مجددًا.", "error");
+      return;
+    }
+
+    setAuthUser(null);
     setRegisteredUser(null);
-    localStorage.removeItem("mobtaker_user_registration");
     setView("landing");
     setIsLogoutConfirmOpen(false);
-    triggerToast("تم تسجيل الخروج بنجاح وإلغاء توثيق الحساب 🛡️", "info");
+    triggerToast("تم تسجيل الخروج وإنهاء جلسة الحساب بنجاح 🛡️", "info");
   };
 
   // Actual backend AI Generation call
@@ -1148,7 +1175,7 @@ export default function App() {
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <div className="text-right hidden sm:block">
                   <span className="block text-slate-800 font-extrabold text-xs">{registeredUser.fullName}</span>
-                  <span className="text-[9px] text-emerald-700 block -mt-1 font-normal">مالك متجر موثق 🚀 {registeredUser.socialPageUrl ? "• صفحة معتمدة" : ""}</span>
+                  <span className="text-[9px] text-emerald-700 block -mt-1 font-normal">جلسة حساب موثقة 🚀 {registeredUser.socialPageUrl ? "• صفحة مضافة" : ""}</span>
                 </div>
                 <button 
                   onClick={handleLogout}
@@ -1902,7 +1929,7 @@ export default function App() {
 
       {/* Registration & Business Documents Verification Gateway */}
       <AnimatePresence>
-        {isRegisterModalOpen && (
+        {isRegisterModalOpen && authUser && (
           <RegistrationGateway
             isOpen={isRegisterModalOpen}
             onClose={() => {
@@ -1912,6 +1939,7 @@ export default function App() {
             onSuccess={handleRegistrationSuccess}
             initialStoreName={config.storeName !== "متجر عطور لورين" && config.storeName !== "متجر تك برو" ? config.storeName : ""}
             currentUser={registeredUser}
+            authenticatedUser={{ fullName: authUser.fullName, email: authUser.email }}
           />
         )}
       </AnimatePresence>
@@ -2026,11 +2054,17 @@ export default function App() {
         initialMode={authGatewayMode}
         onLoginSuccess={(user) => {
           setAuthUser(user);
+          if (pendingAction) {
+            setIsRegisterModalOpen(true);
+          }
           triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
         }}
-        onLogout={() => {
+        onLogout={async () => {
+          await authApi.logout();
           setAuthUser(null);
-          triggerToast("تم تسجيل الخروج من الحساب بنجاح", "info");
+          setRegisteredUser(null);
+          setView("landing");
+          triggerToast("تم تسجيل الخروج وإنهاء الجلسة بنجاح", "info");
         }}
         onStartStoreCreation={() => {
           setView("templates");
@@ -2041,11 +2075,14 @@ export default function App() {
       <AdminAuthModal
         isOpen={isAdminAuthModalOpen}
         onClose={() => setIsAdminAuthModalOpen(false)}
-        onSuccess={() => {
+        onSuccess={(user) => {
+          setAuthUser(user);
           setIsAdminOpen(true);
           triggerToast("مرحباً بك في لوحة الإدارة المركزية لمالكي المنصة 🔒⚡", "success");
         }}
       />
+
+      <ResetPasswordGateway />
     </div>
   );
 }

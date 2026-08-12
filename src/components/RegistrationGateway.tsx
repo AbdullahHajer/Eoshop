@@ -29,6 +29,10 @@ interface RegistrationGatewayProps {
     fileName?: string;
     fileSize?: string;
   } | null;
+  authenticatedUser: {
+    fullName: string;
+    email: string;
+  };
 }
 
 export default function RegistrationGateway({ 
@@ -36,12 +40,13 @@ export default function RegistrationGateway({
   onClose, 
   onSuccess,
   initialStoreName = "",
-  currentUser = null
+  currentUser = null,
+  authenticatedUser,
 }: RegistrationGatewayProps) {
   
   // Form states
-  const [fullName, setFullName] = useState(currentUser?.fullName || "");
-  const [email, setEmail] = useState(currentUser?.email || "");
+  const [fullName] = useState(authenticatedUser.fullName);
+  const [email] = useState(authenticatedUser.email);
   const [phone, setPhone] = useState("");
   const [businessName, setBusinessName] = useState(currentUser?.businessName || initialStoreName);
   const [businessType, setBusinessType] = useState(currentUser?.businessType || "عطور وبخور");
@@ -231,8 +236,8 @@ export default function RegistrationGateway({
                   type="text"
                   required
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 rounded-xl pr-10 pl-4 py-3 text-slate-800 text-xs font-bold focus:outline-none transition"
+                  readOnly
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl pr-10 pl-4 py-3 text-slate-700 text-xs font-bold"
                   placeholder="مثال: محمد بن علي العتيبي"
                 />
                 <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
@@ -247,8 +252,8 @@ export default function RegistrationGateway({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 rounded-xl pr-10 pl-4 py-3 text-slate-800 text-xs font-bold focus:outline-none transition text-left"
+                  readOnly
+                  className="w-full bg-slate-100 border border-slate-200 rounded-xl pr-10 pl-4 py-3 text-slate-700 text-xs font-bold text-left"
                   placeholder="merchant@example.com"
                 />
                 <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
@@ -448,4 +453,3 @@ export default function RegistrationGateway({
     </div>
   );
 }
-
