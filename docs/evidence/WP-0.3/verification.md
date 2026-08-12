@@ -7,7 +7,7 @@
 | Branch | `codex/wp-0.3-ci-gates` |
 | Base | WP 0.2 commit `4d9fcd3` |
 | Local result | Passed |
-| GitHub result | Pending branch push and pull request |
+| GitHub result | Passed — [run 31620260312](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312) |
 
 ## Repository safety
 
@@ -49,6 +49,13 @@
 
 The first integration attempt exposed that an unknown `/api` route returned HTML when the caller sent no `Accept` header. Laravel exception rendering was corrected to preserve the API boundary, a regression assertion was added, and the complete backend and integration gates then passed.
 
-## Pending external evidence
+## GitHub Actions evidence
 
-The four GitHub check URLs and conclusions will be added after the stacked pull request is created. Branch protection must not require the new checks until this workflow exists on `main`; activation is therefore a post-merge repository task and is not claimed as complete here.
+All four checks passed on the implementation commit:
+
+- [Repository safety](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193032386): passed in 15 seconds.
+- [Frontend quality](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193032403): passed in 25 seconds.
+- [Backend quality](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193032429): passed in 2 minutes 48 seconds.
+- [Container integration](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312/job/94193862251): passed in 3 minutes 11 seconds.
+
+Branch protection must not require the new checks until this workflow exists on `main`; activation is therefore a post-merge repository task and is not claimed as complete here.

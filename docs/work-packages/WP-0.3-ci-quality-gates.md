@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 0 — Baseline, governance and unified operation |
 | Work Package | WP 0.3 |
-| Status | Implemented; local gates passed; GitHub checks pending |
+| Status | Implemented; local and GitHub gates passed |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-0.3-ci-gates` |
 | Base dependency | WP 0.2 / `codex/wp-0.2-single-server` |
@@ -100,7 +100,7 @@ Revert the WP commit. If branch protection has already been activated after merg
 - [x] HTTP smoke tests pass through the single Nginx entry point.
 - [x] Temporary containers and volumes are removed even after failure.
 - [x] Local commands are documented and use the same scripts.
-- [ ] Evidence records exact local and GitHub results. Local evidence is complete; GitHub URLs are pending push.
+- [x] Evidence records exact local and GitHub results.
 - [x] Required branch-protection check names and activation sequence are documented.
 
 ## Local execution
@@ -122,4 +122,4 @@ The script owns only the supplied Compose project name and removes its temporary
 ## Evidence
 
 - [Local verification — 2026-08-12](../evidence/WP-0.3/verification.md)
-- GitHub check URLs will be added after the branch is pushed.
+- [GitHub Actions run 31620260312](https://github.com/sas-prog1/Eoshop/actions/runs/31620260312)
