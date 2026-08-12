@@ -5,15 +5,21 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use JsonException;
 
 class GeminiStoreGeneratorService
 {
     protected string $apiKey;
-    protected string $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    protected string $baseUrl;
+    protected string $model;
+    protected int $timeout;
 
     public function __construct()
     {
-        $this->apiKey = config('services.gemini.api_key', env('GEMINI_API_KEY', ''));
+        $this->apiKey = (string) config('services.gemini.api_key', '');
+        $this->baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
+        $this->model = (string) config('services.gemini.model');
+        $this->timeout = (int) config('services.gemini.timeout', 30);
     }
 
     /**
@@ -27,6 +33,10 @@ class GeminiStoreGeneratorService
     {
         if (empty($this->apiKey) || $this->apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
             throw new Exception('مفتاح Gemini API غير معرف في ملف الإعدادات .env');
+        }
+
+        if (! preg_match('/^[A-Za-z0-9._-]+$/', $this->model)) {
+            throw new Exception('اسم نموذج Gemini غير صالح');
         }
 
         $systemInstruction = "أنت خبير في التجارة الإلكترونية وتصميم الهويات البصرية للمتاجر السعودية والخليجية. مهمتك هي مساعدة المستخدم في توليد هوية كاملة لمتجره الإلكتروني الجديد بناءً على الوصف المقدم باللغة العربية. يجب أن ترجع النتيجة ككائن JSON ملتزم تماماً بالهيكل المطلوب، باللغة العربية الفصحى الأنيقة والجذابة للمشترين.";
@@ -80,13 +90,24 @@ class GeminiStoreGeneratorService
             ]
         ];
 
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-            'User-Agent' => 'mobtaker-saas'
-        ])->post("{$this->baseUrl}?key={$this->apiKey}", $payload);
+        $endpoint = "{$this->baseUrl}/models/{$this->model}:generateContent";
+
+        $response = Http::acceptJson()
+            ->asJson()
+            ->withHeaders([
+                'x-goog-api-key' => $this->apiKey,
+                'User-Agent' => 'eoshop-saas',
+            ])
+            ->timeout($this->timeout)
+            ->retry(2, 250, throw: false)
+            ->post($endpoint, $payload);
 
         if ($response->failed()) {
-            Log::error('Gemini API Error Response', ['body' => $response->body()]);
+            Log::error('Gemini API request failed', [
+                'status' => $response->status(),
+                'model' => $this->model,
+                'request_id' => $response->header('x-request-id'),
+            ]);
             throw new Exception('فشل التواصل مع خدمة الذكاء الاصطناعي Gemini');
         }
 
@@ -97,6 +118,21 @@ class GeminiStoreGeneratorService
             throw new Exception('لم يتم إرجاع أي نتائج من الذكاء الاصطناعي');
         }
 
-        return json_decode($textResult, true);
+        try {
+            $decoded = json_decode($textResult, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            Log::warning('Gemini returned invalid JSON', [
+                'model' => $this->model,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw new Exception('أرجعت خدمة الذكاء الاصطناعي استجابة غير صالحة');
+        }
+
+        if (! is_array($decoded)) {
+            throw new Exception('أرجعت خدمة الذكاء الاصطناعي استجابة غير صالحة');
+        }
+
+        return $decoded;
     }
 }

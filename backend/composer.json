@@ -1,15 +1,15 @@
 {
-    "name": "mobtaker/saas-backend",
+    "name": "eoshop/platform-backend",
     "type": "project",
-    "description": "Multi-Tenant E-Commerce SaaS Platform Backend powered by Laravel 11 & Stancl Tenancy",
+    "description": "Eoshop multi-tenant commerce API powered by Laravel 12 and Stancl Tenancy",
     "keywords": ["laravel", "framework", "tenancy", "multi-tenant", "ecommerce", "gemini-ai"],
     "license": "MIT",
     "require": {
-        "php": "^8.4",
+        "php": "^8.4.1",
         "guzzlehttp/guzzle": "^7.8",
-        "laravel/framework": "*",
+        "laravel/framework": "^12.0",
         "laravel/tinker": "^2.9",
-        "stancl/tenancy": "^3.8"
+        "stancl/tenancy": "^3.10"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -43,12 +43,7 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
-        },
-        "audit": {
-            "block-advisories": false,
-            "block": false
         }
     },
-    "minimum-stability": "dev",
     "prefer-stable": true
 }

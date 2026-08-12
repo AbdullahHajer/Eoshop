@@ -35,11 +35,15 @@ pnpm-debug.log*
 # -----------------------------------------------------------------------------
 backend/vendor/
 backend/storage/logs/*
+backend/storage/app/private/*
+backend/storage/app/public/*
 backend/storage/framework/cache/*
 backend/storage/framework/sessions/*
 backend/storage/framework/testing/*
 backend/storage/framework/views/*
 backend/bootstrap/cache/*.php
+!backend/storage/**/.gitignore
+!backend/bootstrap/cache/.gitkeep
 .phpunit.result.cache
 
 # -----------------------------------------------------------------------------
@@ -58,3 +62,4 @@ Desktop.ini
 
 # Local Docker data directories, if created later.
 docker-data/
+.docker-local/

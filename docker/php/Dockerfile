@@ -1,26 +1,69 @@
-FROM php:8.4-fpm-alpine
+# syntax=docker/dockerfile:1.7
 
-# Install system dependencies via Alpine apk
-RUN apk add --no-cache \
-    git \
-    curl \
-    libpng-dev \
-    oniguruma-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    postgresql-dev \
-    libzip-dev \
-    libpq
+FROM php:8.4-fpm-alpine3.24 AS php-base
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql pgsql mbstring exif pcntl bcmath gd zip
+RUN set -eux; \
+    apk add --no-cache libpng libpq libzip oniguruma libxml2; \
+    apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        libpng-dev \
+        libzip-dev \
+        oniguruma-dev \
+        postgresql-dev \
+        libxml2-dev; \
+    docker-php-ext-install -j"$(nproc)" \
+        bcmath \
+        exif \
+        gd \
+        mbstring \
+        opcache \
+        pcntl \
+        pdo_pgsql \
+        pgsql \
+        zip; \
+    apk del .build-deps; \
+    mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
-# Get latest Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10.2 /usr/bin/composer /usr/local/bin/composer
 
-# Set working directory
 WORKDIR /var/www/backend
 
+FROM php-base AS vendor
+
+COPY backend/composer.json backend/composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --optimize-autoloader \
+    --prefer-dist
+
+FROM php-base AS app
+
+ENV APP_ENV=production \
+    APP_DEBUG=false \
+    LOG_CHANNEL=stderr
+
+COPY backend/ ./
+COPY --from=vendor /var/www/backend/vendor ./vendor
+
+RUN set -eux; \
+    mkdir -p \
+        storage/app/private \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache; \
+    php artisan package:discover --ansi; \
+    chown -R www-data:www-data storage bootstrap/cache
+
+USER www-data
+
 EXPOSE 9000
-CMD ["php-fpm"]
+
+CMD ["php-fpm", "-F"]
