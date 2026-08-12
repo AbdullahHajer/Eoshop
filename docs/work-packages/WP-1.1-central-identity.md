@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 1 — Identity, authentication and authorization |
 | Work Package | WP 1.1 |
-| Status | Local verification passed; GitHub verification pending |
+| Status | Ready for merge; local and GitHub verification passed |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-1.1-central-identity` |
 | Base | Protected `main` at `4aa02e7` |
@@ -107,7 +107,7 @@ Reverse the new system migration before any real identities are created. After p
 
 - Local verification evidence: [WP 1.1 verification](../evidence/WP-1.1/verification.md).
 - Independent sub-agent re-review: `APPROVE` with no blocking findings after the requested security fixes.
-- GitHub Actions results will be added before merge.
+- GitHub Actions run `31629494852` passed all four required checks on implementation commit `5848a2a`.
 
 ## Acceptance criteria
 
@@ -121,8 +121,9 @@ Reverse the new system migration before any real identities are created. After p
 - [x] Role assignments create audit records.
 - [x] Password and remember-token values are hidden from serialization.
 - [x] Existing repository, frontend, backend and container gates pass locally.
-- [ ] Evidence and exact CI results are recorded before merge.
+- [x] Evidence and exact CI results are recorded before merge.
 
 ## Evidence
 
 - [Local verification — 2026-08-12](../evidence/WP-1.1/verification.md)
+- [GitHub Actions run 31629494852](https://github.com/sas-prog1/Eoshop/actions/runs/31629494852)

@@ -42,11 +42,18 @@ The frontend production build retains its existing bundle-size warning (`782.99 
 
 ## Pending before merge
 
-- Required GitHub checks on the pull request.
-- Final commit and run identifiers.
+- Final required checks after this evidence-only update.
 
 ## Independent review
 
 The read-only reviewer initially returned `REQUEST_CHANGES` for permission-scope enforcement, audit-history retention, actor attribution and concurrency. After the schema, service and negative-test changes, the reviewer rechecked the latest working tree and returned `APPROVE` with no blocking findings.
 
 One non-blocking observation remains: per-user row locking is structurally verified and PostgreSQL-backed behavior passes, but a two-connection concurrency stress test may be added in a later hardening package.
+
+## GitHub verification
+
+- Pull request: [PR #4](https://github.com/sas-prog1/Eoshop/pull/4)
+- Implementation commit: `5848a2a27a02dda9d58d8fa43324791ada3e392b`
+- Workflow run: [31629494852](https://github.com/sas-prog1/Eoshop/actions/runs/31629494852)
+- Required checks: Repository safety, Frontend quality, Backend quality and Container integration all passed.
+- Merge state after the run: `CLEAN`.
