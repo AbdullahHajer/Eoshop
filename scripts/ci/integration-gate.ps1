@@ -43,6 +43,27 @@ function Assert-HttpResponse {
     }
 }
 
+function Invoke-IdentityDatabaseTests {
+    $networkName = "${ProjectName}_app"
+    $dockerArguments = @(
+        'run', '--rm',
+        '--network', $networkName,
+        '--env', 'DB_CONNECTION=pgsql',
+        '--env', 'DB_HOST=db',
+        '--env', 'DB_PORT=5432',
+        '--env', "DB_DATABASE=$($env:POSTGRES_DB)",
+        '--env', "DB_USERNAME=$($env:POSTGRES_USER)",
+        '--env', "DB_PASSWORD=$($env:POSTGRES_PASSWORD)",
+        'eoshop/backend-quality:ci',
+        'composer', 'test:database'
+    )
+
+    & docker @dockerArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Central identity database tests failed.'
+    }
+}
+
 Push-Location $repositoryRoot
 
 try {
@@ -60,6 +81,13 @@ try {
     Invoke-Compose up -d --no-build --wait --wait-timeout 240
 
     Invoke-Compose exec -T backend php artisan migrate --path=database/migrations/system --force --no-interaction
+    Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
+    Invoke-IdentityDatabaseTests
+
+    $identityMigration = 'database/migrations/system/2026_08_12_000003_create_central_identity_tables.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$identityMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$identityMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:status --path=database/migrations/system --no-interaction
 
     Add-Type -AssemblyName System.Net.Http

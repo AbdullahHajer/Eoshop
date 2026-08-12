@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Stancl\Tenancy\Contracts\TenantWithDatabase;
 use Stancl\Tenancy\Database\Concerns\HasDatabase;
@@ -20,6 +21,17 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     public function domains(): HasMany
     {
         return $this->hasMany(Domain::class, 'tenant_id');
+    }
+
+    /**
+     * @return BelongsToMany<User, $this, TenantMembership, 'pivot'>
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tenant_user')
+            ->using(TenantMembership::class)
+            ->withPivot(['role_id', 'role_scope', 'status', 'invited_by', 'joined_at'])
+            ->withTimestamps();
     }
 
     public static function getCustomColumns(): array

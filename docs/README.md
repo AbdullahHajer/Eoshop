@@ -11,11 +11,13 @@
 - [WP 0.1 — Baseline and repository hygiene](work-packages/WP-0.1-baseline.md)
 - [WP 0.2 — Single application server](work-packages/WP-0.2-single-application-server.md)
 - [WP 0.3 — CI and automated quality gates](work-packages/WP-0.3-ci-quality-gates.md)
+- [WP 1.1 — Central identity model](work-packages/WP-1.1-central-identity.md)
 
 ## Architecture decisions
 
 - [ADR 0001 — Laravel is the single application server](decisions/ADR-0001-laravel-single-application-server.md)
 - [ADR 0002 — Reproducible CI gates](decisions/ADR-0002-reproducible-ci-gates.md)
+- [ADR 0003 — Central identity and scoped roles](decisions/ADR-0003-central-identity-and-role-scopes.md)
 
 ## Evidence
 
@@ -23,6 +25,7 @@
 - [WP 0.2 verification — 2026-08-12](evidence/WP-0.2/verification.md)
 - [WP 0.3 verification — 2026-08-12](evidence/WP-0.3/verification.md)
 - [WP 0.3 branch-protection activation — 2026-08-12](evidence/WP-0.3/branch-protection.md)
+- [WP 1.1 verification — 2026-08-12](evidence/WP-1.1/verification.md)
 
 ## Documentation rules
 
