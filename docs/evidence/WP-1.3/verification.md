@@ -61,6 +61,7 @@ The read-only reviewer initially returned `REQUEST_CHANGES` for default-connecti
 
 - Implementation commit: `b47c148` (`feat(authz): enforce platform and tenant policies`).
 - Pull request: [#6](https://github.com/sas-prog1/Eoshop/pull/6).
-- Required-check run: [31729172582](https://github.com/sas-prog1/Eoshop/actions/runs/31729172582).
-- Required jobs passed on the implementation head: `Repository safety`, `Backend quality`, `Frontend quality` and `Container integration`.
-- The evidence-only follow-up commit must pass the same required checks before merge.
+- Implementation-head run: [31729172582](https://github.com/sas-prog1/Eoshop/actions/runs/31729172582).
+- Final evidence-head run: [31729468053](https://github.com/sas-prog1/Eoshop/actions/runs/31729468053).
+- Required jobs passed on both heads: `Repository safety`, `Backend quality`, `Frontend quality` and `Container integration`.
+- PR #6 merged into protected `main` as `d78e122f77384ee7c35ab5aa5cd501ce5e9fc70d` on 2026-08-13.
