@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 1 — Identity, authentication and authorization |
 | Work Package | WP 1.3 |
-| Status | Pull request open; required implementation checks passed |
+| Status | Complete and merged |
 | Started | 2026-08-13 |
 | Branch | `codex/wp-1.3-authorization-policies` |
 | Base | Protected `main` at `1217724` |
@@ -82,7 +82,7 @@ Turn the role and permission model into enforced server-side authorization for p
 
 - [x] Complete independent read-only review.
 - [x] Record verification evidence.
-- [ ] Commit, push, open PR, pass required CI and merge.
+- [x] Commit, push, open PR, pass required CI and merge.
 
 ## Risks and controls
 
