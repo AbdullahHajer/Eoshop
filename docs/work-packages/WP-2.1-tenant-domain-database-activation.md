@@ -4,10 +4,12 @@
 |---|---|
 | Phase | Phase 2 — Tenant lifecycle, store and domain |
 | Work Package | WP 2.1 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-13 |
+| Completed | 2026-08-14 |
 | Branch | `codex/wp-2.1-tenancy-activation` |
 | Base | Protected `main` at `605f5e1` |
+| Delivery | PR #8; merge commit `fac85c5` |
 | Dependencies | WP 1.1 identity; WP 1.2 sessions; WP 1.3 authorization |
 | Decision | [ADR 0006](../decisions/ADR-0006-schema-per-tenant-runtime-boundary.md) |
 
@@ -70,7 +72,7 @@ Activate domain-resolved tenancy and PostgreSQL schema isolation without prematu
 
 - [x] Record final verification evidence.
 - [x] Complete independent read-only review (`APPROVE`; no blocking findings).
-- [ ] Commit, push, open PR, pass required CI and merge.
+- [x] Commit, push, open PR, pass required CI and merge.
 
 ## Rollback
 

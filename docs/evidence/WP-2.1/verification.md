@@ -42,6 +42,10 @@ Evidence covers domain-resolved runtime tenancy, PostgreSQL schema isolation, ce
 
 Read-only reviewer verdict: `APPROVE`. No blocking findings remained after the final direct-database uniqueness assertion.
 
-## Pending before delivery
+## GitHub delivery
 
-- GitHub pull request and required-check run identifiers.
+- Implementation commit: `a4ae588`.
+- Pull request: [#8](https://github.com/sas-prog1/Eoshop/pull/8), merged on 2026-08-14.
+- Required-check run: [31746142883](https://github.com/sas-prog1/Eoshop/actions/runs/31746142883).
+- Required checks: Repository safety, Frontend quality, Backend quality and Container integration all passed.
+- Merge commit on protected `main`: `fac85c525b6b28e9c8f3e0349f8981e4e2afdfbf`.
