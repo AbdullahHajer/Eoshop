@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 1 — Identity, authentication and authorization |
 | Work Package | WP 1.3 |
-| Status | Ready for pull request |
+| Status | Pull request open; required implementation checks passed |
 | Started | 2026-08-13 |
 | Branch | `codex/wp-1.3-authorization-policies` |
 | Base | Protected `main` at `1217724` |

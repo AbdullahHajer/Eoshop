@@ -57,6 +57,10 @@ Verification covers server-owned platform and tenant authorization, explicit sto
 
 The read-only reviewer initially returned `REQUEST_CHANGES` for default-connection permission queries, an exposed deletion contract, an over-broad reviewer transition set, authorization before the row lock and reviewer access to revise an already decided reason. The design was changed to explicit central connections, no deletion route, a closed transition matrix, authorization on the locked model and management-only revision of decided values. The reviewer then independently reran the PostgreSQL integration gate at 32 tests and 161 assertions and returned final `APPROVE` with no remaining blockers.
 
-## Pending before merge
+## GitHub delivery evidence
 
-- GitHub pull request and required-check run identifiers.
+- Implementation commit: `b47c148` (`feat(authz): enforce platform and tenant policies`).
+- Pull request: [#6](https://github.com/sas-prog1/Eoshop/pull/6).
+- Required-check run: [31729172582](https://github.com/sas-prog1/Eoshop/actions/runs/31729172582).
+- Required jobs passed on the implementation head: `Repository safety`, `Backend quality`, `Frontend quality` and `Container integration`.
+- The evidence-only follow-up commit must pass the same required checks before merge.
