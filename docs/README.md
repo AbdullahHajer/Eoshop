@@ -15,6 +15,7 @@
 - [WP 1.2 — Real authentication and sessions](work-packages/WP-1.2-authentication-and-sessions.md)
 
 - [WP 1.3 — Authorization, policies and protected resources](work-packages/WP-1.3-authorization-and-resource-policies.md)
+- [WP 2.1 — Tenant, domain and database activation](work-packages/WP-2.1-tenant-domain-database-activation.md)
 
 ## Architecture decisions
 
@@ -24,6 +25,7 @@
 - [ADR 0004 — First-party same-origin session authentication](decisions/ADR-0004-first-party-session-authentication.md)
 
 - [ADR 0005 — Server-owned authorization boundaries](decisions/ADR-0005-server-owned-authorization-boundaries.md)
+- [ADR 0006 — Schema-per-tenant runtime boundary](decisions/ADR-0006-schema-per-tenant-runtime-boundary.md)
 
 ## Evidence
 

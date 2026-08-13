@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveUserSession;
+use App\Http\Middleware\EnsureCentralDomain;
+use App\Http\Middleware\EnsureKnownApplicationDomain;
 use App\Http\Middleware\EnsureTenantPermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -12,7 +14,6 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo(
@@ -20,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $middleware->authenticateSessions();
         $middleware->alias([
+            'central.domain' => EnsureCentralDomain::class,
+            'known.domain' => EnsureKnownApplicationDomain::class,
             'tenant.permission' => EnsureTenantPermission::class,
         ]);
         $middleware->web(append: [EnsureActiveUserSession::class]);
