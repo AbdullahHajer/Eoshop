@@ -17,9 +17,9 @@ return [
         ],
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_CACHE_CONNECTION'),
+            'connection' => env('DB_CACHE_CONNECTION', env('DB_CONNECTION', 'pgsql')),
             'table' => env('DB_CACHE_TABLE', 'cache'),
-            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION'),
+            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION', env('DB_CONNECTION', 'pgsql')),
             'lock_table' => env('DB_CACHE_LOCK_TABLE', 'cache_locks'),
         ],
     ],

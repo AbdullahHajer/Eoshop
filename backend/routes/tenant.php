@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\StoreFrontController;
+use App\Http\Middleware\InitializeTenancyByDomain;
 use Illuminate\Support\Facades\Route;
-use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
 /*
@@ -21,5 +21,4 @@ Route::middleware([
     Route::get('/api/store/config', [StoreFrontController::class, 'getStoreConfig']);
     Route::post('/api/store/config', [StoreFrontController::class, 'updateStoreConfig'])
         ->middleware(['auth', 'tenant.permission:tenant.store.manage']);
-    Route::post('/api/store/orders', [StoreFrontController::class, 'createOrder']);
 });
