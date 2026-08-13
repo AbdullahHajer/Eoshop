@@ -2,6 +2,7 @@
 
 namespace Tests\Integration;
 
+use App\Enums\PermissionKey;
 use App\Enums\SystemRole;
 use App\Enums\UserStatus;
 use App\Models\Role;
@@ -84,7 +85,12 @@ class AuthenticationTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.id', $user->getKey())
-            ->assertJsonPath('data.platform_roles.0', SystemRole::PlatformReviewer->value);
+            ->assertJsonPath('data.platform_roles.0', SystemRole::PlatformReviewer->value)
+            ->assertJsonPath('data.platform_permissions', [
+                PermissionKey::PlatformAuditView->value,
+                PermissionKey::PlatformStoresReview->value,
+                PermissionKey::PlatformStoresView->value,
+            ]);
 
         $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->refresh()->last_login_at);

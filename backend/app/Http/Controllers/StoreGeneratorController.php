@@ -28,8 +28,10 @@ class StoreGeneratorController extends Controller
 
             return response()->json($storeData);
         } catch (Exception $e) {
+            report($e);
+
             return response()->json([
-                'error' => $e->getMessage() ?: 'فشل توليد الأفكار، يرجى المحاولة لاحقاً',
+                'message' => 'تعذر توليد الأفكار الآن. يرجى المحاولة لاحقاً.',
             ], 500);
         }
     }

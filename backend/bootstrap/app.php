@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveUserSession;
+use App\Http\Middleware\EnsureTenantPermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->expectsJson() ? null : '/'
         );
         $middleware->authenticateSessions();
+        $middleware->alias([
+            'tenant.permission' => EnsureTenantPermission::class,
+        ]);
         $middleware->web(append: [EnsureActiveUserSession::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

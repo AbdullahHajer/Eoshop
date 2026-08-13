@@ -6,6 +6,7 @@ import {
   ShieldCheck, DollarSign, Gift, Layers, CheckSquare, AlertTriangle, ArrowRight, Save, ToggleLeft, ToggleRight
 } from "lucide-react";
 import { StoreConfig, Product, Coupon, EWallet } from "../types";
+import { apiMutation } from "../services/authApi";
 
 interface ControlPanelProps {
   config: StoreConfig;
@@ -130,14 +131,11 @@ export default function ControlPanel({
 
     setIsGeneratingCopy(true);
     try {
-      const response = await fetch("/api/generate-store-ideas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: `اكتب شعارات وعروض دعائية ومحتوى تسويقي بناءً على هذه الفكرة: "${assistantPrompt}"` }),
-      });
-
-      if (!response.ok) throw new Error("فشل توليد الأفكار التسويقية.");
-      const data = await response.json();
+      const data = await apiMutation<Record<string, any>>(
+        "/api/generate-store-ideas",
+        "POST",
+        { description: `اكتب شعارات وعروض دعائية ومحتوى تسويقي بناءً على هذه الفكرة: "${assistantPrompt}"` },
+      );
       
       setCopyOutput({
         slogan: data.slogan,

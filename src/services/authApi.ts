@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   status: "pending" | "active" | "suspended";
   email_verified_at: string | null;
   platform_roles: string[];
+  platform_permissions: string[];
 }
 
 interface DataResponse<T> {
@@ -60,10 +61,24 @@ async function establishCsrf(): Promise<string> {
   return csrfToken;
 }
 
-async function mutate<T>(path: string, body: Record<string, unknown>, retry = true): Promise<T> {
+export async function apiGet<T>(path: string): Promise<T> {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+
+  return parseResponse<T>(response);
+}
+
+export async function apiMutation<T>(
+  path: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body: Record<string, unknown>,
+  retry = true,
+): Promise<T> {
   const token = csrfToken ?? await establishCsrf();
   const response = await fetch(path, {
-    method: "POST",
+    method,
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
@@ -77,7 +92,7 @@ async function mutate<T>(path: string, body: Record<string, unknown>, retry = tr
     csrfToken = null;
     await establishCsrf();
 
-    return mutate<T>(path, body, false);
+    return apiMutation<T>(path, method, body, false);
   }
 
   return parseResponse<T>(response);
@@ -85,11 +100,7 @@ async function mutate<T>(path: string, body: Record<string, unknown>, retry = tr
 
 export const authApi = {
   async session(): Promise<AuthenticatedUser | null> {
-    const response = await fetch("/api/auth/session", {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-    });
-    const payload = await parseResponse<DataResponse<AuthenticatedUser | null>>(response);
+    const payload = await apiGet<DataResponse<AuthenticatedUser | null>>("/api/auth/session");
 
     return payload.data;
   },
@@ -101,7 +112,7 @@ export const authApi = {
     password: string;
     passwordConfirmation: string;
   }): Promise<AuthenticatedUser> {
-    const payload = await mutate<DataResponse<AuthenticatedUser>>("/api/auth/register", {
+    const payload = await apiMutation<DataResponse<AuthenticatedUser>>("/api/auth/register", "POST", {
       name: input.name,
       email: input.email,
       phone: input.phone || null,
@@ -113,7 +124,7 @@ export const authApi = {
   },
 
   async login(email: string, password: string): Promise<AuthenticatedUser> {
-    const payload = await mutate<DataResponse<AuthenticatedUser>>("/api/auth/login", {
+    const payload = await apiMutation<DataResponse<AuthenticatedUser>>("/api/auth/login", "POST", {
       email,
       password,
     });
@@ -122,12 +133,12 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
-    await mutate<MessageResponse>("/api/auth/logout", {});
+    await apiMutation<MessageResponse>("/api/auth/logout", "POST", {});
     csrfToken = null;
   },
 
   async forgotPassword(email: string): Promise<string> {
-    const payload = await mutate<MessageResponse>("/api/auth/forgot-password", { email });
+    const payload = await apiMutation<MessageResponse>("/api/auth/forgot-password", "POST", { email });
 
     return payload.message;
   },
@@ -138,7 +149,7 @@ export const authApi = {
     password: string;
     passwordConfirmation: string;
   }): Promise<string> {
-    const payload = await mutate<MessageResponse>("/api/auth/reset-password", {
+    const payload = await apiMutation<MessageResponse>("/api/auth/reset-password", "POST", {
       token: input.token,
       email: input.email,
       password: input.password,
@@ -160,6 +171,7 @@ export function toUserProfile(user: AuthenticatedUser) {
     phone: user.phone ?? "",
     role: isSuperAdmin ? "admin" as const : "merchant" as const,
     platformRoles: user.platform_roles,
+    platformPermissions: user.platform_permissions,
     storeStatus: "none" as const,
   };
 }

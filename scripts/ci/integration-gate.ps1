@@ -107,6 +107,13 @@ function Assert-AuthenticationBoundary {
         }
 
         $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$csrfPayload.csrf_token)
+        $protectedBody = [System.Net.Http.StringContent]::new('{"description":"protected generator"}')
+        $protectedBody.Headers.ContentType = $jsonContentType
+        $protectedResponse = $client.PostAsync('/api/generate-store-ideas', $protectedBody).GetAwaiter().GetResult()
+        if ([int]$protectedResponse.StatusCode -ne 401) {
+            throw "Expected authenticated-only generator HTTP 401 for an anonymous CSRF session, received $([int]$protectedResponse.StatusCode)."
+        }
+
         $body = [System.Net.Http.StringContent]::new('{"email":"nobody@example.com","password":"invalid-password"}')
         $body.Headers.ContentType = $jsonContentType
         $response = $client.PostAsync('/api/auth/login', $body).GetAwaiter().GetResult()
@@ -133,6 +140,11 @@ function Assert-AuthenticationBoundary {
         $sessionPayload = $sessionResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
         if ([int]$sessionResponse.StatusCode -ne 200 -or -not $sessionPayload.Contains('wp12-live-gate@example.test')) {
             throw 'The rotated live session did not restore the registered identity.'
+        }
+
+        $adminResponse = $client.GetAsync('/api/admin/stores').GetAwaiter().GetResult()
+        if ([int]$adminResponse.StatusCode -ne 403) {
+            throw "Expected authenticated merchant HTTP 403 at the platform boundary, received $([int]$adminResponse.StatusCode)."
         }
     }
     finally {
@@ -164,10 +176,13 @@ try {
 
     $authMigration = 'database/migrations/system/2026_08_12_000004_create_authentication_state_tables.php'
     $identityMigration = 'database/migrations/system/2026_08_12_000003_create_central_identity_tables.php'
+    $authorizationMigration = 'database/migrations/system/2026_08_13_000005_harden_tenant_verification_status.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$authorizationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$authMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$identityMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$identityMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$authMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$authorizationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:status --path=database/migrations/system --no-interaction
 
@@ -181,6 +196,7 @@ try {
         Assert-HttpResponse $client '/up' 200 'text/html'
         Assert-HttpResponse $client '/api/does-not-exist' 404 'application/json'
         Assert-HttpResponse $client '/api/auth/session' 200 'application/json' '"data":null'
+        Assert-HttpResponse $client '/api/admin/stores' 401 'application/json'
         Assert-AuthenticationBoundary -Port $Port
     }
     finally {

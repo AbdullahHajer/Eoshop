@@ -17,76 +17,8 @@ import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
 import DomainSetupModal from "./components/DomainSetupModal";
 import AdminAuthModal from "./components/AdminAuthModal";
 import ResetPasswordGateway from "./components/ResetPasswordGateway";
-import { authApi, toUserProfile } from "./services/authApi";
-
-const initialMockStores: PlatformStore[] = [
-  {
-    id: "store-1",
-    storeName: "نخبة العود الفاخر",
-    ownerName: "عبدالرحمن بن خالد",
-    ownerEmail: "abdulrahman@oudlux.com",
-    businessType: "عطور وبخور",
-    socialPageUrl: "https://facebook.com/oudlux.sa",
-    docType: "حساب تجاري / سوشيال ميديا",
-    docFileName: "رابط: facebook.com/oudlux.sa",
-    docFileSize: "رقمي",
-    verificationStatus: "approved",
-    themeStyle: "elegant",
-    createdAt: "2026/07/11",
-    config: ELEGANT_PRESET
-  },
-  {
-    id: "store-2",
-    storeName: "تك زون للإلكترونيات",
-    ownerName: "ماجد المطيري",
-    ownerEmail: "majed@techzone.sa",
-    businessType: "إلكترونيات وأجهزة",
-    socialPageUrl: "https://instagram.com/techzone.sa",
-    docType: "حساب تجاري / سوشيال ميديا",
-    docFileName: "رابط: instagram.com/techzone.sa",
-    docFileSize: "رقمي",
-    verificationStatus: "pending",
-    themeStyle: "tech",
-    createdAt: "2026/07/13",
-    config: TECH_PRESET
-  },
-  {
-    id: "store-3",
-    storeName: "قهوة ومحمصة أرابيكا",
-    ownerName: "سارة الشمري",
-    ownerEmail: "sara@arabica.cafe",
-    businessType: "قهوة ومأكولات",
-    socialPageUrl: "https://tiktok.com/@arabica.coffee",
-    docType: "حساب تجاري / سوشيال ميديا",
-    docFileName: "رابط: tiktok.com/@arabica.coffee",
-    docFileSize: "رقمي",
-    verificationStatus: "suspended",
-    themeStyle: "elegant",
-    createdAt: "2026/07/07",
-    config: {
-      ...ELEGANT_PRESET,
-      storeName: "محمصة أرابيكا",
-      slogan: "القهوة المختصة والبن الفاخر المحمص بعناية",
-      logoIcon: "☕",
-      primaryColor: "#7c2d12"
-    }
-  },
-  {
-    id: "store-4",
-    storeName: "هدايا لورين ومصنوعات",
-    ownerName: "نورة القحطاني",
-    ownerEmail: "noura@loren.gifts",
-    businessType: "أخرى",
-    socialPageUrl: "https://facebook.com/loren.gifts",
-    docType: "حساب تجاري / سوشيال ميديا",
-    docFileName: "رابط: facebook.com/loren.gifts",
-    docFileSize: "رقمي",
-    verificationStatus: "approved",
-    themeStyle: "elegant",
-    createdAt: "2026/07/01",
-    config: ELEGANT_PRESET
-  }
-];
+import { AuthApiError, apiMutation, authApi, toUserProfile } from "./services/authApi";
+import { adminApi } from "./services/adminApi";
 
 export default function App() {
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
@@ -94,6 +26,8 @@ export default function App() {
   
   // Platform Administrator States
   const [platformStores, setPlatformStores] = useState<PlatformStore[]>([]);
+  const [platformStoresLoading, setPlatformStoresLoading] = useState(false);
+  const [platformStoresError, setPlatformStoresError] = useState<string | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState(false);
   
@@ -230,17 +164,6 @@ export default function App() {
       .then((user) => setAuthUser(user ? toUserProfile(user) : null))
       .catch(() => setAuthUser(null));
 
-    const savedPlatformStores = localStorage.getItem("mobtaker_platform_stores");
-    if (savedPlatformStores) {
-      try {
-        setPlatformStores(JSON.parse(savedPlatformStores));
-      } catch (e) {
-        setPlatformStores(initialMockStores);
-      }
-    } else {
-      setPlatformStores(initialMockStores);
-    }
-
     // Dedicated Admin Route Check (/admin or #admin)
     const currentPath = window.location.pathname;
     const currentHash = window.location.hash;
@@ -259,118 +182,41 @@ export default function App() {
     const configToSave = customConfig || config;
     localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
     triggerToast("تم حفظ متجرك وتعديلاتك بنجاح في المتصفح! 💾", "success");
-    if (registeredUser) {
-      updateMerchantStoreInPlatformList(registeredUser, configToSave);
+  };
+
+  const loadPlatformStores = async () => {
+    setPlatformStoresLoading(true);
+    setPlatformStoresError(null);
+    try {
+      setPlatformStores(await adminApi.listStores());
+    } catch (requestError) {
+      setPlatformStoresError(requestError instanceof AuthApiError
+        ? requestError.message
+        : "تعذر تحميل متاجر المنصة من الخادم.");
+    } finally {
+      setPlatformStoresLoading(false);
     }
   };
 
-  const updateMerchantStoreInPlatformList = (currentUser: any, currentConfig: StoreConfig) => {
-    if (!currentUser) return;
-    setPlatformStores((prev) => {
-      const userStoreIndex = prev.findIndex((s) => s.ownerEmail === currentUser.email);
-      let updatedList = [...prev];
-      if (userStoreIndex >= 0) {
-        updatedList[userStoreIndex] = {
-          ...updatedList[userStoreIndex],
-          storeName: currentConfig.storeName,
-          businessType: currentUser.businessType,
-          socialPageUrl: currentUser.socialPageUrl,
-          config: currentConfig,
-          themeStyle: currentConfig.themeStyle
-        };
-      } else {
-        updatedList.push({
-          id: `merchant-${Date.now()}`,
-          storeName: currentConfig.storeName,
-          ownerName: currentUser.fullName,
-          ownerEmail: currentUser.email,
-          businessType: currentUser.businessType,
-          socialPageUrl: currentUser.socialPageUrl,
-          docType: currentUser.docType || "حساب تجاري / سوشيال ميديا",
-          docFileName: currentUser.fileName || "رابط صفحة المالك",
-          docFileSize: currentUser.fileSize || "رقمي",
-          verificationStatus: "approved",
-          themeStyle: currentConfig.themeStyle,
-          createdAt: new Date().toLocaleDateString("ar-SA"),
-          config: currentConfig
-        });
-      }
-      localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updatedList));
-      return updatedList;
-    });
-  };
-
-  const handleAdminUpdateStatus = (storeId: string, status: PlatformStore["verificationStatus"], reason?: string) => {
-    const updated = platformStores.map((s) => {
-      if (s.id === storeId) {
-        const updatedStore: PlatformStore = { 
-          ...s, 
-          verificationStatus: status,
-          rejectionReason: reason || undefined
-        };
-        if (registeredUser && s.ownerEmail === registeredUser.email) {
-          triggerToast(`تنبيه النظام: قام المشرف بتغيير حالة متجرك إلى (${
-            status === "approved" ? "مقبول وموثّق 🛡️" : 
-            status === "rejected" ? "مرفوض ❌" : 
-            status === "suspended" ? "موقوف مؤقتاً ⚠️" : "تحت المراجعة ⏳"
-          })`, "info");
-        }
-        return updatedStore;
-      }
-      return s;
-    });
-    setPlatformStores(updated);
-    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
-  };
-
-  const handleAdminUpdateConfig = (storeId: string, updatedConfig: StoreConfig) => {
-    const updated = platformStores.map((s) => {
-      if (s.id === storeId) {
-        if (registeredUser && s.ownerEmail === registeredUser.email) {
-          setConfig(updatedConfig);
-          localStorage.setItem("mobtaker_custom_store", JSON.stringify(updatedConfig));
-          triggerToast("تنبيه: قام المشرف بتحديث إعدادات متجرك مباشرة!", "info");
-        }
-        return {
-          ...s,
-          storeName: updatedConfig.storeName,
-          config: updatedConfig
-        };
-      }
-      return s;
-    });
-    setPlatformStores(updated);
-    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
-    triggerToast("تم تحديث إعدادات المتجر بنجاح", "success");
-  };
-
-  const handleAdminDeleteStore = (storeId: string) => {
-    const storeToDelete = platformStores.find(s => s.id === storeId);
-    if (storeToDelete && registeredUser && storeToDelete.ownerEmail === registeredUser.email) {
-      setRegisteredUser(null);
-      localStorage.removeItem("mobtaker_user_registration");
-      setView("landing");
-      triggerToast("تنبيه: تم حذف متجرك من قبل إدارة المنصة.", "error");
+  const handleAdminUpdateStatus = async (
+    storeId: string,
+    status: PlatformStore["verificationStatus"],
+    reason?: string,
+  ) => {
+    setPlatformStoresError(null);
+    try {
+      const updatedStore = await adminApi.updateStoreStatus(storeId, status, reason);
+      setPlatformStores((current) => current.map((storeRecord) => (
+        storeRecord.id === updatedStore.id ? updatedStore : storeRecord
+      )));
+      triggerToast("تم تحديث حالة المتجر وتسجيل العملية في سجل التدقيق.", "success");
+    } catch (requestError) {
+      const message = requestError instanceof AuthApiError
+        ? requestError.message
+        : "تعذر تحديث حالة المتجر.";
+      setPlatformStoresError(message);
+      throw requestError;
     }
-    const updated = platformStores.filter((s) => s.id !== storeId);
-    setPlatformStores(updated);
-    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
-    triggerToast("تم حذف المتجر بنجاح من المنصة", "success");
-  };
-
-  const handleAdminPreviewStore = (storeConfig: StoreConfig) => {
-    setConfig(storeConfig);
-    setCart([]);
-    setSelectedCategory("الكل");
-    setView("builder");
-    setIsAdminOpen(false);
-  };
-
-  const handleAdminAddStore = (newStore: PlatformStore) => {
-    const updated = [...platformStores, newStore];
-    setPlatformStores(updated);
-    localStorage.setItem("mobtaker_platform_stores", JSON.stringify(updated));
-    triggerToast(`تمت إضافة وتأسيس متجر "${newStore.storeName}" بنجاح!`, "success");
   };
 
   // Reset to default
@@ -449,7 +295,6 @@ export default function App() {
       storeName: userData.businessName
     };
     setConfig(updatedConfig);
-    updateMerchantStoreInPlatformList(userData, updatedConfig);
 
     triggerToast("تم تقديم بريف المتجر وتأكيد بيانات المالك بنجاح! 🚀🎉", "success");
 
@@ -494,17 +339,11 @@ export default function App() {
     triggerToast("جاري صياغة الفكرة وتصميم الهوية بالذكاء الاصطناعي... 🧠⚡", "info");
 
     try {
-      const response = await fetch("/api/generate-store-ideas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: promptText }),
-      });
-
-      if (!response.ok) {
-        throw new Error("فشلت عملية التوليد. يرجى المحاولة مرة أخرى.");
-      }
-
-      const generatedData = await response.json();
+      const generatedData = await apiMutation<Record<string, any>>(
+        "/api/generate-store-ideas",
+        "POST",
+        { description: promptText },
+      );
       
       const finalConfig: StoreConfig = {
         storeName: generatedData.storeName || "متجر مبتكر",
@@ -1528,66 +1367,6 @@ export default function App() {
             </div>
           </header>
 
-          {/* Platform Merchant Status Warning/Alert Banners */}
-          {registeredUser && (() => {
-            const currentPlatformStore = platformStores.find(s => s.ownerEmail === registeredUser.email);
-            if (!currentPlatformStore) return null;
-
-            if (currentPlatformStore.verificationStatus === "pending") {
-              return (
-                <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-amber-800 font-bold select-none animate-fadeIn shrink-0">
-                  <div className="flex items-center gap-2">
-                    <RefreshCw className="w-4 h-4 text-amber-500 animate-spin shrink-0" style={{ animationDuration: "3s" }} />
-                    <span>وثائق متجرك قيد التدقيق والمراجعة من قبل مشرف المنصة حالياً. ستظهر هويتك الموثقة فور قبولها! ⏳</span>
-                  </div>
-                  <span className="text-[10px] text-amber-600 font-bold uppercase shrink-0">قيد المراجعة</span>
-                </div>
-              );
-            }
-
-            if (currentPlatformStore.verificationStatus === "rejected") {
-              return (
-                <div className="bg-rose-500/10 border-b border-rose-500/20 px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-rose-800 font-bold select-none animate-fadeIn shrink-0">
-                  <div className="flex items-start sm:items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
-                    <div>
-                      <span>تم رفض وثيقة إثبات التجارة المرفقة لمتجرك! ❌ </span>
-                      <span className="font-normal block sm:inline text-[11px] text-slate-600">سبب الرفض: <span className="font-bold text-rose-700">{currentPlatformStore.rejectionReason || "تاريخ الصلاحية منتهي أو الملف غير واضح."}</span></span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsRegisterModalOpen(true)}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-lg text-[11px] font-black transition w-fit shrink-0 shadow-sm"
-                  >
-                    إعادة رفع الوثائق وتحديث الطلب 🔄
-                  </button>
-                </div>
-              );
-            }
-
-            if (currentPlatformStore.verificationStatus === "suspended") {
-              return (
-                <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-300 font-bold select-none animate-fadeIn shrink-0">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>تم إيقاف متجرك مؤقتاً بقرار من إدارة المنصة. يرجى مراجعة الدعم الفني لحل الإشكال ⚠️</span>
-                  </div>
-                  <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[10px] shrink-0">موقوف مؤقتاً</span>
-                </div>
-              );
-            }
-
-            return (
-              <div className="bg-emerald-500/5 border-b border-emerald-500/20 px-6 py-2.5 flex items-center justify-between text-xs text-emerald-800 font-bold select-none animate-fadeIn shrink-0">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>تهانينا! تم التحقق من وثائقك واعتمد متجرك رسمياً ككيان تجاري موثق على المنصة 🛡️🎉</span>
-                </div>
-                <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black shrink-0">تاجر موثق معتمد</span>
-              </div>
-            );
-          })()}
-
           {/* Builder Workplace (Two Columns: controls & preview) */}
           <div className="flex-1 flex flex-col lg:flex-row min-h-0 bg-slate-100 overflow-hidden h-full">
             {/* COLUMN 1: CONTROLS PANEL */}
@@ -1917,11 +1696,11 @@ export default function App() {
         {isAdminOpen && (
           <AdminDashboard
             stores={platformStores}
+            permissions={authUser?.platformPermissions ?? []}
+            loading={platformStoresLoading}
+            error={platformStoresError}
+            onReload={loadPlatformStores}
             onUpdateStoreStatus={handleAdminUpdateStatus}
-            onUpdateStoreConfig={handleAdminUpdateConfig}
-            onDeleteStore={handleAdminDeleteStore}
-            onPreviewStore={handleAdminPreviewStore}
-            onAddStoreManually={handleAdminAddStore}
             onClose={() => setIsAdminOpen(false)}
           />
         )}
@@ -2078,6 +1857,7 @@ export default function App() {
         onSuccess={(user) => {
           setAuthUser(user);
           setIsAdminOpen(true);
+          void loadPlatformStores();
           triggerToast("مرحباً بك في لوحة الإدارة المركزية لمالكي المنصة 🔒⚡", "success");
         }}
       />

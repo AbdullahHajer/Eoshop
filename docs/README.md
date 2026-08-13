@@ -14,12 +14,16 @@
 - [WP 1.1 — Central identity model](work-packages/WP-1.1-central-identity.md)
 - [WP 1.2 — Real authentication and sessions](work-packages/WP-1.2-authentication-and-sessions.md)
 
+- [WP 1.3 — Authorization, policies and protected resources](work-packages/WP-1.3-authorization-and-resource-policies.md)
+
 ## Architecture decisions
 
 - [ADR 0001 — Laravel is the single application server](decisions/ADR-0001-laravel-single-application-server.md)
 - [ADR 0002 — Reproducible CI gates](decisions/ADR-0002-reproducible-ci-gates.md)
 - [ADR 0003 — Central identity and scoped roles](decisions/ADR-0003-central-identity-and-role-scopes.md)
 - [ADR 0004 — First-party same-origin session authentication](decisions/ADR-0004-first-party-session-authentication.md)
+
+- [ADR 0005 — Server-owned authorization boundaries](decisions/ADR-0005-server-owned-authorization-boundaries.md)
 
 ## Evidence
 
@@ -28,6 +32,8 @@
 - [WP 0.3 verification — 2026-08-12](evidence/WP-0.3/verification.md)
 - [WP 0.3 branch-protection activation — 2026-08-12](evidence/WP-0.3/branch-protection.md)
 - [WP 1.1 verification — 2026-08-12](evidence/WP-1.1/verification.md)
+- [WP 1.2 verification — 2026-08-12](evidence/WP-1.2/verification.md)
+- [WP 1.3 verification — 2026-08-13](evidence/WP-1.3/verification.md)
 
 ## Documentation rules
 

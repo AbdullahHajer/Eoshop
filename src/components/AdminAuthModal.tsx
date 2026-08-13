@@ -36,9 +36,9 @@ export default function AdminAuthModal({
     try {
       const authenticated = await authApi.login(email, password);
 
-      if (!authenticated.platform_roles.includes("platform_super_admin")) {
+      if (!authenticated.platform_permissions.includes("platform.stores.view")) {
         await authApi.logout();
-        setError("هذا الحساب لا يحمل دور مدير المنصة الأعلى.");
+        setError("هذا الحساب لا يملك صلاحية الدخول إلى إدارة متاجر المنصة.");
         return;
       }
 

@@ -29,6 +29,7 @@ class AuthenticatedUserResource extends JsonResource
             'status' => $status instanceof UserStatus ? $status->value : (string) $status,
             'email_verified_at' => $emailVerifiedAt instanceof CarbonInterface ? $emailVerifiedAt->toIso8601String() : null,
             'platform_roles' => $this->platformRoles->pluck('key')->values()->all(),
+            'platform_permissions' => $this->platformPermissionKeys(),
         ];
     }
 }
