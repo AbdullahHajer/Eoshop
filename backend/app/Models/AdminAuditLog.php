@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 class AdminAuditLog extends Model
 {
+    use CentralConnection;
+
     public $timestamps = false;
 
     protected $fillable = [

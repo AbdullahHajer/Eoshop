@@ -45,7 +45,6 @@ class TenantController extends Controller
             ]);
 
             // 2. Attach Subdomain Domain
-            $domainName = $subdomain.'.'.parse_url(config('app.url'), PHP_URL_HOST);
             $tenant->domains()->create([
                 'domain' => $subdomain,
             ]);
@@ -68,43 +67,14 @@ class TenantController extends Controller
             ], 201);
 
         } catch (Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            report($e);
 
             return response()->json([
-                'error' => 'فشل إنشاء المتجر: '.$e->getMessage(),
+                'message' => 'تعذر إنشاء المتجر الآن. لم يكتمل طلب التأسيس.',
             ], 500);
         }
-    }
-
-    /**
-     * List all platform stores for Super Admin Dashboard
-     */
-    public function listStores()
-    {
-        $stores = Tenant::with('domains')->latest()->get();
-
-        return response()->json($stores);
-    }
-
-    /**
-     * Update Store Verification Status (Approve / Reject / Suspend)
-     */
-    public function updateStatus(Request $request, string $storeId)
-    {
-        $request->validate([
-            'status' => 'required|in:approved,pending,rejected,suspended',
-            'reason' => 'nullable|string|max:1000',
-        ]);
-
-        $tenant = Tenant::findOrFail($storeId);
-        $tenant->update([
-            'verification_status' => $request->input('status'),
-            'rejection_reason' => $request->input('reason'),
-        ]);
-
-        return response()->json([
-            'message' => 'تم تحديث حالة المتجر بنجاح',
-            'tenant' => $tenant,
-        ]);
     }
 }

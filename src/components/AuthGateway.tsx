@@ -13,6 +13,7 @@ export interface UserProfile {
   phone: string;
   role: "merchant" | "admin";
   platformRoles: string[];
+  platformPermissions: string[];
   createdStoreId?: string;
   createdStoreName?: string;
   storeStatus?: "pending" | "approved" | "rejected" | "none";

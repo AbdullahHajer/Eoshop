@@ -15,10 +15,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 class User extends Authenticatable
 {
-    use HasFactory, HasUlids, Notifiable, SoftDeletes;
+    use CentralConnection, HasFactory, HasUlids, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -83,7 +84,7 @@ class User extends Authenticatable
     {
         $permissionKey = $permission instanceof PermissionKey ? $permission->value : $permission;
 
-        return DB::table('role_user')
+        return DB::connection((string) config('tenancy.database.central_connection'))->table('role_user')
             ->join('users', 'users.id', '=', 'role_user.user_id')
             ->join('roles', 'roles.id', '=', 'role_user.role_id')
             ->join('permission_role', 'permission_role.role_id', '=', 'roles.id')
@@ -97,12 +98,34 @@ class User extends Authenticatable
             ->exists();
     }
 
+    /**
+     * @return list<string>
+     */
+    public function platformPermissionKeys(): array
+    {
+        if ($this->getAttribute('status') !== UserStatus::Active || $this->trashed()) {
+            return [];
+        }
+
+        return DB::connection((string) config('tenancy.database.central_connection'))->table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->join('permission_role', 'permission_role.role_id', '=', 'roles.id')
+            ->join('permissions', 'permissions.id', '=', 'permission_role.permission_id')
+            ->where('role_user.user_id', $this->getKey())
+            ->where('roles.scope', RoleScope::Platform->value)
+            ->where('permissions.scope', RoleScope::Platform->value)
+            ->distinct()
+            ->orderBy('permissions.key')
+            ->pluck('permissions.key')
+            ->all();
+    }
+
     public function hasTenantPermission(Tenant|string $tenant, PermissionKey|string $permission): bool
     {
         $tenantId = $tenant instanceof Tenant ? $tenant->getKey() : $tenant;
         $permissionKey = $permission instanceof PermissionKey ? $permission->value : $permission;
 
-        return DB::table('tenant_user')
+        return DB::connection((string) config('tenancy.database.central_connection'))->table('tenant_user')
             ->join('users', 'users.id', '=', 'tenant_user.user_id')
             ->join('roles', 'roles.id', '=', 'tenant_user.role_id')
             ->join('permission_role', 'permission_role.role_id', '=', 'roles.id')

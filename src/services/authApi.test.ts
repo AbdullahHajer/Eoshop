@@ -18,6 +18,7 @@ describe("authApi", () => {
           status: "active",
           email_verified_at: null,
           platform_roles: [],
+          platform_permissions: [],
         },
       }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -56,7 +57,11 @@ describe("authApi", () => {
       status: "active",
       email_verified_at: null,
       platform_roles: ["platform_reviewer"],
-    }).role).toBe("merchant");
+      platform_permissions: ["platform.stores.view", "platform.stores.review"],
+    })).toEqual(expect.objectContaining({
+      role: "merchant",
+      platformPermissions: ["platform.stores.view", "platform.stores.review"],
+    }));
 
     expect(toUserProfile({
       id: "01ADMIN",
@@ -66,6 +71,7 @@ describe("authApi", () => {
       status: "active",
       email_verified_at: null,
       platform_roles: ["platform_super_admin"],
+      platform_permissions: ["platform.stores.manage"],
     }).role).toBe("admin");
   });
 });

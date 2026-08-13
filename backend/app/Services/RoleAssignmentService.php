@@ -17,10 +17,12 @@ class RoleAssignmentService
     {
         $this->assertScope($role, RoleScope::Platform);
 
-        DB::transaction(function () use ($user, $role, $actor): void {
+        $central = DB::connection((string) config('tenancy.database.central_connection'));
+
+        $central->transaction(function () use ($user, $role, $actor, $central): void {
             User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
-            $alreadyAssigned = DB::table('role_user')
+            $alreadyAssigned = $central->table('role_user')
                 ->where('user_id', $user->getKey())
                 ->where('role_id', $role->getKey())
                 ->exists();
@@ -57,10 +59,12 @@ class RoleAssignmentService
     ): void {
         $this->assertScope($role, RoleScope::Tenant);
 
-        DB::transaction(function () use ($tenant, $user, $role, $actor, $status): void {
+        $central = DB::connection((string) config('tenancy.database.central_connection'));
+
+        $central->transaction(function () use ($tenant, $user, $role, $actor, $status, $central): void {
             User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
-            $existing = DB::table('tenant_user')
+            $existing = $central->table('tenant_user')
                 ->where('tenant_id', $tenant->getKey())
                 ->where('user_id', $user->getKey())
                 ->first();
