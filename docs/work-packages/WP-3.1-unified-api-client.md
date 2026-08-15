@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 3 — Connect the interface to the backend |
 | Work Package | WP 3.1 |
-| Status | In progress |
+| Status | Implementation complete — PR #14 awaiting final evidence CI and merge |
 | Started | 2026-08-15 |
 | Branch | `codex/wp-3.1-unified-api-client` |
 | Base | Protected `main` at `52d81f2` |
@@ -60,7 +60,7 @@ Create one typed, same-origin frontend boundary for Laravel APIs so authenticati
 
 - [x] Prove the status matrix, CSRF concurrency/recovery, network failure and no unsafe automatic retry.
 - [x] Prove domain mappers discard unknown transport/database fields.
-- [ ] Pass frontend tests, typecheck/build and all repository CI gates (local gates pass; required GitHub checks pending).
+- [x] Pass frontend tests, typecheck/build and all repository CI gates.
 
 ### T5 — Evidence and delivery
 

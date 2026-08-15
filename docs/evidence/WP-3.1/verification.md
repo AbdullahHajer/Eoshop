@@ -59,6 +59,8 @@ Expected error logs from negative rollback, audit and provisioning-failure tests
 ## Review and delivery
 
 - Independent read-only review: **APPROVE — no blocking findings** after one requested-changes cycle and verification of all five fixes.
-- Implementation commit: pending.
-- Pull request and four required GitHub checks: pending.
+- Implementation commit: `64bcc14` (`feat(frontend): unify API transport and contracts`).
+- Pull request: [#14 — WP 3.1: unify frontend API boundary](https://github.com/sas-prog1/Eoshop/pull/14).
+- Required-check run: [31889358724](https://github.com/sas-prog1/Eoshop/actions/runs/31889358724) — Repository safety, Frontend quality, Backend quality and Container integration all passed.
+- Final evidence commit and required-check run: pending.
 - Merge and protected-main post-merge run: pending.
