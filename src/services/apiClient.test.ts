@@ -41,6 +41,19 @@ describe("apiClient", () => {
     }));
   });
 
+  it("preserves a safe machine code used to distinguish 409 contracts", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      message: "stale",
+      code: "workspace_revision_conflict",
+    }), { status: 409 })));
+
+    await expect(apiClient.request("/api/test")).rejects.toMatchObject({
+      category: "conflict",
+      status: 409,
+      code: "workspace_revision_conflict",
+    });
+  });
+
   it("sanitizes 5xx text while retaining request correlation", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       message: "SQLSTATE secret detail",

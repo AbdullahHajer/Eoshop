@@ -84,4 +84,10 @@ class TenantPolicy
     {
         return $user->hasTenantPermission($tenant, PermissionKey::TenantStoreManage);
     }
+
+    public function updateStoreWorkspace(User $user, Tenant $tenant): bool
+    {
+        return $user->hasTenantPermission($tenant, PermissionKey::TenantStoreManage)
+            && $user->hasTenantPermission($tenant, PermissionKey::TenantProductsManage);
+    }
 }

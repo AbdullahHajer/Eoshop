@@ -46,6 +46,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('admin.mutations', fn (Request $request): Limit => Limit::perMinute(30)
             ->by('admin-mutation:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
 
+        RateLimiter::for('merchant.mutations', fn (Request $request): Limit => Limit::perMinute(30)
+            ->by('merchant-mutation:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
+
         RateLimiter::for('ai.generate', fn (Request $request): Limit => Limit::perMinute(10)
             ->by('ai-generate:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
 

@@ -3,14 +3,20 @@
 namespace App\Services;
 
 use App\Exceptions\ProvisioningFailure;
+use App\Models\Plan;
+use App\Models\PublicationRequest;
 use App\Models\StoreSubmission;
 use App\Models\Tenant;
+use App\Models\TenantSubscription;
+use App\Support\StoreWorkspaceContract;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class TenantProvisioningExecutor
 {
+    public function __construct(private readonly StoreWorkspaceService $workspaces) {}
+
     public function migrate(Tenant $tenant): void
     {
         $exitCode = Artisan::call('tenants:migrate', [
@@ -26,29 +32,53 @@ class TenantProvisioningExecutor
 
     public function initializeConfig(Tenant $tenant, StoreSubmission $submission): void
     {
-        $payload = $submission->getAttribute('payload_snapshot');
-        $config = is_array($payload) ? ($payload['config'] ?? null) : null;
+        DB::connection((string) config('tenancy.database.central_connection'))->transaction(function () use ($tenant, $submission): void {
+            $lockedTenant = Tenant::query()->whereKey($tenant->getKey())->lockForUpdate()->firstOrFail();
+            $lockedSubmission = StoreSubmission::query()->whereKey($submission->getKey())->lockForUpdate()->firstOrFail();
+            $publication = PublicationRequest::query()
+                ->whereKey($lockedTenant->getAttribute('publication_request_id'))
+                ->where('tenant_id', $lockedTenant->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $subscription = TenantSubscription::query()
+                ->whereKey($publication->getAttribute('tenant_subscription_id'))
+                ->where('tenant_id', $lockedTenant->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $plan = Plan::query()->whereKey($subscription->getAttribute('plan_key'))->lockForUpdate()->firstOrFail();
+            $payload = $lockedSubmission->getAttribute('payload_snapshot');
+            $config = is_array($payload) ? ($payload['config'] ?? null) : null;
 
-        if (! is_array($config)) {
-            throw new ProvisioningFailure('initial_config_missing', 'The initial store configuration is unavailable.');
-        }
+            if (! is_array($config)) {
+                throw new ProvisioningFailure('initial_config_missing', 'The initial store configuration is unavailable.');
+            }
 
-        $tenant->run(static function () use ($submission, $config): void {
-            DB::table('store_configs')->updateOrInsert(
-                ['id' => $submission->getAttribute('initial_config_id')],
-                [
-                    'config_json' => json_encode($config, JSON_THROW_ON_ERROR),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
+            $validator = StoreWorkspaceContract::validator(
+                $config,
+                $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
             );
+            if ($validator->fails()) {
+                throw new ProvisioningFailure('initial_config_invalid', 'The initial store configuration does not satisfy the current server contract.');
+            }
+
+            $lockedTenant->run(function () use ($lockedSubmission, $config): void {
+                $this->workspaces->initialize(
+                    (string) $lockedSubmission->getAttribute('initial_config_id'),
+                    $config,
+                );
+            });
         });
     }
 
     public function assertReady(Tenant $tenant, StoreSubmission $submission): void
     {
         $ready = $tenant->run(static fn (): bool => Schema::hasTable('store_configs')
-            && DB::table('store_configs')->where('id', $submission->getAttribute('initial_config_id'))->exists());
+            && Schema::hasTable('products')
+            && DB::table('store_configs')
+                ->where('id', $submission->getAttribute('initial_config_id'))
+                ->where('is_current', true)
+                ->where('products_materialized', true)
+                ->exists());
 
         if (! $ready) {
             throw new ProvisioningFailure('tenant_readiness_failed', 'The tenant database did not pass its readiness check.');

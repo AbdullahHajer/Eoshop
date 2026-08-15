@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Store, Paintbrush, Package, Sparkles, Smartphone, Monitor, 
@@ -22,6 +22,25 @@ import { authApi, toUserProfile } from "./services/authApi";
 import { ApiError } from "./services/apiClient";
 import { adminApi } from "./services/adminApi";
 import { assistantApi } from "./services/assistantApi";
+import { provisioningApi, type StoreSubmission } from "./services/provisioningApi";
+import { workspaceApi, type StoreWorkspace } from "./services/workspaceApi";
+import {
+  LatestWorkspaceLoad,
+  classifyMerchantRestore,
+  hasRecoverableWorkspaceChanges,
+  isAsyncWorkspaceResultCurrent,
+  isRevisionConflict,
+  mayDiscardDirtyWorkspace,
+  openWorkspaceConflict,
+  reloadWorkspaceConflict,
+  resolveWorkspaceConflict,
+  shouldApplyWorkspaceResponse,
+  shouldClaimAiSave,
+  tenantSafeConfig,
+  type MerchantRestoreResult,
+  type WorkspaceConflictReviewState,
+  type WorkspaceConflictState,
+} from "./services/merchantWorkspaceState";
 
 export default function App() {
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
@@ -120,6 +139,17 @@ export default function App() {
   const [authGatewayMode, setAuthGatewayMode] = useState<"login" | "signup">("signup");
   
   const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [merchantStores, setMerchantStores] = useState<StoreSubmission[]>([]);
+  const [activeWorkspace, setActiveWorkspace] = useState<StoreWorkspace | null>(null);
+  const [localDraft, setLocalDraft] = useState<StoreConfig | null>(null);
+  const [workspaceSaving, setWorkspaceSaving] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceConflict, setWorkspaceConflict] = useState<WorkspaceConflictState | null>(null);
+  const [workspaceConflictReview, setWorkspaceConflictReview] = useState<WorkspaceConflictReviewState | null>(null);
+  const workspaceEditGeneration = useRef(0);
+  const workspaceOperationSequence = useRef(0);
+  const merchantRestoreSequence = useRef(0);
+  const workspaceLoads = useRef(new LatestWorkspaceLoad());
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -127,6 +157,26 @@ export default function App() {
     type: "templates" | "ai" | "builder";
     data?: any;
   } | null>(null);
+  const workspaceDirty = useMemo(
+    () => activeWorkspace !== null && JSON.stringify(config) !== JSON.stringify(activeWorkspace.config),
+    [activeWorkspace, config],
+  );
+  const workspaceEditorLocked = workspaceLoading || workspaceSaving || workspaceConflict !== null;
+  const recoverableWorkspaceChanges = hasRecoverableWorkspaceChanges(
+    workspaceDirty,
+    workspaceConflict !== null,
+    workspaceConflictReview !== null,
+  );
+
+  useEffect(() => {
+    if (!recoverableWorkspaceChanges) return;
+    const protectDirtyWorkspace = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectDirtyWorkspace);
+    return () => window.removeEventListener("beforeunload", protectDirtyWorkspace);
+  }, [recoverableWorkspaceChanges]);
 
   // Store Interactive States inside Preview (Simulating Client Store)
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
@@ -157,6 +207,7 @@ export default function App() {
           heroBannerImage: parsed.heroBannerImage || basePreset.heroBannerImage,
           showHeroBanner: parsed.showHeroBanner !== false
         });
+        setLocalDraft(parsed as StoreConfig);
       } catch (e) {
         console.error("Error loading saved config", e);
       }
@@ -164,8 +215,15 @@ export default function App() {
 
     localStorage.removeItem("mobtaker_user_registration");
     authApi.session()
-      .then((user) => setAuthUser(user ? toUserProfile(user) : null))
-      .catch(() => setAuthUser(null));
+      .then((user) => {
+        const profile = user ? toUserProfile(user) : null;
+        setAuthUser(profile);
+        if (profile) void restoreMerchantState(profile);
+      })
+      .catch(() => {
+        setAuthUser(null);
+        resetTenantOwnedState();
+      });
 
     // Dedicated Admin Route Check (/admin or #admin)
     const currentPath = window.location.pathname;
@@ -180,11 +238,211 @@ export default function App() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Save config to local storage
-  const saveStore = (customConfig?: StoreConfig) => {
+  const merchantProfile = (user: UserProfile, store: StoreSubmission) => ({
+    fullName: user.fullName,
+    email: user.email,
+    businessName: store.storeName,
+    businessType: store.businessType,
+  });
+
+  const resetTenantOwnedState = () => {
+    workspaceOperationSequence.current += 1;
+    merchantRestoreSequence.current += 1;
+    workspaceLoads.current.invalidate();
+    setWorkspaceLoading(false);
+    setWorkspaceSaving(false);
+    setWorkspaceConflict(null);
+    setWorkspaceConflictReview(null);
+    setActiveWorkspace(null);
+    setMerchantStores([]);
+    setRegisteredUser(null);
+    setConfig(tenantSafeConfig(localDraft));
+    setCart([]);
+    setSelectedCategory("الكل");
+    setIsCartDrawerOpen(false);
+    setHasOrdered(false);
+  };
+
+  const loadMerchantWorkspace = async (
+    store: StoreSubmission,
+    user: UserProfile,
+    preserveConflict = false,
+  ): Promise<boolean> => {
+    const request = workspaceLoads.current.begin();
+    const startingEditGeneration = workspaceEditGeneration.current;
+    workspaceOperationSequence.current += 1;
+    setWorkspaceLoading(true);
+
+    try {
+      const workspace = await workspaceApi.load(store.id, request.signal);
+      if (!shouldApplyWorkspaceResponse(
+        startingEditGeneration,
+        workspaceEditGeneration.current,
+        workspaceLoads.current.isCurrent(request.sequence),
+      )) {
+        if (workspaceLoads.current.isCurrent(request.sequence)) {
+          triggerToast("لم نطبّق استجابة الخادم لأن المحرر تغيّر أثناء التحميل. أعد المحاولة بعد حفظ تعديلاتك.", "error");
+        }
+        return false;
+      }
+      setActiveWorkspace(workspace);
+      setConfig(workspace.config);
+      setRegisteredUser(merchantProfile(user, store));
+      if (preserveConflict && workspaceConflict?.tenantId === workspace.tenantId) {
+        setWorkspaceConflict(reloadWorkspaceConflict(workspaceConflict, workspace.config));
+      } else if (!preserveConflict) {
+        setWorkspaceConflict(null);
+        setWorkspaceConflictReview(null);
+      }
+      localStorage.setItem("eoshop.active-tenant-id", store.id);
+      return true;
+    } finally {
+      if (workspaceLoads.current.isCurrent(request.sequence)) {
+        setWorkspaceLoading(false);
+        workspaceLoads.current.finish(request.sequence);
+      }
+    }
+  };
+
+  const restoreMerchantState = async (user: UserProfile): Promise<MerchantRestoreResult> => {
+    const restoreSequence = ++merchantRestoreSequence.current;
+    try {
+      const stores = await provisioningApi.listStores();
+      if (restoreSequence !== merchantRestoreSequence.current) return "error";
+      setMerchantStores(stores);
+      if (stores.length === 0) return classifyMerchantRestore(0);
+
+      const fallback = stores[0];
+      setRegisteredUser(merchantProfile(user, fallback));
+      const editable = stores.filter((store) => store.verificationStatus === "approved" && store.provisioningStatus === "active");
+      const preferredId = localStorage.getItem("eoshop.active-tenant-id");
+      const selected = editable.find((store) => store.id === preferredId) ?? editable[0];
+      if (selected) {
+        await loadMerchantWorkspace(selected, user);
+        if (restoreSequence !== merchantRestoreSequence.current) return "error";
+      }
+
+      return classifyMerchantRestore(stores.length);
+    } catch (requestError) {
+      if (restoreSequence !== merchantRestoreSequence.current) return "error";
+      if (requestError instanceof ApiError && requestError.category === "unauthenticated") {
+        setAuthUser(null);
+        resetTenantOwnedState();
+      }
+      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر استعادة متاجر الحساب من الخادم.", "error");
+      return classifyMerchantRestore(0, true);
+    }
+  };
+
+  const selectMerchantStore = async (tenantId: string): Promise<void> => {
+    if (!authUser || workspaceLoading || workspaceSaving || activeWorkspace?.tenantId === tenantId) return;
+    const store = merchantStores.find((candidate) => candidate.id === tenantId);
+    if (!store) return;
+    const confirmed = !recoverableWorkspaceChanges || window.confirm("لديك تعديلات أو لقطة تعارض غير محفوظة. هل تريد تجاهلها والانتقال إلى متجر آخر؟");
+    if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
+    try {
+      const loaded = await loadMerchantWorkspace(store, authUser);
+      if (loaded) triggerToast(`تم تحميل بيانات ${store.storeName} من الخادم.`, "info");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.category === "aborted") return;
+      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر تحميل مساحة عمل المتجر.", "error");
+    }
+  };
+
+  const reloadActiveWorkspace = async (discardConflict = false): Promise<void> => {
+    if (!authUser || !activeWorkspace || workspaceLoading || workspaceSaving) return;
+    const store = merchantStores.find((candidate) => candidate.id === activeWorkspace.tenantId);
+    if (!store) return;
+    if (!workspaceConflict && recoverableWorkspaceChanges
+      && !window.confirm("سيتم تجاهل التعديلات غير المحفوظة وتحميل نسخة الخادم. هل تريد المتابعة؟")) return;
+
+    const pendingConflict = workspaceConflict;
+    try {
+      const loaded = await loadMerchantWorkspace(store, authUser, Boolean(pendingConflict) && !discardConflict);
+      if (!loaded) return;
+      if (!pendingConflict || discardConflict) {
+        setWorkspaceConflict(null);
+        if (discardConflict) setWorkspaceConflictReview(null);
+      }
+      triggerToast("تم تحميل أحدث نسخة من الخادم.", "info");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.category === "aborted") return;
+      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر تحميل أحدث نسخة من الخادم.", "error");
+    }
+  };
+
+  const applyNonConflictingChanges = () => {
+    if (!workspaceConflict || !activeWorkspace || activeWorkspace.tenantId !== workspaceConflict.tenantId) return;
+    const resolution = resolveWorkspaceConflict(workspaceConflict, activeWorkspace.config);
+    if (!resolution) return;
+    workspaceEditGeneration.current += 1;
+    setConfig(resolution.config);
+    const conflictCount = workspaceConflict.conflictingFields.length;
+    setWorkspaceConflictReview(resolution.review);
+    setWorkspaceConflict(null);
+    triggerToast(
+      conflictCount === 0
+        ? "أعدنا تطبيق تغييراتك غير المتعارضة على أحدث نسخة. راجعها ثم احفظها يدويًا."
+        : `أعدنا التغييرات الآمنة، وأبقينا نسخة الخادم في ${conflictCount} حقل متعارض لحمايتها. راجعها يدويًا قبل الحفظ.`,
+      "info",
+    );
+  };
+
+  const archiveConflictDraft = () => {
+    if (!workspaceConflictReview) return;
+    localStorage.setItem("mobtaker_custom_store", JSON.stringify(workspaceConflictReview.draft));
+    setLocalDraft(workspaceConflictReview.draft);
+    setWorkspaceConflictReview(null);
+    triggerToast("حُفظت لقطة تعديلات التعارض كمسودة محلية صريحة. لن تُرسل للخادم إلا باختيارك.", "info");
+  };
+
+  const discardConflictReview = () => {
+    if (!workspaceConflictReview) return;
+    if (!window.confirm("سيتم تجاهل القيم المتعارضة التي احتفظنا بها، مع بقاء نسخة الخادم. هل تريد المتابعة؟")) return;
+    setWorkspaceConflictReview(null);
+  };
+
+  // Authenticated workspaces are saved on the server. Browser storage is draft-only.
+  const saveStore = async (customConfig?: StoreConfig, importingDraft = false): Promise<boolean> => {
     const configToSave = customConfig || config;
-    localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
-    triggerToast("تم حفظ متجرك وتعديلاتك بنجاح في المتصفح! 💾", "success");
+    if (!activeWorkspace) {
+      localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
+      setLocalDraft(configToSave);
+      triggerToast("تم حفظ مسودة غير منشورة في هذا المتصفح حتى يصبح المتجر جاهزاً على الخادم. 💾", "info");
+      return true;
+    }
+
+    if (workspaceLoading || workspaceSaving || workspaceConflict) return false;
+    const workspace = activeWorkspace;
+    const operation = ++workspaceOperationSequence.current;
+    setWorkspaceSaving(true);
+    try {
+      const saved = await workspaceApi.save(workspace.tenantId, workspace.revision, configToSave);
+      if (operation !== workspaceOperationSequence.current) return false;
+      setActiveWorkspace(saved);
+      setConfig(saved.config);
+      setWorkspaceConflict(null);
+      setWorkspaceConflictReview(null);
+      if (importingDraft) {
+        localStorage.removeItem("mobtaker_custom_store");
+        setLocalDraft(null);
+      }
+      triggerToast("تم حفظ إعدادات المتجر والمنتجات في الخادم بنجاح. 💾", "success");
+      return true;
+    } catch (requestError) {
+      if (operation !== workspaceOperationSequence.current) return false;
+      if (isRevisionConflict(requestError)) {
+        setWorkspaceConflict(openWorkspaceConflict(workspace.tenantId, workspace.config, configToSave));
+      }
+      if (requestError instanceof ApiError && requestError.category === "unauthenticated") {
+        setAuthUser(null);
+        resetTenantOwnedState();
+      }
+      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر حفظ مساحة عمل المتجر في الخادم.", "error");
+      return false;
+    } finally {
+      if (operation === workspaceOperationSequence.current) setWorkspaceSaving(false);
+    }
   };
 
   const loadPlatformStores = async () => {
@@ -284,6 +542,8 @@ export default function App() {
   };
 
   const executeResetStore = () => {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
     const defaultValue = config.themeStyle === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
     setConfig(defaultValue);
     setCart([]);
@@ -309,6 +569,8 @@ export default function App() {
       return;
     }
     const defaultData = type === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
     setConfig(defaultData);
     setCart([]);
     setSelectedCategory("الكل");
@@ -353,6 +615,7 @@ export default function App() {
       ...config,
       storeName: userData.businessName
     };
+    workspaceEditGeneration.current += 1;
     setConfig(updatedConfig);
 
     triggerToast("تم تقديم بريف المتجر وتأكيد بيانات المالك بنجاح! 🚀🎉", "success");
@@ -378,6 +641,9 @@ export default function App() {
   };
 
   const executeLogout = async () => {
+    const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
+    if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
+    workspaceOperationSequence.current += 1;
     try {
       await authApi.logout();
     } catch {
@@ -386,7 +652,7 @@ export default function App() {
     }
 
     setAuthUser(null);
-    setRegisteredUser(null);
+    resetTenantOwnedState();
     setView("landing");
     setIsLogoutConfirmOpen(false);
     triggerToast("تم تسجيل الخروج وإنهاء جلسة الحساب بنجاح 🛡️", "info");
@@ -394,11 +660,27 @@ export default function App() {
 
   // Actual backend AI Generation call
   const runAiGenerationDirectly = async (promptText: string) => {
+    if (workspaceEditorLocked || workspaceConflictReview) {
+      triggerToast("أكمل تحميل مساحة العمل أو معالجة التعارض قبل تشغيل التوليد.", "error");
+      return;
+    }
+    const startingOperation = workspaceOperationSequence.current;
+    const startingEditGeneration = workspaceEditGeneration.current;
     setIsAiGenerating(true);
     triggerToast("جاري صياغة الفكرة وتصميم الهوية بالذكاء الاصطناعي... 🧠⚡", "info");
 
     try {
       const generatedData = await assistantApi.generateStoreIdeas(promptText);
+      if (!isAsyncWorkspaceResultCurrent(
+        startingOperation,
+        workspaceOperationSequence.current,
+        startingEditGeneration,
+        workspaceEditGeneration.current,
+        false,
+      )) {
+        triggerToast("لم نطبّق نتيجة الذكاء الاصطناعي لأن مساحة العمل تغيّرت أثناء التوليد.", "error");
+        return;
+      }
       
       const finalConfig: StoreConfig = {
         storeName: generatedData.storeName || "متجر مبتكر",
@@ -421,11 +703,13 @@ export default function App() {
         }))
       };
 
+      workspaceEditGeneration.current += 1;
       setConfig(finalConfig);
-      saveStore(finalConfig);
+      const saved = await saveStore(finalConfig);
       setCart([]);
       setSelectedCategory("الكل");
       setView("builder");
+      if (!shouldClaimAiSave(saved)) return;
       triggerToast("نجاح! تم توليد المتجر والمنتجات والألوان بالكامل بالذكاء الاصطناعي 🚀🎉", "success");
     } catch (err: any) {
       console.error(err);
@@ -472,6 +756,8 @@ export default function App() {
 
   // Store customization edits
   const handleConfigChange = (key: keyof StoreConfig, value: any) => {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
     setConfig(prev => ({
       ...prev,
       [key]: value
@@ -480,19 +766,19 @@ export default function App() {
 
   // Product CRUD
   const handleProductChange = (index: number, key: keyof Product, value: any) => {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
     const updatedProducts = [...config.products];
     updatedProducts[index] = {
       ...updatedProducts[index],
       [key]: value
     };
-    setConfig(prev => {
-      const updated = { ...prev, products: updatedProducts };
-      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
-      return updated;
-    });
+    setConfig(prev => ({ ...prev, products: updatedProducts }));
   };
 
   const addEmptyProduct = () => {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
     const newProduct: Product = {
       id: `custom-p-${Date.now()}`,
       name: "منتج جديد للتعديل",
@@ -501,27 +787,21 @@ export default function App() {
       category: "منتجات عامة",
       imageKeyword: "default"
     };
-    setConfig(prev => {
-      const updated = {
+    setConfig(prev => ({
         ...prev,
         products: [newProduct, ...prev.products]
-      };
-      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
-      return updated;
-    });
+      }));
     setSelectedCategory("الكل");
     triggerToast("تمت إضافة المنتج بنجاح في أعلى القائمة! تم فتح شاشة التعديل الخاصة به مباشرة 📦", "success");
   };
 
   const deleteProduct = (id: string) => {
-    setConfig(prev => {
-      const updated = {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
+    setConfig(prev => ({
         ...prev,
         products: prev.products.filter(p => p.id !== id)
-      };
-      localStorage.setItem("mobtaker_custom_store", JSON.stringify(updated));
-      return updated;
-    });
+      }));
     setCart(prev => prev.filter(item => item.product.id !== id));
     triggerToast("تم حذف المنتج بنجاح من القائمة", "info");
   };
@@ -577,6 +857,116 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {activeWorkspace && workspaceConflict && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-md rounded-2xl border border-rose-300 bg-white p-4 shadow-2xl">
+          <p className="text-sm font-black text-slate-900">تعارضت تعديلاتك مع نسخة أحدث</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            جمّدنا المحرر واحتفظنا بلقطة تعديلاتك. حمّل نسخة الخادم، وسنعيد فقط الحقول غير المتعارضة؛ الحقول التي عدّلها الطرفان تبقى كما هي على الخادم حتى تراجعها يدويًا.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={workspaceLoading || workspaceSaving}
+              onClick={() => void reloadActiveWorkspace(false)}
+              className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              تحميل نسخة الخادم
+            </button>
+            <button
+              type="button"
+              disabled={!workspaceConflict.serverReloaded || workspaceLoading || workspaceSaving}
+              onClick={applyNonConflictingChanges}
+              className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800 disabled:opacity-40"
+            >
+              تطبيق التغييرات الآمنة
+            </button>
+            <button
+              type="button"
+              disabled={workspaceLoading || workspaceSaving}
+              onClick={() => void reloadActiveWorkspace(true)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-50"
+            >
+              تجاهل تعديلاتي
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeWorkspace && workspaceConflictReview?.tenantId === activeWorkspace.tenantId && (
+        <div className="fixed bottom-5 right-5 z-50 max-h-[70vh] w-[min(34rem,calc(100vw-2rem))] overflow-auto rounded-2xl border border-amber-300 bg-white p-4 shadow-2xl">
+          <p className="text-sm font-black text-slate-900">قيم تحتاج مراجعة يدوية</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            طبّقنا الحقول الآمنة فقط. الحقول التالية عدّلها الطرفان، لذلك أبقينا قيمة الخادم في المحرر واحتفظنا بقيمتك هنا دون إرسال تلقائي.
+          </p>
+          <div className="mt-3 space-y-3">
+            {workspaceConflictReview.conflictingFields.map((field) => (
+              <div key={String(field)} className="rounded-xl border border-slate-200 p-3 text-xs">
+                <p className="font-black text-slate-800">{String(field)}</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 font-bold text-amber-700">قيمتك المحفوظة للاسترداد</p>
+                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-amber-50 p-2 text-[10px]">
+                      {JSON.stringify(workspaceConflictReview.draft[field], null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <p className="mb-1 font-bold text-sky-700">قيمة الخادم الحالية</p>
+                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-sky-50 p-2 text-[10px]">
+                      {JSON.stringify(workspaceConflictReview.server[field], null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={archiveConflictDraft}
+              className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white"
+            >
+              حفظ لقطتي كمسودة محلية
+            </button>
+            <button
+              type="button"
+              onClick={discardConflictReview}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
+            >
+              تجاهل القيم المتعارضة
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeWorkspace && localDraft && (
+        <div className="fixed bottom-5 left-5 z-50 max-w-md rounded-2xl border border-amber-300 bg-white p-4 shadow-2xl">
+          <p className="text-sm font-black text-slate-900">توجد مسودة محلية لم تُدمج</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            بيانات الخادم معروضة الآن. لن نستبدلها بالمسودة إلا بعد اختيارك الصريح.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
+              onClick={() => void saveStore(localDraft, true)}
+              className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              استيراد المسودة إلى المتجر
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem("mobtaker_custom_store");
+                setLocalDraft(null);
+              }}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
+            >
+              تجاهل المسودة
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ----------------- 1. LANDING PAGE VIEW ----------------- */}
       {view === "landing" && (
@@ -1157,6 +1547,35 @@ export default function App() {
             </div>
 
             {/* Merchant Badge */}
+            {activeWorkspace && (
+              <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">
+                {merchantStores.filter((store) => store.verificationStatus === "approved" && store.provisioningStatus === "active").length > 1 && (
+                  <label className="flex items-center gap-2">
+                    <span>المتجر:</span>
+                    <select
+                      value={activeWorkspace.tenantId}
+                      disabled={workspaceLoading || workspaceSaving}
+                      onChange={(event) => void selectMerchantStore(event.target.value)}
+                      className="rounded-lg border border-sky-200 bg-white px-2 py-1 disabled:opacity-50"
+                    >
+                      {merchantStores
+                        .filter((store) => store.verificationStatus === "approved" && store.provisioningStatus === "active")
+                        .map((store) => <option key={store.id} value={store.id}>{store.storeName}</option>)}
+                    </select>
+                  </label>
+                )}
+                <button
+                  type="button"
+                  disabled={workspaceLoading || workspaceSaving}
+                  onClick={() => void reloadActiveWorkspace(false)}
+                  className="flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 py-1 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${workspaceLoading ? "animate-spin" : ""}`} />
+                  أحدث نسخة
+                </button>
+                {recoverableWorkspaceChanges && <span className="text-amber-700">تعديلات أو تعارضات غير محفوظة</span>}
+              </div>
+            )}
             {registeredUser && (
               <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl text-emerald-800 text-xs font-bold shadow-sm select-none">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1180,10 +1599,10 @@ export default function App() {
             {/* Quick Actions (Finished Customization, Save, Reset, Export, Fullscreen) */}
             <div className="flex items-center flex-wrap gap-2">
               <button
-                onClick={() => {
-                  saveStore();
-                  setIsDomainModalOpen(true);
-                }}
+                disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
+                onClick={() => void saveStore().then((saved) => {
+                  if (saved) setIsDomainModalOpen(true);
+                })}
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-md hover:shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer ring-2 ring-emerald-400/30"
                 title="إنهاء التخصيص واختيار الدومين والاستضافة لمتجرك"
               >
@@ -1192,9 +1611,10 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => saveStore()}
+                disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
+                onClick={() => void saveStore()}
                 className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
-                title="حفظ الهوية الحالية بالمتصفح"
+                title={activeWorkspace ? "حفظ الإعدادات والمنتجات في الخادم" : "حفظ مسودة غير منشورة في المتصفح"}
               >
                 <Save className="w-4 h-4 text-emerald-600" />
                 <span>حفظ التعديلات</span>
@@ -1318,7 +1738,10 @@ export default function App() {
                 </div>
 
                 {/* Render dynamic ControlPanel with states - Independent Scrolling */}
-                <div className="flex-1 min-h-0 overflow-hidden h-full">
+                <div
+                  aria-disabled={workspaceEditorLocked}
+                  className={`flex-1 min-h-0 overflow-hidden h-full ${workspaceEditorLocked ? "pointer-events-none opacity-60" : ""}`}
+                >
                   <ControlPanel 
                     config={config}
                     handleConfigChange={handleConfigChange}
@@ -1628,7 +2051,9 @@ export default function App() {
               </div>
 
               <p className="text-slate-600 text-sm leading-relaxed mb-6">
-                هل أنت متأكد من تسجيل الخروج وإلغاء تفعيل حسابك التجاري مؤقتاً؟ سيتم حفظ متجرك وسيظل بإمكانك الدخول مجدداً باستخدام بياناتك في أي وقت.
+                {recoverableWorkspaceChanges
+                  ? "توجد تعديلات غير محفوظة. تسجيل الخروج سيحفظ ما سبق إرساله للخادم فقط، وسيتجاهل التعديلات الحالية في المحرر."
+                  : "هل أنت متأكد من تسجيل الخروج؟ ستبقى النسخة المحفوظة على الخادم ويمكنك الدخول مجددًا في أي وقت."}
               </p>
 
               <div className="flex items-center gap-3 justify-end">
@@ -1717,16 +2142,29 @@ export default function App() {
         currentUser={authUser}
         initialMode={authGatewayMode}
         onLoginSuccess={(user) => {
+          resetTenantOwnedState();
           setAuthUser(user);
-          if (pendingAction) {
-            setIsRegisterModalOpen(true);
-          }
+          void restoreMerchantState(user).then((restoreResult) => {
+            if (!pendingAction) return;
+            if (restoreResult === "none") {
+              setIsRegisterModalOpen(true);
+              return;
+            }
+            if (restoreResult === "error") return;
+            if (pendingAction.type === "templates") setView("templates");
+            if (pendingAction.type === "builder") setView("builder");
+            if (pendingAction.type === "ai") void runAiGenerationDirectly(pendingAction.data);
+            setPendingAction(null);
+          });
           triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
         }}
         onLogout={async () => {
+          const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
+          if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
+          workspaceOperationSequence.current += 1;
           await authApi.logout();
           setAuthUser(null);
-          setRegisteredUser(null);
+          resetTenantOwnedState();
           setView("landing");
           triggerToast("تم تسجيل الخروج وإنهاء الجلسة بنجاح", "info");
         }}

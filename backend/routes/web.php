@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AuthenticationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\DomainAvailabilityController;
 use App\Http\Controllers\MerchantStoreController;
+use App\Http\Controllers\MerchantWorkspaceController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\StoreGeneratorController;
@@ -60,6 +61,11 @@ Route::middleware('central.domain')->group(function (): void {
         Route::get('/merchant/stores', [MerchantStoreController::class, 'index']);
         Route::get('/merchant/stores/{tenant}/publication', [MerchantStoreController::class, 'show'])
             ->can('viewMerchant', 'tenant');
+        Route::get('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'show'])
+            ->can('viewMerchant', 'tenant');
+        Route::patch('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'update'])
+            ->can('updateStoreWorkspace', 'tenant')
+            ->middleware('throttle:merchant.mutations');
         Route::post('/generate-store-ideas', [StoreGeneratorController::class, 'generate'])
             ->middleware('throttle:ai.generate');
         Route::post('/register-store', [StoreSubmissionController::class, 'store'])

@@ -15,10 +15,12 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\CanonicalDomain;
 use App\Support\CanonicalPayload;
+use App\Support\StoreWorkspaceContract;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Stancl\Tenancy\Exceptions\DomainOccupiedByOtherTenantException;
 
 class StoreSubmissionService
@@ -53,6 +55,13 @@ class StoreSubmissionService
                 User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
                 $this->subscriptions->assertStoreQuota($actor);
                 $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
+                $workspaceValidator = StoreWorkspaceContract::validator(
+                    $input['config'],
+                    $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
+                );
+                if ($workspaceValidator->fails()) {
+                    throw ValidationException::withMessages($workspaceValidator->errors()->toArray());
+                }
                 $tenant = Tenant::query()->create([
                     'id' => strtolower((string) Str::ulid()),
                     'store_name' => trim((string) $input['storeName']),

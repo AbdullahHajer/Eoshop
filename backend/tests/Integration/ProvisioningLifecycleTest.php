@@ -10,6 +10,7 @@ use App\Exceptions\ProvisioningFailure;
 use App\Jobs\ProvisionTenant;
 use App\Models\ProvisioningRun;
 use App\Models\Role;
+use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\RoleAssignmentService;
@@ -248,6 +249,52 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
     }
 
+    public function test_worker_revalidates_a_legacy_queued_submission_against_the_locked_plan(): void
+    {
+        [$tenant] = $this->submitAndApprove('legacy-over-limit');
+        $run = ProvisioningRun::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $schema = (string) $run->schema_name;
+        $this->schemas[] = $schema;
+        $submission = StoreSubmission::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $payload = $submission->payload_snapshot;
+        $payload['config']['products'] = array_map(fn (int $index): array => $this->product("LEGACY-{$index}"), range(1, 11));
+        $submission->forceFill(['payload_snapshot' => $payload])->save();
+
+        try {
+            app(TenantProvisioner::class)->provision((string) $run->id, 1, 3);
+            $this->fail('The worker materialized a legacy payload above the locked plan limit.');
+        } catch (ProvisioningFailure $failure) {
+            $this->assertSame('initial_config_invalid', $failure->errorCode);
+        }
+
+        $this->assertSame(ProvisioningState::Retrying, $run->refresh()->status);
+        $this->assertSame(ProvisioningState::Retrying->value, $tenant->refresh()->provisioning_status);
+        $this->assertSame(0, $tenant->run(static fn (): int => DB::table('store_configs')->count()));
+    }
+
+    public function test_worker_rejects_malformed_media_in_a_legacy_queued_submission(): void
+    {
+        [$tenant] = $this->submitAndApprove('legacy-unsafe-media');
+        $run = ProvisioningRun::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $schema = (string) $run->schema_name;
+        $this->schemas[] = $schema;
+        $submission = StoreSubmission::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $payload = $submission->payload_snapshot;
+        $unsafe = $this->product('UNSAFE-1');
+        $unsafe['imageUrl'] = 'data:image/png;base64,unsafe';
+        $payload['config']['products'] = [$unsafe];
+        $submission->forceFill(['payload_snapshot' => $payload])->save();
+
+        try {
+            app(TenantProvisioner::class)->provision((string) $run->id, 1, 3);
+            $this->fail('The worker materialized unsafe media from a legacy payload.');
+        } catch (ProvisioningFailure $failure) {
+            $this->assertSame('initial_config_invalid', $failure->errorCode);
+        }
+
+        $this->assertSame(0, $tenant->run(static fn (): int => DB::table('products')->count()));
+    }
+
     public function test_failure_retains_owned_schema_and_retry_completes_without_duplicate_config(): void
     {
         [$tenant] = $this->submitAndApprove('retry-store');
@@ -270,7 +317,7 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(ProvisioningState::Retrying, $run->refresh()->status);
         $this->assertStringNotContainsString('raw database detail', (string) $run->last_error_message);
 
-        (new TenantProvisioner(new TenantProvisioningExecutor))->provision((string) $run->id, 2, 3);
+        (new TenantProvisioner(app(TenantProvisioningExecutor::class)))->provision((string) $run->id, 2, 3);
 
         $this->assertSame(ProvisioningState::Active, $run->refresh()->status);
         $count = $tenant->run(static fn (): int => DB::table('store_configs')->count());
@@ -438,8 +485,43 @@ class ProvisioningLifecycleTest extends TestCase
             'themeStyle' => 'elegant',
             'handle' => $label,
             'planKey' => 'starter',
-            'config' => ['marker' => $label],
+            'config' => $this->storeConfig($label),
             'ownerEmail' => 'forged-owner@example.test',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function storeConfig(string $label): array
+    {
+        return [
+            'storeName' => 'Store '.$label,
+            'slogan' => 'Test slogan',
+            'logoIcon' => 'S',
+            'primaryColor' => '#112233',
+            'secondaryColor' => '#334455',
+            'themeStyle' => 'elegant',
+            'bannerText' => 'Test banner',
+            'products' => [],
+            'fontFamily' => 'Cairo',
+            'phone' => '+967700000000',
+            'currency' => 'YER',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function product(string $sku): array
+    {
+        return [
+            'name' => 'Legacy product',
+            'price' => '12.50',
+            'description' => 'Legacy product description',
+            'category' => 'General',
+            'imageKeyword' => 'product',
+            'imageUrl' => 'https://images.example.test/product.jpg',
+            'stockQuantity' => 10,
+            'manageStock' => true,
+            'sku' => $sku,
+            'lowStockThreshold' => 3,
         ];
     }
 }

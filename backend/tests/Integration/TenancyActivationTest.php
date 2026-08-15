@@ -206,7 +206,7 @@ class TenancyActivationTest extends TestCase
         $this->assertCentralContext();
     }
 
-    public function test_custom_domain_login_and_store_config_update_use_central_identity_and_session_tables(): void
+    public function test_custom_domain_login_and_store_config_read_use_central_identity_and_session_tables(): void
     {
         $this->seed(IdentitySeeder::class);
         $tenant = $this->createReadyTenant('Authenticated Host', 'auth.example.test');
@@ -223,6 +223,7 @@ class TenancyActivationTest extends TestCase
             $owner,
             TenantMembershipStatus::Active,
         );
+        $this->insertConfig($tenant, 'authenticated-store');
 
         $host = (string) $tenant->domains()->firstOrFail()->domain;
         $this->getJson($this->urlOnHost($host, '/api/auth/csrf'))->assertOk();
@@ -231,9 +232,10 @@ class TenancyActivationTest extends TestCase
             'password' => 'secure-pass-123',
         ])->assertOk();
 
+        $this->getJson($this->urlOnHost($host, '/api/store/config'))->assertOk();
         $this->postJson($this->urlOnHost($host, '/api/store/config'), [
             'config' => ['marker' => 'owner-write'],
-        ])->assertOk();
+        ])->assertStatus(405);
 
         $this->assertDatabaseHas('sessions', ['user_id' => $owner->id], (string) config('tenancy.database.central_connection'));
         $this->assertDatabaseHas('cache', [], (string) config('tenancy.database.central_connection'));
@@ -350,6 +352,7 @@ class TenancyActivationTest extends TestCase
             DB::table('store_configs')->insert([
                 'id' => (string) Str::uuid(),
                 'config_json' => json_encode(['marker' => $marker], JSON_THROW_ON_ERROR),
+                'is_current' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

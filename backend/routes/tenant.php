@@ -19,6 +19,4 @@ Route::middleware([
     PreventAccessFromCentralDomains::class,
 ])->group(function () {
     Route::get('/api/store/config', [StoreFrontController::class, 'getStoreConfig']);
-    Route::post('/api/store/config', [StoreFrontController::class, 'updateStoreConfig'])
-        ->middleware(['auth', 'tenant.permission:tenant.store.manage']);
 });
