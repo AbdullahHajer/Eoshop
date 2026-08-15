@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 2 — Tenant lifecycle, store and domain |
 | Work Package | WP 2.2 |
-| Status | In progress — implementation and local gates complete |
+| Status | Complete and merged |
 | Started | 2026-08-14 |
 | Branch | `codex/wp-2.2-recoverable-provisioning` |
 | Base | Protected `main` at `f350f7a` |
@@ -75,8 +75,8 @@ Turn an authenticated store request into an approved, isolated and reachable ten
 ### T5 — Evidence and delivery
 
 - [x] Record local verification evidence.
-- [ ] Complete independent read-only review with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Complete independent read-only review with no blocking findings.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Rollback
 
