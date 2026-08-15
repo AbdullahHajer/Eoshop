@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { plansApi } from "./plansApi";
+import { apiClient } from "./apiClient";
 
 afterEach(() => {
+  apiClient.clearCsrfToken();
   vi.unstubAllGlobals();
 });
 

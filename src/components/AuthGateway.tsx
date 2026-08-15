@@ -4,7 +4,8 @@ import {
   User, Mail, Phone, Lock, Eye, EyeOff, ShieldCheck, 
   Sparkles, LogOut, X, ChevronLeft, LogIn, AlertCircle
 } from "lucide-react";
-import { authApi, AuthApiError, toUserProfile } from "../services/authApi";
+import { authApi, toUserProfile } from "../services/authApi";
+import { ApiError } from "../services/apiClient";
 
 export interface UserProfile {
   id: string;
@@ -116,7 +117,7 @@ export default function AuthGateway({
       onLoginSuccess(newUser);
       onClose();
     } catch (requestError) {
-      setError(requestError instanceof AuthApiError ? requestError.message : "تعذر الاتصال بالخادم. حاول مرة أخرى.");
+      setError(requestError instanceof ApiError ? requestError.message : "تعذر الاتصال بالخادم. حاول مرة أخرى.");
     } finally {
       setLoading(false);
     }
@@ -136,7 +137,7 @@ export default function AuthGateway({
     try {
       setNotice(await authApi.forgotPassword(email));
     } catch (requestError) {
-      setError(requestError instanceof AuthApiError ? requestError.message : "تعذر إرسال طلب الاستعادة.");
+      setError(requestError instanceof ApiError ? requestError.message : "تعذر إرسال طلب الاستعادة.");
     } finally {
       setLoading(false);
     }

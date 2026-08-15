@@ -18,6 +18,7 @@
 - [WP 2.1 — Tenant, domain and database activation](work-packages/WP-2.1-tenant-domain-database-activation.md)
 - [WP 2.2 — Recoverable tenant provisioning](work-packages/WP-2.2-recoverable-tenant-provisioning.md)
 - [WP 2.3 — Domain, packages and publication](work-packages/WP-2.3-domain-packages-publication.md)
+- [WP 3.1 — Unified frontend API boundary](work-packages/WP-3.1-unified-api-client.md)
 
 ## Architecture decisions
 
@@ -30,6 +31,7 @@
 - [ADR 0006 — Schema-per-tenant runtime boundary](decisions/ADR-0006-schema-per-tenant-runtime-boundary.md)
 - [ADR 0007 — Recoverable tenant provisioning](decisions/ADR-0007-recoverable-tenant-provisioning.md)
 - [ADR 0008 — Domain, subscription and publication boundaries](decisions/ADR-0008-domain-subscription-publication-boundaries.md)
+- [ADR 0009 — Unified frontend API boundary](decisions/ADR-0009-unified-frontend-api-boundary.md)
 
 ## Evidence
 
@@ -43,6 +45,7 @@
 - [WP 2.1 verification — 2026-08-14](evidence/WP-2.1/verification.md)
 - [WP 2.2 verification — 2026-08-15](evidence/WP-2.2/verification.md)
 - [WP 2.3 verification — 2026-08-15](evidence/WP-2.3/verification.md)
+- [WP 3.1 verification — 2026-08-15](evidence/WP-3.1/verification.md)
 
 ## Documentation rules
 

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { provisioningApi } from "./provisioningApi";
+import { apiClient } from "./apiClient";
 
 afterEach(() => {
+  apiClient.clearCsrfToken();
   vi.unstubAllGlobals();
 });
 
@@ -62,7 +64,23 @@ describe("provisioningApi", () => {
       setItem: vi.fn((key: string, value: string) => values.set(key, value)),
       removeItem: vi.fn((key: string) => values.delete(key)),
     } as unknown as Storage;
-    const response = { data: { id: "tenant-2" }, meta: { replayed: true } };
+    const response = {
+      data: {
+        id: "tenant-2",
+        storeName: "Store Two",
+        businessType: "retail",
+        verificationStatus: "pending",
+        provisioningStatus: "not_started",
+        publicationStatus: "requested",
+        internalDomain: "store-tenant-2.eoshop.local",
+        requestedDomain: "store-two.eoshop.local",
+        plan: { key: "pro", name: "Pro", activationMode: "manual" },
+        subscriptionStatus: "pending_activation",
+        publicationBlockers: ["review_not_approved"],
+        createdAt: "2026-08-15T00:00:00Z",
+      },
+      meta: { replayed: true },
+    };
     let mutations = 0;
     const fetchMock = vi.fn((path: string, _options?: RequestInit) => {
       if (path === "/api/auth/csrf") {
@@ -85,7 +103,7 @@ describe("provisioningApi", () => {
       config: { marker: "two" },
     };
 
-    await expect(provisioningApi.submit(input)).rejects.toThrow("ambiguous network failure");
+    await expect(provisioningApi.submit(input)).rejects.toMatchObject({ category: "network" });
     await expect(provisioningApi.submit(input)).resolves.toEqual(response);
 
     const mutationHeaders = fetchMock.mock.calls

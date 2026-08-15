@@ -1,4 +1,14 @@
-import { apiGet } from "./authApi";
+import { apiClient } from "./apiClient";
+import {
+  arrayField,
+  booleanField,
+  enumField,
+  nullableNumberField,
+  numberField,
+  record,
+  stringArrayField,
+  stringField,
+} from "./apiContract";
 
 export type PlanActivationMode = "automatic" | "manual";
 
@@ -15,7 +25,23 @@ export interface StorePlan {
 }
 
 interface PlanCollectionResponse {
-  data: StorePlan[];
+  data: unknown[];
+}
+
+function mapPlan(value: unknown): StorePlan {
+  const dto = record(value, "باقة المتجر");
+
+  return {
+    key: stringField(dto, "key", "باقة المتجر"),
+    name: stringField(dto, "name", "باقة المتجر"),
+    priceMinor: nullableNumberField(dto, "priceMinor", "باقة المتجر"),
+    currency: stringField(dto, "currency", "باقة المتجر"),
+    billingInterval: enumField(dto, "billingInterval", ["monthly"] as const, "باقة المتجر"),
+    activationMode: enumField(dto, "activationMode", ["automatic", "manual"] as const, "باقة المتجر"),
+    maxStores: numberField(dto, "maxStores", "باقة المتجر"),
+    maxProducts: nullableNumberField(dto, "maxProducts", "باقة المتجر"),
+    features: stringArrayField(dto, "features", "باقة المتجر"),
+  };
 }
 
 interface DomainAvailabilityResponse {
@@ -28,16 +54,21 @@ interface DomainAvailabilityResponse {
 
 export const plansApi = {
   async list(): Promise<StorePlan[]> {
-    const payload = await apiGet<PlanCollectionResponse>("/api/plans");
+    const payload = await apiClient.request<PlanCollectionResponse>("/api/plans");
 
-    return payload.data;
+    return arrayField(record(payload, "قائمة الباقات"), "data", "قائمة الباقات").map(mapPlan);
   },
 
   async domainAvailability(handle: string): Promise<DomainAvailabilityResponse["data"]> {
-    const payload = await apiGet<DomainAvailabilityResponse>(
+    const payload = await apiClient.request<DomainAvailabilityResponse>(
       `/api/domains/availability?handle=${encodeURIComponent(handle)}`,
     );
 
-    return payload.data;
+    const dto = record(record(payload, "توفر النطاق").data, "توفر النطاق");
+    return {
+      handle: stringField(dto, "handle", "توفر النطاق"),
+      domain: stringField(dto, "domain", "توفر النطاق"),
+      available: booleanField(dto, "available", "توفر النطاق"),
+    };
   },
 };

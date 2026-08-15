@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { authApi, toUserProfile } from "./authApi";
+import { apiClient } from "./apiClient";
 
 afterEach(() => {
+  apiClient.clearCsrfToken();
   vi.unstubAllGlobals();
 });
 
@@ -36,10 +38,12 @@ describe("authApi", () => {
   });
 
   it("surfaces server validation errors without fabricating a user", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      message: "The given data was invalid.",
-      errors: { email: ["بيانات الدخول غير صحيحة."] },
-    }), { status: 422 })));
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "validation-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: "The given data was invalid.",
+        errors: { email: ["بيانات الدخول غير صحيحة."] },
+      }), { status: 422 })));
 
     await expect(authApi.login("wrong@example.com", "wrong-password"))
       .rejects.toEqual(expect.objectContaining({
@@ -55,9 +59,9 @@ describe("authApi", () => {
       email: "reviewer@example.com",
       phone: null,
       status: "active",
-      email_verified_at: null,
-      platform_roles: ["platform_reviewer"],
-      platform_permissions: ["platform.stores.view", "platform.stores.review"],
+      emailVerifiedAt: null,
+      platformRoles: ["platform_reviewer"],
+      platformPermissions: ["platform.stores.view", "platform.stores.review"],
     })).toEqual(expect.objectContaining({
       role: "merchant",
       platformPermissions: ["platform.stores.view", "platform.stores.review"],
@@ -69,9 +73,44 @@ describe("authApi", () => {
       email: "admin@example.com",
       phone: null,
       status: "active",
-      email_verified_at: null,
-      platform_roles: ["platform_super_admin"],
-      platform_permissions: ["platform.stores.manage"],
+      emailVerifiedAt: null,
+      platformRoles: ["platform_super_admin"],
+      platformPermissions: ["platform.stores.manage"],
     }).role).toBe("admin");
+  });
+
+  it("maps explicit user fields and rejects malformed successful contracts", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          id: "01USER",
+          name: "User",
+          email: "user@example.com",
+          phone: null,
+          status: "active",
+          email_verified_at: null,
+          platform_roles: [],
+          platform_permissions: [],
+          password_hash: "must-not-escape",
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          id: "01USER",
+          name: "User",
+          email: "user@example.com",
+          phone: null,
+          status: "unknown",
+          email_verified_at: null,
+          platform_roles: [],
+          platform_permissions: [],
+        },
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = await authApi.session();
+    expect(user).not.toHaveProperty("password_hash");
+    expect(user).toMatchObject({ platformRoles: [], emailVerifiedAt: null });
+    await expect(authApi.session()).rejects.toMatchObject({ category: "unexpected" });
   });
 });

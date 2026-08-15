@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Globe, RefreshCw, ShieldCheck, X, XCircle } from "lucide-react";
-import { AuthApiError } from "../services/authApi";
+import { ApiError } from "../services/apiClient";
 import { plansApi, type StorePlan } from "../services/plansApi";
 import { provisioningApi, type StoreSubmission } from "../services/provisioningApi";
 
@@ -58,7 +58,7 @@ export default function DomainSetupModal({
           setSelectedPlan(items[0]?.key ?? "");
         }
       })
-      .catch((caught) => setError(caught instanceof AuthApiError ? caught.message : "تعذر تحميل الباقات من الخادم."))
+      .catch((caught) => setError(caught instanceof ApiError ? caught.message : "تعذر تحميل الباقات من الخادم."))
       .finally(() => setLoadingPlans(false));
   }, [isOpen]);
 
@@ -107,8 +107,8 @@ export default function DomainSetupModal({
       onSubmitted?.(response.data);
       onClose();
     } catch (caught) {
-      setError(caught instanceof AuthApiError ? caught.message : "تعذر إرسال طلب المتجر. حاول مرة أخرى.");
-      if (caught instanceof AuthApiError && caught.status === 409) setAvailability(null);
+      setError(caught instanceof ApiError ? caught.message : "تعذر إرسال طلب المتجر. حاول مرة أخرى.");
+      if (caught instanceof ApiError && caught.category === "conflict") setAvailability(null);
     } finally {
       setSubmitting(false);
     }

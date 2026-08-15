@@ -1,4 +1,5 @@
-import { apiMutation } from "./authApi";
+import { apiClient } from "./apiClient";
+import { booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
 
 export interface StoreSubmission {
   id: string;
@@ -20,8 +21,37 @@ export interface StoreSubmission {
 }
 
 interface StoreSubmissionResponse {
-  data: StoreSubmission;
-  meta: { replayed: boolean };
+  data: unknown;
+  meta: unknown;
+}
+
+function mapSubmission(value: unknown): StoreSubmission {
+  const dto = record(value, "طلب المتجر");
+  const planValue = dto.plan;
+
+  return {
+    id: stringField(dto, "id", "طلب المتجر"),
+    storeName: stringField(dto, "storeName", "طلب المتجر"),
+    businessType: stringField(dto, "businessType", "طلب المتجر"),
+    verificationStatus: enumField(dto, "verificationStatus", ["pending", "approved", "rejected", "suspended"] as const, "طلب المتجر"),
+    provisioningStatus: enumField(dto, "provisioningStatus", ["not_started", "queued", "provisioning", "retrying", "active", "failed"] as const, "طلب المتجر"),
+    publicationStatus: enumField(dto, "publicationStatus", ["requested", "published", "unpublished", "rejected"] as const, "طلب المتجر"),
+    internalDomain: nullableStringField(dto, "internalDomain", "طلب المتجر"),
+    requestedDomain: nullableStringField(dto, "requestedDomain", "طلب المتجر"),
+    plan: planValue === null ? null : (() => {
+      const plan = record(planValue, "باقة طلب المتجر");
+      return {
+        key: stringField(plan, "key", "باقة طلب المتجر"),
+        name: stringField(plan, "name", "باقة طلب المتجر"),
+        activationMode: enumField(plan, "activationMode", ["automatic", "manual"] as const, "باقة طلب المتجر"),
+      };
+    })(),
+    subscriptionStatus: dto.subscriptionStatus === null
+      ? null
+      : enumField(dto, "subscriptionStatus", ["pending_activation", "active", "cancelled", "expired"] as const, "طلب المتجر"),
+    publicationBlockers: stringArrayField(dto, "publicationBlockers", "طلب المتجر"),
+    createdAt: nullableStringField(dto, "createdAt", "طلب المتجر"),
+  };
 }
 
 export interface StoreSubmissionInput {
@@ -100,21 +130,26 @@ function clearPendingSubmission(pending: PendingSubmission): void {
 }
 
 export const provisioningApi = {
-  async submit(input: StoreSubmissionInput): Promise<StoreSubmissionResponse> {
+  async submit(input: StoreSubmissionInput): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
     const pending = acquireIdempotencyKey(input);
-    const response = await apiMutation<StoreSubmissionResponse>("/api/register-store", "POST", {
-      storeName: input.storeName,
-      businessType: input.businessType,
-      themeStyle: input.themeStyle,
-      handle: input.handle,
-      planKey: input.planKey,
-      config: input.config,
-    }, {
+    const response = await apiClient.request<StoreSubmissionResponse>("/api/register-store", {
+      method: "POST",
+      body: {
+        storeName: input.storeName,
+        businessType: input.businessType,
+        themeStyle: input.themeStyle,
+        handle: input.handle,
+        planKey: input.planKey,
+        config: input.config,
+      },
       headers: { "Idempotency-Key": pending.idempotencyKey },
+      retrySafety: "idempotent",
     });
 
     clearPendingSubmission(pending);
 
-    return response;
+    const envelope = record(response, "استجابة طلب المتجر");
+    const meta = record(envelope.meta, "بيانات تكرار طلب المتجر");
+    return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار طلب المتجر") } };
   },
 };
