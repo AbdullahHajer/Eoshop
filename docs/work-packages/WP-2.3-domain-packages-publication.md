@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 2 — Tenant lifecycle, store and domain |
 | Work Package | WP 2.3 |
-| Status | In progress — implementation and local gates complete |
+| Status | Complete — delivered through PR #12 |
 | Started | 2026-08-15 |
 | Branch | `codex/wp-2.3-domain-packages` |
 | Base | Protected `main` at `a305192` |
@@ -70,7 +70,7 @@ Let a merchant request a real platform hostname and package without races or fal
 
 - [x] Record verification evidence.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Rollback
 
