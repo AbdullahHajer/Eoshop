@@ -3,6 +3,9 @@
 - Date: 2026-08-15
 - Branch: `codex/wp-3.2-server-owned-state`
 - Base: protected `main` at `d2eb1892`
+- Implementation commit: `3f4d1c4551887a78822f8ab406630006f8a63e5e`
+- Pull request: [#16](https://github.com/sas-prog1/Eoshop/pull/16)
+- Merge commit: `d24eef4bb002ee2a4fd0c2c095f85d85b70267c6`
 - Scope: server-owned store workspace, product materialization, revision conflicts, plan enforcement and explicit browser drafts
 
 ## Authority and migration contract
@@ -72,4 +75,6 @@ Expected error logs from negative audit, rollback, unowned-schema and injected p
 
 - Early independent review found six blocking design gaps; the implementation addressed all six before the final gates.
 - Final independent read-only verdict: **APPROVE**, with no blocking findings.
-- Implementation commit, PR, required checks, merge and protected-main verification: pending delivery.
+- Pull-request run [31896564836](https://github.com/sas-prog1/Eoshop/actions/runs/31896564836) completed successfully at implementation head `3f4d1c4`; Repository safety, Backend quality, Frontend quality and Container integration all passed.
+- PR #16 was merged through the documented single-owner admin path after all four required checks succeeded. The required approval count remained zero under the repository's single-owner policy; all four required checks and administrator enforcement remained enabled.
+- Protected-main run [31896737268](https://github.com/sas-prog1/Eoshop/actions/runs/31896737268) completed successfully at merge commit `d24eef4`; all four jobs passed again.

@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 3 — Connect the interface to the backend |
 | Work Package | WP 3.2 |
-| Status | Implementation and gates complete; delivery pending |
+| Status | Complete and merged |
 | Started | 2026-08-15 |
 | Branch | `codex/wp-3.2-server-owned-state` |
 | Base | Protected `main` at `d2eb1892` |
@@ -73,7 +73,7 @@ Make the tenant database the durable source for store presentation, products, pr
 
 - [x] Record verification evidence and rollback observations.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Acceptance criteria
 
