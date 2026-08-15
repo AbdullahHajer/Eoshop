@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { ArrowLeft, Check, RefreshCw, ShieldCheck } from "lucide-react";
 import { plansApi, type StorePlan } from "../services/plansApi";
+import { useApiTask } from "../hooks/useApiTask";
 
 interface ServerPricingPlansProps {
   onStart: () => void;
@@ -15,16 +16,12 @@ const featureLabels: Record<string, string> = {
 };
 
 export default function ServerPricingPlans({ onStart }: ServerPricingPlansProps) {
-  const [plans, setPlans] = useState<StorePlan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const plansTask = useApiTask<StorePlan[], []>(plansApi.list, { retry: "safe" });
+  const plans = plansTask.data ?? [];
 
   useEffect(() => {
-    plansApi.list()
-      .then(setPlans)
-      .catch(() => setError("تعذر تحميل الباقات من الخادم حاليًا."))
-      .finally(() => setLoading(false));
-  }, []);
+    void plansTask.execute();
+  }, [plansTask.execute]);
 
   return (
     <section id="pricing" className="scroll-mt-6 border-t border-slate-200/80 bg-slate-50 py-16 md:py-24">
@@ -35,9 +32,18 @@ export default function ServerPricingPlans({ onStart }: ServerPricingPlansProps)
           <p className="text-sm leading-relaxed text-slate-600">اختيار الباقة المدفوعة يسجل طلبًا فقط؛ تفعيلها إداري في هذه المرحلة، ولم تُربط بوابة دفع إلكترونية بعد.</p>
         </div>
 
-        {loading && <div className="flex justify-center py-12 text-indigo-700"><RefreshCw className="h-7 w-7 animate-spin" /></div>}
-        {error && <p className="mx-auto max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-bold text-rose-700">{error}</p>}
-        {!loading && !error && (
+        {plansTask.loading && <div className="flex justify-center py-12 text-indigo-700"><RefreshCw className="h-7 w-7 animate-spin" /></div>}
+        {plansTask.error && (
+          <div className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center text-sm font-bold text-rose-700">
+            <p>{plansTask.error.message}</p>
+            {plansTask.canRetry && (
+              <button type="button" onClick={() => void plansTask.retry()} className="flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2 text-xs text-white">
+                <RefreshCw className="h-4 w-4" /> إعادة المحاولة
+              </button>
+            )}
+          </div>
+        )}
+        {!plansTask.loading && !plansTask.error && (
           <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-3">
             {plans.map((plan) => (
               <article key={plan.key} className={`flex flex-col rounded-3xl border bg-white p-7 shadow-sm ${plan.key === "pro" ? "border-2 border-amber-500 shadow-lg" : "border-slate-200"}`}>

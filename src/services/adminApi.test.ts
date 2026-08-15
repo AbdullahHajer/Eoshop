@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminApi } from "./adminApi";
+import { apiClient } from "./apiClient";
 
 afterEach(() => {
+  apiClient.clearCsrfToken();
   vi.unstubAllGlobals();
 });
 
@@ -34,10 +36,13 @@ const store = {
 
 describe("adminApi", () => {
   it("loads authoritative platform stores with same-origin credentials", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [store] }), { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      data: [{ ...store, databasePassword: "must-not-escape" }],
+    }), { status: 200 })));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(adminApi.listStores()).resolves.toEqual([store]);
+    expect((await adminApi.listStores())[0]).not.toHaveProperty("databasePassword");
     expect(fetchMock).toHaveBeenCalledWith("/api/admin/stores", expect.objectContaining({
       credentials: "same-origin",
     }));

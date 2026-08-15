@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
-import { authApi, AuthApiError } from "../services/authApi";
+import { authApi } from "../services/authApi";
+import { ApiError } from "../services/apiClient";
 
 export default function ResetPasswordGateway() {
   const parameters = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -35,7 +36,7 @@ export default function ResetPasswordGateway() {
       }));
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {
-      setError(requestError instanceof AuthApiError ? requestError.message : "تعذر تحديث كلمة المرور.");
+      setError(requestError instanceof ApiError ? requestError.message : "تعذر تحديث كلمة المرور.");
     } finally {
       setLoading(false);
     }

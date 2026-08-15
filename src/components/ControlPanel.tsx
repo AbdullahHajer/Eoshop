@@ -6,7 +6,7 @@ import {
   ShieldCheck, DollarSign, Gift, Layers, CheckSquare, AlertTriangle, ArrowRight, Save, ToggleLeft, ToggleRight
 } from "lucide-react";
 import { StoreConfig, Product, Coupon, EWallet } from "../types";
-import { apiMutation } from "../services/authApi";
+import { assistantApi } from "../services/assistantApi";
 
 interface ControlPanelProps {
   config: StoreConfig;
@@ -131,10 +131,8 @@ export default function ControlPanel({
 
     setIsGeneratingCopy(true);
     try {
-      const data = await apiMutation<Record<string, any>>(
-        "/api/generate-store-ideas",
-        "POST",
-        { description: `اكتب شعارات وعروض دعائية ومحتوى تسويقي بناءً على هذه الفكرة: "${assistantPrompt}"` },
+      const data = await assistantApi.generateStoreIdeas(
+        `اكتب شعارات وعروض دعائية ومحتوى تسويقي بناءً على هذه الفكرة: "${assistantPrompt}"`,
       );
       
       setCopyOutput({

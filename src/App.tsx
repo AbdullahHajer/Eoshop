@@ -18,8 +18,10 @@ import DomainSetupModal from "./components/DomainSetupModal";
 import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
 import ResetPasswordGateway from "./components/ResetPasswordGateway";
-import { AuthApiError, apiMutation, authApi, toUserProfile } from "./services/authApi";
+import { authApi, toUserProfile } from "./services/authApi";
+import { ApiError } from "./services/apiClient";
 import { adminApi } from "./services/adminApi";
+import { assistantApi } from "./services/assistantApi";
 
 export default function App() {
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
@@ -191,7 +193,7 @@ export default function App() {
     try {
       setPlatformStores(await adminApi.listStores());
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof AuthApiError
+      setPlatformStoresError(requestError instanceof ApiError
         ? requestError.message
         : "تعذر تحميل متاجر المنصة من الخادم.");
     } finally {
@@ -212,7 +214,7 @@ export default function App() {
       )));
       triggerToast("تم تحديث حالة المتجر وتسجيل العملية في سجل التدقيق.", "success");
     } catch (requestError) {
-      const message = requestError instanceof AuthApiError
+      const message = requestError instanceof ApiError
         ? requestError.message
         : "تعذر تحديث حالة المتجر.";
       setPlatformStoresError(message);
@@ -229,7 +231,7 @@ export default function App() {
       )));
       triggerToast("تمت جدولة إعادة محاولة تجهيز المتجر بأمان.", "success");
     } catch (requestError) {
-      const message = requestError instanceof AuthApiError
+      const message = requestError instanceof ApiError
         ? requestError.message
         : "تعذر جدولة إعادة محاولة تجهيز المتجر.";
       setPlatformStoresError(message);
@@ -249,7 +251,7 @@ export default function App() {
       replacePlatformStore(await adminApi.activateSubscription(storeId, endsAt));
       triggerToast("تم تفعيل استحقاق الباقة وتسجيل العملية في سجل التدقيق.", "success");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر تفعيل الاشتراك.");
+      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر تفعيل الاشتراك.");
       throw requestError;
     }
   };
@@ -260,7 +262,7 @@ export default function App() {
       replacePlatformStore(await adminApi.publish(storeId));
       triggerToast("تم نشر المتجر على النطاق المحجوز بعد اجتياز جميع الشروط.", "success");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر نشر المتجر.");
+      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر نشر المتجر.");
       throw requestError;
     }
   };
@@ -271,7 +273,7 @@ export default function App() {
       replacePlatformStore(await adminApi.unpublish(storeId));
       triggerToast("تم إيقاف نشر المتجر مع الاحتفاظ ببياناته ونطاقه.", "info");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر إيقاف نشر المتجر.");
+      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر إيقاف نشر المتجر.");
       throw requestError;
     }
   };
@@ -396,11 +398,7 @@ export default function App() {
     triggerToast("جاري صياغة الفكرة وتصميم الهوية بالذكاء الاصطناعي... 🧠⚡", "info");
 
     try {
-      const generatedData = await apiMutation<Record<string, any>>(
-        "/api/generate-store-ideas",
-        "POST",
-        { description: promptText },
-      );
+      const generatedData = await assistantApi.generateStoreIdeas(promptText);
       
       const finalConfig: StoreConfig = {
         storeName: generatedData.storeName || "متجر مبتكر",
@@ -413,7 +411,7 @@ export default function App() {
         fontFamily: generatedData.themeStyle === "tech" ? "Tajawal" : "Cairo",
         phone: "+966 50 111 2222",
         currency: "ر.س",
-        products: (generatedData.products || []).map((p: any, idx: number) => ({
+        products: generatedData.products.map((p, idx) => ({
           id: `ai-p-${idx}`,
           name: p.name,
           price: Number(p.price) || 99,

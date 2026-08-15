@@ -1,110 +1,37 @@
+import { apiClient } from "./apiClient";
+import { enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
+
 export interface AuthenticatedUser {
   id: string;
   name: string;
   email: string;
   phone: string | null;
   status: "pending" | "active" | "suspended";
-  email_verified_at: string | null;
-  platform_roles: string[];
-  platform_permissions: string[];
+  emailVerifiedAt: string | null;
+  platformRoles: string[];
+  platformPermissions: string[];
 }
 
-interface DataResponse<T> {
-  data: T;
-}
+function mapAuthenticatedUser(value: unknown): AuthenticatedUser {
+  const dto = record(value, "المستخدم المصادق");
 
-interface MessageResponse {
-  message: string;
-}
-
-interface ErrorResponse {
-  message?: string;
-  errors?: Record<string, string[]>;
-}
-
-export class AuthApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly errors: Record<string, string[]> = {},
-  ) {
-    super(message);
-    this.name = "AuthApiError";
-  }
-}
-
-let csrfToken: string | null = null;
-
-async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => ({}))) as ErrorResponse & T;
-
-  if (!response.ok) {
-    const firstValidationMessage = Object.values(payload.errors ?? {})[0]?.[0];
-    throw new AuthApiError(
-      firstValidationMessage ?? payload.message ?? "تعذر إكمال الطلب. حاول مرة أخرى.",
-      response.status,
-      payload.errors,
-    );
-  }
-
-  return payload;
-}
-
-async function establishCsrf(): Promise<string> {
-  const response = await fetch("/api/auth/csrf", {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-  });
-  const payload = await parseResponse<{ csrf_token: string }>(response);
-  csrfToken = payload.csrf_token;
-
-  return csrfToken;
-}
-
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-  });
-
-  return parseResponse<T>(response);
-}
-
-export async function apiMutation<T>(
-  path: string,
-  method: "POST" | "PATCH" | "DELETE",
-  body: Record<string, unknown>,
-  options: { headers?: Record<string, string>; retry?: boolean } = {},
-): Promise<T> {
-  const retry = options.retry ?? true;
-  const token = csrfToken ?? await establishCsrf();
-  const response = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-CSRF-TOKEN": token,
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (response.status === 419 && retry) {
-    csrfToken = null;
-    await establishCsrf();
-
-    return apiMutation<T>(path, method, body, { ...options, retry: false });
-  }
-
-  return parseResponse<T>(response);
+  return {
+    id: stringField(dto, "id", "المستخدم المصادق"),
+    name: stringField(dto, "name", "المستخدم المصادق"),
+    email: stringField(dto, "email", "المستخدم المصادق"),
+    phone: nullableStringField(dto, "phone", "المستخدم المصادق"),
+    status: enumField(dto, "status", ["pending", "active", "suspended"] as const, "المستخدم المصادق"),
+    emailVerifiedAt: nullableStringField(dto, "email_verified_at", "المستخدم المصادق"),
+    platformRoles: stringArrayField(dto, "platform_roles", "المستخدم المصادق"),
+    platformPermissions: stringArrayField(dto, "platform_permissions", "المستخدم المصادق"),
+  };
 }
 
 export const authApi = {
   async session(): Promise<AuthenticatedUser | null> {
-    const payload = await apiGet<DataResponse<AuthenticatedUser | null>>("/api/auth/session");
+    const payload = record(await apiClient.request<unknown>("/api/auth/session"), "جلسة المستخدم");
 
-    return payload.data;
+    return payload.data === null ? null : mapAuthenticatedUser(payload.data);
   },
 
   async register(input: {
@@ -114,35 +41,41 @@ export const authApi = {
     password: string;
     passwordConfirmation: string;
   }): Promise<AuthenticatedUser> {
-    const payload = await apiMutation<DataResponse<AuthenticatedUser>>("/api/auth/register", "POST", {
-      name: input.name,
-      email: input.email,
-      phone: input.phone || null,
-      password: input.password,
-      password_confirmation: input.passwordConfirmation,
-    });
+    const payload = record(await apiClient.request<unknown>("/api/auth/register", {
+      method: "POST",
+      body: {
+        name: input.name,
+        email: input.email,
+        phone: input.phone || null,
+        password: input.password,
+        password_confirmation: input.passwordConfirmation,
+      },
+    }), "تسجيل المستخدم");
 
-    return payload.data;
+    return mapAuthenticatedUser(payload.data);
   },
 
   async login(email: string, password: string): Promise<AuthenticatedUser> {
-    const payload = await apiMutation<DataResponse<AuthenticatedUser>>("/api/auth/login", "POST", {
-      email,
-      password,
-    });
+    const payload = record(await apiClient.request<unknown>("/api/auth/login", {
+      method: "POST",
+      body: { email, password },
+    }), "دخول المستخدم");
 
-    return payload.data;
+    return mapAuthenticatedUser(payload.data);
   },
 
   async logout(): Promise<void> {
-    await apiMutation<MessageResponse>("/api/auth/logout", "POST", {});
-    csrfToken = null;
+    record(await apiClient.request<unknown>("/api/auth/logout", { method: "POST", body: {} }), "خروج المستخدم");
+    apiClient.clearCsrfToken();
   },
 
   async forgotPassword(email: string): Promise<string> {
-    const payload = await apiMutation<MessageResponse>("/api/auth/forgot-password", "POST", { email });
+    const payload = record(await apiClient.request<unknown>("/api/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+    }), "استعادة كلمة المرور");
 
-    return payload.message;
+    return stringField(payload, "message", "استعادة كلمة المرور");
   },
 
   async resetPassword(input: {
@@ -151,20 +84,23 @@ export const authApi = {
     password: string;
     passwordConfirmation: string;
   }): Promise<string> {
-    const payload = await apiMutation<MessageResponse>("/api/auth/reset-password", "POST", {
-      token: input.token,
-      email: input.email,
-      password: input.password,
-      password_confirmation: input.passwordConfirmation,
-    });
-    csrfToken = null;
+    const payload = record(await apiClient.request<unknown>("/api/auth/reset-password", {
+      method: "POST",
+      body: {
+        token: input.token,
+        email: input.email,
+        password: input.password,
+        password_confirmation: input.passwordConfirmation,
+      },
+    }), "تحديث كلمة المرور");
+    apiClient.clearCsrfToken();
 
-    return payload.message;
+    return stringField(payload, "message", "تحديث كلمة المرور");
   },
 };
 
 export function toUserProfile(user: AuthenticatedUser) {
-  const isSuperAdmin = user.platform_roles.includes("platform_super_admin");
+  const isSuperAdmin = user.platformRoles.includes("platform_super_admin");
 
   return {
     id: user.id,
@@ -172,8 +108,8 @@ export function toUserProfile(user: AuthenticatedUser) {
     email: user.email,
     phone: user.phone ?? "",
     role: isSuperAdmin ? "admin" as const : "merchant" as const,
-    platformRoles: user.platform_roles,
-    platformPermissions: user.platform_permissions,
+    platformRoles: user.platformRoles,
+    platformPermissions: user.platformPermissions,
     storeStatus: "none" as const,
   };
 }
