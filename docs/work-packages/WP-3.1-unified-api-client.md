@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 3 — Connect the interface to the backend |
 | Work Package | WP 3.1 |
-| Status | Implementation complete — PR #14 awaiting final evidence CI and merge |
+| Status | Complete — delivered through PR #14 |
 | Started | 2026-08-15 |
 | Branch | `codex/wp-3.1-unified-api-client` |
 | Base | Protected `main` at `52d81f2` |
@@ -66,7 +66,7 @@ Create one typed, same-origin frontend boundary for Laravel APIs so authenticati
 
 - [x] Record verification evidence.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Risks and controls
 

@@ -62,5 +62,9 @@ Expected error logs from negative rollback, audit and provisioning-failure tests
 - Implementation commit: `64bcc14` (`feat(frontend): unify API transport and contracts`).
 - Pull request: [#14 — WP 3.1: unify frontend API boundary](https://github.com/sas-prog1/Eoshop/pull/14).
 - Required-check run: [31889358724](https://github.com/sas-prog1/Eoshop/actions/runs/31889358724) — Repository safety, Frontend quality, Backend quality and Container integration all passed.
-- Final evidence commit and required-check run: pending.
-- Merge and protected-main post-merge run: pending.
+- Final evidence commit: `2ca93d05ffdfc69713a3aaa2b35c10aeb230991c`.
+- Final required-check run: [31889525695](https://github.com/sas-prog1/Eoshop/actions/runs/31889525695) — all four required jobs passed on the final PR head.
+- PR #14 merged at `701271d91c65b228123af6cdcceafbb4a31099a6` on 2026-08-15.
+- Protected-main post-merge run: [31889689850](https://github.com/sas-prog1/Eoshop/actions/runs/31889689850) — all four jobs passed on the merge commit.
+
+WP 3.1 is complete. WP 3.2 may now replace browser-held business state incrementally while using the unified API boundary delivered here.
