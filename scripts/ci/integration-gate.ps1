@@ -173,7 +173,8 @@ function Assert-TenancyBoundary {
     param([int]$Port)
 
     $tenantId = 'wp21-live'
-    $tenantDomain = 'wp21-live.example.test'
+    $tenantDomain = 'wp23-live.example.test'
+    $internalDomain = 'store-wp21-live.example.test'
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
     try {
         $hashBytes = $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($tenantId))
@@ -185,10 +186,10 @@ function Assert-TenancyBoundary {
     $schema = "tenant_wp21_live_$($hash.Substring(0, 16))"
 
     $tenantSql = @"
-INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, active_at, theme_style, created_at, updated_at)
-VALUES ('$tenantId', 'WP 2.1 Live Store', 'Live Owner', 'live-owner@example.test', 'retail', 'approved', 'active', now(), 'elegant', now(), now());
-INSERT INTO domains (domain, tenant_id, created_at, updated_at)
-VALUES ('$tenantDomain', '$tenantId', now(), now());
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, publication_status, active_at, theme_style, created_at, updated_at)
+VALUES ('$tenantId', 'WP 2.3 Live Store', 'Live Owner', 'live-owner@example.test', 'retail', 'approved', 'active', 'requested', now(), 'elegant', now(), now());
+INSERT INTO domains (domain, kind, tenant_id, created_at, updated_at)
+VALUES ('$internalDomain', 'internal', '$tenantId', now(), now());
 CREATE SCHEMA "$schema";
 INSERT INTO provisioning_runs (
     id, tenant_id, status, run_number, schema_name, schema_origin, schema_created_at,
@@ -198,6 +199,35 @@ VALUES (
     '00000000-0000-0000-0000-000000000022', '$tenantId', 'active', 1, '$schema', 'platform_created', now(),
     now(), now(), now(), now(), now()
 );
+INSERT INTO tenant_subscriptions (
+    id, tenant_id, plan_key, status, activation_source, starts_at, created_at, updated_at
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000023', '$tenantId', 'starter', 'active', 'automatic_free', now(), now(), now()
+);
+INSERT INTO domain_reservations (
+    id, tenant_id, domain, handle, status, origin, reserved_at, activated_at, created_at, updated_at
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000024', '$tenantId', '$tenantDomain', 'wp23-live', 'active', 'user_selected', now(), now(), now(), now()
+);
+INSERT INTO publication_requests (
+    id, tenant_id, domain_reservation_id, tenant_subscription_id, status, origin,
+    requested_at, decided_at, published_at, created_at, updated_at
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000025', '$tenantId',
+    '00000000-0000-0000-0000-000000000024', '00000000-0000-0000-0000-000000000023',
+    'published', 'user_selected', now(), now(), now(), now(), now()
+);
+INSERT INTO domains (domain, kind, tenant_id, created_at, updated_at)
+VALUES ('$tenantDomain', 'public_subdomain', '$tenantId', now(), now());
+UPDATE tenants
+SET publication_status = 'published', publication_requested_at = now(), published_at = now(),
+    publication_request_id = '00000000-0000-0000-0000-000000000025',
+    published_domain_id = (SELECT id FROM domains WHERE domain = '$tenantDomain'),
+    publication_subscription_id = '00000000-0000-0000-0000-000000000023'
+WHERE id = '$tenantId';
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql',
@@ -328,6 +358,8 @@ try {
     $adoptionSql = @"
 INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
 VALUES ('$adoptionTenantId', 'WP 2.1 Adoption Store', 'Adoption Owner', 'adoption-owner@example.test', 'retail', 'approved', 'not_started', 'elegant', now(), now());
+INSERT INTO domains (domain, tenant_id, created_at, updated_at)
+VALUES ('wp21-adopt.example.test', '$adoptionTenantId', now(), now());
 CREATE SCHEMA "$adoptionSchema";
 "@
     Invoke-Compose -Arguments @(
@@ -355,10 +387,21 @@ VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp2
     }
     $incompleteHash = -join ($incompleteHashBytes | ForEach-Object { $_.ToString('x2') })
     $incompleteSchema = "tenant_wp21_incomplete_$($incompleteHash.Substring(0, 16))"
+    $longLegacyLabel = 'l' * 55
     $incompleteSql = @"
 INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
 VALUES ('$incompleteTenantId', 'Incomplete WP 2.1 Store', 'Incomplete Owner', 'incomplete-owner@example.test', 'retail', 'approved', 'not_started', 'elegant', now(), now());
+INSERT INTO domains (domain, tenant_id, created_at, updated_at)
+VALUES ('wp21-incomplete.example.test', '$incompleteTenantId', now(), now());
 CREATE SCHEMA "$incompleteSchema";
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
+VALUES ('wp21-rejected', 'Rejected WP 2.1 Store', 'Rejected Owner', 'rejected-owner@example.test', 'retail', 'rejected', 'not_started', 'elegant', now(), now());
+INSERT INTO domains (domain, tenant_id, created_at, updated_at)
+VALUES ('x.example.test', 'wp21-rejected', now(), now());
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
+VALUES ('wp21-long-label', 'Long Label WP 2.1 Store', 'Long Label Owner', 'long-label-owner@example.test', 'retail', 'pending', 'not_started', 'elegant', now(), now());
+INSERT INTO domains (domain, tenant_id, created_at, updated_at)
+VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
@@ -370,6 +413,8 @@ CREATE SCHEMA "$incompleteSchema";
     $authorizationMigration = 'database/migrations/system/2026_08_13_000005_harden_tenant_verification_status.php'
     $tenancyMigration = 'database/migrations/system/2026_08_14_000006_enforce_canonical_tenant_domains.php'
     $provisioningMigration = 'database/migrations/system/2026_08_14_000007_create_tenant_provisioning_lifecycle.php'
+    $publicationMigration = 'database/migrations/system/2026_08_15_000008_create_domain_subscription_publication_lifecycle.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$publicationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$provisioningMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$tenancyMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$authorizationMigration --force --no-interaction
@@ -380,6 +425,7 @@ CREATE SCHEMA "$incompleteSchema";
     Invoke-Compose exec -T backend php artisan migrate --path=$authorizationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$tenancyMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$provisioningMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$publicationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     $adoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
@@ -388,12 +434,33 @@ CREATE SCHEMA "$incompleteSchema";
     if ($adoptionResult -ne 'active:wp21_adopted') {
         throw "WP 2.1 schema adoption failed. Received: $adoptionResult"
     }
+    $publicationAdoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT publication_status || ':' || count(publication_request_id)::text FROM tenants WHERE id = '$adoptionTenantId' GROUP BY publication_status;"
+    )).Trim()
+    if ($publicationAdoptionResult -ne 'published:1') {
+        throw "WP 2.3 publication adoption failed. Received: $publicationAdoptionResult"
+    }
     $incompleteResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
         '-tAc', "SELECT t.provisioning_status || ':' || count(r.id)::text FROM tenants t LEFT JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$incompleteTenantId' GROUP BY t.provisioning_status;"
     )).Trim()
     if ($incompleteResult -ne 'not_started:0') {
         throw "Incomplete WP 2.1 schema did not remain fail-closed. Received: $incompleteResult"
+    }
+    $legacyDomainAdoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT string_agg(tenant_id || ':' || char_length(handle)::text, ',' ORDER BY tenant_id) FROM domain_reservations WHERE tenant_id IN ('wp21-long-label', 'wp21-rejected');"
+    )).Trim()
+    if ($legacyDomainAdoptionResult -ne 'wp21-long-label:55,wp21-rejected:1') {
+        throw "WP 2.3 did not preserve legacy DNS-label lengths. Received: $legacyDomainAdoptionResult"
+    }
+    $rejectedAdoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT t.publication_status || ':' || p.status || ':' || count(*) FILTER (WHERE open_request.status = 'requested')::text FROM tenants t JOIN publication_requests p ON p.id = t.publication_request_id LEFT JOIN publication_requests open_request ON open_request.tenant_id = t.id WHERE t.id = 'wp21-rejected' GROUP BY t.publication_status, p.status;"
+    )).Trim()
+    if ($rejectedAdoptionResult -ne 'rejected:rejected:0') {
+        throw "Rejected WP 2.1 tenant adoption left an open publication request. Received: $rejectedAdoptionResult"
     }
     Invoke-Compose exec -T backend php artisan migrate:status --path=database/migrations/system --no-interaction
     Invoke-Compose exec -T backend php artisan route:cache --no-interaction

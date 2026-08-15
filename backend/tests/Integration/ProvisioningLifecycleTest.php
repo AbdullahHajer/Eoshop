@@ -200,8 +200,7 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(ProvisioningState::Active->value, $tenant->refresh()->provisioning_status);
         $this->assertSame($stepCount, $run->steps()->count());
         $this->getJson('http://'.$tenant->domains()->firstOrFail()->domain.'/api/store/config')
-            ->assertOk()
-            ->assertJsonPath('marker', 'worker-store');
+            ->assertNotFound();
     }
 
     public function test_unowned_schema_fails_closed_and_exhausted_worker_job_is_quarantined(): void
@@ -244,8 +243,7 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(4, $run->steps()->count());
 
         $this->getJson('http://'.$tenant->domains()->firstOrFail()->domain.'/api/store/config')
-            ->assertOk()
-            ->assertJsonPath('marker', 'active-store');
+            ->assertNotFound();
         $this->assertFalse(tenancy()->initialized);
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
     }
@@ -325,8 +323,7 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(ProvisioningState::Active->value, $tenant->refresh()->provisioning_status);
         $this->assertSame($retryStepCount, $retryRun->steps()->count());
         $this->getJson('http://'.$tenant->domains()->firstOrFail()->domain.'/api/store/config')
-            ->assertOk()
-            ->assertJsonPath('marker', 'manual-retry-store');
+            ->assertNotFound();
     }
 
     public function test_lock_contention_and_its_failed_callback_do_not_mutate_the_current_run(): void
@@ -439,6 +436,8 @@ class ProvisioningLifecycleTest extends TestCase
             'storeName' => 'Store '.$label,
             'businessType' => 'retail',
             'themeStyle' => 'elegant',
+            'handle' => $label,
+            'planKey' => 'starter',
             'config' => ['marker' => $label],
             'ownerEmail' => 'forged-owner@example.test',
         ];

@@ -3371,115 +3371,23 @@ export default function ControlPanel({
         {/* --- STORE ACTIVATION & SUBDOMAIN REQUEST TAB --- */}
         {activeTab === "export" && (
           <div className="space-y-5 animate-fadeIn">
-            <div className="bg-gradient-to-r from-sky-50 to-indigo-50 p-4 rounded-2xl border border-sky-100 space-y-1.5">
-              <h4 className="font-bold text-sky-900 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-sky-600" />
-                <span>إرسال طلب اعتماد ونشر المتجر 🚀</span>
-              </h4>
-              <p className="text-[11px] text-sky-700 leading-relaxed">
-                تهانينا! لقد أنجزت هويتك ومنتجاتك بنجاح. حدد باقتك والدومين الفرعي المطلوب وأرفق مستند التوثيق لإنشاء قاعدة البيانات المنفصلة وتفعيل متجرك فوراً.
-              </p>
+            <div className="rounded-2xl border border-indigo-200 bg-gradient-to-l from-indigo-50 to-sky-50 p-5">
+              <h4 className="flex items-center gap-2 text-sm font-black text-indigo-950"><Sparkles className="h-5 w-5 text-indigo-600" /> إرسال طلب المتجر الحقيقي</h4>
+              <p className="mt-2 text-xs leading-relaxed text-indigo-800">ستفتح نافذة متصلة بالخادم لاختيار عنوان متاح وباقة فعلية. إرسال الطلب يحجز العنوان ويضع المتجر للمراجعة فقط؛ تجهيز قاعدة البيانات والنشر عمليتان لاحقتان محميتان.</p>
             </div>
-
-            {/* Store Preview Summary Card */}
-            <div className="p-4 bg-white border border-slate-200/90 rounded-2xl shadow-2xs space-y-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ملخص المتجر الحالي</span>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center text-lg font-bold shadow-xs">
-                    {config.logoIcon || "🛍️"}
-                  </div>
-                  <div>
-                    <h5 className="font-extrabold text-sm text-slate-900">{config.storeName}</h5>
-                    <p className="text-xs text-slate-500">{config.slogan}</p>
-                  </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">ملخص التصميم الحالي</span>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div>
+                  <h5 className="text-sm font-extrabold text-slate-900">{config.storeName}</h5>
+                  <p className="text-xs text-slate-500">{config.slogan}</p>
                 </div>
-                <div className="text-left">
-                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 inline-block">
-                    {config.products.length} منتج مضاف
-                  </span>
-                </div>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{config.products.length} منتج</span>
               </div>
             </div>
-
-            {/* Step A: Choose Subscription Plan */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-800">
-                1. اختر باقة الاشتراك المناسبة نشاطك <span className="text-rose-500">*</span>
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="p-3.5 rounded-xl border-2 border-slate-200 hover:border-sky-500 bg-white transition cursor-pointer space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-900">الباقة الأساسية</span>
-                    <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded">99 ر.س / شهرياً</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">متجر واحد + 50 منتج + قاعدة بيانات مشتركة مؤمنة</p>
-                </div>
-
-                <div className="p-3.5 rounded-xl border-2 border-sky-500 bg-sky-50/50 transition cursor-pointer space-y-1 relative overflow-hidden shadow-xs">
-                  <div className="absolute top-0 left-0 bg-sky-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-md">
-                    الموصى بها 🌟
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-sky-950">باقة النمو</span>
-                    <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded">199 ر.س / شهرياً</span>
-                  </div>
-                  <p className="text-[10px] text-sky-900/80">منتجات غير محدودة + قاعدة بيانات PostgreSQL منفصلة + دومين فرعي مجاني</p>
-                </div>
-
-                <div className="p-3.5 rounded-xl border-2 border-slate-200 hover:border-sky-500 bg-white transition cursor-pointer space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-900">الباقة الاحترافية</span>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">399 ر.س / شهرياً</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">دومين مخصص كامل + ربط بوابة دفع فيزا ومدا + ربط شحن مباشر</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Step B: Subdomain & CR Upload */}
-            <div className="space-y-3 p-4 bg-white border border-slate-200/90 rounded-2xl">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  2. حدد الدومين الفرعي الخاص بمتجرك <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex items-center dir-ltr">
-                  <span className="px-3 py-2.5 bg-slate-100 border border-r-0 border-slate-200 text-slate-500 text-xs font-bold rounded-l-xl">.mobtaker.sa</span>
-                  <input
-                    type="text"
-                    placeholder="mybrand"
-                    defaultValue={config.storeName.replace(/\s+/g, '-').toLowerCase()}
-                    className="w-full dir-ltr px-3 py-2.5 bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 rounded-r-xl focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  3. إرفاق وثيقة التوثيق التجاري (سجل تجاري / وثيقة عمل حر / رابط حساب) <span className="text-rose-500">*</span>
-                </label>
-                <div className="p-4 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 text-center hover:bg-slate-100/80 transition cursor-pointer">
-                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-                  <span className="text-xs font-bold text-slate-700 block">اسحب المستند هنا أو اضغط للاختيار</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">يدعم صيغ PDF, PNG, JPG (الحد الأقصى 10MB)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Submit Request Button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenDomainModal) {
-                  onOpenDomainModal();
-                } else {
-                  alert("تم إرسال طلب تفعيل المتجر وإعادة التوجيه للإدارة بنجاح 🎉");
-                }
-              }}
-              className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 via-sky-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
-            >
-              <Sparkles className="w-5 h-5" />
-              <span>إرسال طلب الاعتماد وإنشاء قاعدة البيانات ⚡</span>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">رفع مستندات التحقق، الدفع الإلكتروني، والنطاقات الخارجية ليست مفعلة في هذه المرحلة ولن تدّعي الواجهة نجاحها.</div>
+            <button type="button" onClick={() => onOpenDomainModal?.()} disabled={!onOpenDomainModal} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-emerald-600 via-sky-600 to-indigo-600 px-6 py-4 text-sm font-extrabold text-white shadow-lg disabled:opacity-50">
+              <Sparkles className="h-5 w-5" /> اختيار العنوان والباقة وإرسال الطلب
             </button>
           </div>
         )}

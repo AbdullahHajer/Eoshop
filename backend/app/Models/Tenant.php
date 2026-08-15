@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -56,6 +57,36 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return $this->hasOne(ProvisioningRun::class, 'tenant_id')->orderByDesc('run_number');
     }
 
+    /** @return HasMany<DomainReservation, $this> */
+    public function domainReservations(): HasMany
+    {
+        return $this->hasMany(DomainReservation::class, 'tenant_id');
+    }
+
+    /** @return HasMany<TenantSubscription, $this> */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(TenantSubscription::class, 'tenant_id');
+    }
+
+    /** @return BelongsTo<PublicationRequest, $this> */
+    public function currentPublicationRequest(): BelongsTo
+    {
+        return $this->belongsTo(PublicationRequest::class, 'publication_request_id');
+    }
+
+    /** @return BelongsTo<Domain, $this> */
+    public function publishedDomain(): BelongsTo
+    {
+        return $this->belongsTo(Domain::class, 'published_domain_id');
+    }
+
+    /** @return BelongsTo<TenantSubscription, $this> */
+    public function publicationSubscription(): BelongsTo
+    {
+        return $this->belongsTo(TenantSubscription::class, 'publication_subscription_id');
+    }
+
     public static function getCustomColumns(): array
     {
         return [
@@ -67,6 +98,12 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'business_type',
             'verification_status',
             'provisioning_status',
+            'publication_status',
+            'publication_requested_at',
+            'published_at',
+            'publication_request_id',
+            'published_domain_id',
+            'publication_subscription_id',
             'active_at',
             'rejection_reason',
             'theme_style',

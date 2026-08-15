@@ -25,10 +25,15 @@ class EnsureKnownApplicationDomain
             return $next($request);
         }
 
-        $domain = Domain::query()->with('tenant.latestProvisioningRun')->where('domain', $host)->first();
+        $domain = Domain::query()->with([
+            'tenant.latestProvisioningRun',
+            'tenant.currentPublicationRequest.reservation',
+            'tenant.publishedDomain',
+            'tenant.publicationSubscription',
+        ])->where('domain', $host)->first();
         $tenant = $domain?->tenant;
 
-        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant)) {
+        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant, $host)) {
             abort(404);
         }
 

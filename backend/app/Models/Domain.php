@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\DomainKind;
 use App\Support\CanonicalDomain;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,11 @@ use Stancl\Tenancy\Database\Models\Domain as BaseDomain;
 class Domain extends BaseDomain
 {
     protected $guarded = [];
+
+    protected function casts(): array
+    {
+        return ['kind' => DomainKind::class];
+    }
 
     /**
      * @return BelongsTo<Tenant, $this>

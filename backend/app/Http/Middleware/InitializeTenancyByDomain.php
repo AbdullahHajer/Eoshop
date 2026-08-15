@@ -21,12 +21,13 @@ class InitializeTenancyByDomain
     public function handle($request, Closure $next): mixed
     {
         try {
-            $tenant = $this->resolver->resolve(CanonicalDomain::normalize($request->getHost()));
+            $host = CanonicalDomain::normalize($request->getHost());
+            $tenant = $this->resolver->resolve($host);
         } catch (InvalidArgumentException|TenantCouldNotBeIdentifiedException) {
             abort(404);
         }
 
-        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant)) {
+        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant, $host)) {
             abort(404);
         }
 

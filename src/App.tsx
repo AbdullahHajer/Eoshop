@@ -15,6 +15,7 @@ import RegistrationGateway from "./components/RegistrationGateway";
 import AuthGateway, { UserProfile } from "./components/AuthGateway";
 import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
 import DomainSetupModal from "./components/DomainSetupModal";
+import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
 import ResetPasswordGateway from "./components/ResetPasswordGateway";
 import { AuthApiError, apiMutation, authApi, toUserProfile } from "./services/authApi";
@@ -232,6 +233,45 @@ export default function App() {
         ? requestError.message
         : "تعذر جدولة إعادة محاولة تجهيز المتجر.";
       setPlatformStoresError(message);
+      throw requestError;
+    }
+  };
+
+  const replacePlatformStore = (updatedStore: PlatformStore) => {
+    setPlatformStores((current) => current.map((storeRecord) => (
+      storeRecord.id === updatedStore.id ? updatedStore : storeRecord
+    )));
+  };
+
+  const handleAdminActivateSubscription = async (storeId: string, endsAt: string) => {
+    setPlatformStoresError(null);
+    try {
+      replacePlatformStore(await adminApi.activateSubscription(storeId, endsAt));
+      triggerToast("تم تفعيل استحقاق الباقة وتسجيل العملية في سجل التدقيق.", "success");
+    } catch (requestError) {
+      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر تفعيل الاشتراك.");
+      throw requestError;
+    }
+  };
+
+  const handleAdminPublish = async (storeId: string) => {
+    setPlatformStoresError(null);
+    try {
+      replacePlatformStore(await adminApi.publish(storeId));
+      triggerToast("تم نشر المتجر على النطاق المحجوز بعد اجتياز جميع الشروط.", "success");
+    } catch (requestError) {
+      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر نشر المتجر.");
+      throw requestError;
+    }
+  };
+
+  const handleAdminUnpublish = async (storeId: string) => {
+    setPlatformStoresError(null);
+    try {
+      replacePlatformStore(await adminApi.unpublish(storeId));
+      triggerToast("تم إيقاف نشر المتجر مع الاحتفاظ ببياناته ونطاقه.", "info");
+    } catch (requestError) {
+      setPlatformStoresError(requestError instanceof AuthApiError ? requestError.message : "تعذر إيقاف نشر المتجر.");
       throw requestError;
     }
   };
@@ -832,185 +872,7 @@ export default function App() {
           </section>
 
           {/* Pricing & Plans Section (الأسعار والباقات) */}
-          <section id="pricing" className="bg-slate-50 border-t border-slate-200/80 py-16 md:py-24 scroll-mt-6">
-            <div className="container mx-auto px-6">
-              <div className="text-center max-w-2xl mx-auto space-y-4 mb-16">
-                <span className="bg-amber-100/80 text-amber-900 border border-amber-300 px-4 py-1.5 rounded-full text-xs font-black tracking-wide uppercase inline-flex items-center gap-1.5 shadow-2xs">
-                  <Zap className="w-3.5 h-3.5 text-amber-600" />
-                  <span>خطط باقات مرنة تناسب طموحك</span>
-                </span>
-                <h2 className="font-display font-black text-3xl md:text-4xl text-slate-900">
-                  الأسعار والباقات 💎
-                </h2>
-                <p className="text-slate-600 text-sm md:text-base leading-relaxed">
-                  اختر الباقة المناسبة لحجم تجارتك. ابدأ مجاناً بدون أي تكاليف خفية وترقّى في أي وقت.
-                </p>
-              </div>
-
-              {/* Pricing Cards Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
-                {/* Plan 1: Starter / Free */}
-                <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md hover:shadow-xl transition duration-300 p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group">
-                  <div className="space-y-6">
-                    <div>
-                      <span className="bg-slate-100 text-slate-700 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-slate-200">
-                        الباقة المبتدئة
-                      </span>
-                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">مجانية للأبد 🚀</h3>
-                      <p className="text-slate-500 text-xs mt-1 leading-relaxed">مثالية لتجربة المنصة واستكشاف الميزات وبناء أول متجر.</p>
-                    </div>
-
-                    <div className="flex items-baseline gap-1 border-y border-slate-100 py-4">
-                      <span className="font-display font-black text-4xl text-slate-900">0</span>
-                      <span className="text-sm font-extrabold text-slate-600">ر.س / شهرياً</span>
-                    </div>
-
-                    <ul className="space-y-3.5 text-xs text-slate-600">
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>إنشاء متجر إلكتروني واحد</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>تخصيص القوالب الأساسية والألوان</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>إضافة حتى 10 منتجات مع الصور</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>معاينة حية فورية للجوال والكمبيوتر</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>تصدير ملفات المتجر والبيانات (JSON)</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => checkRegistrationAndExecute("templates")}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold py-3.5 rounded-xl transition text-xs flex items-center justify-center gap-2 border border-slate-200/80 cursor-pointer active:scale-95"
-                  >
-                    <span>ابدأ مجاناً الآن</span>
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Plan 2: Pro (Featured / Popular) */}
-                <div className="bg-white rounded-3xl border-2 border-amber-500 shadow-xl p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group transform lg:-translate-y-2">
-                  {/* Badge */}
-                  <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-[11px] text-center py-1.5 uppercase tracking-wider shadow-xs">
-                    ⭐ الأكثر شعبية واختياراً للتاجر
-                  </div>
-
-                  <div className="space-y-6 pt-4">
-                    <div>
-                      <span className="bg-amber-100 text-amber-900 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-amber-300">
-                        الباقة الاحترافية Pro
-                      </span>
-                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">نمو ومتجر موثق ✨</h3>
-                      <p className="text-slate-600 text-xs mt-1 leading-relaxed">لكافة المتاجر الراغبة بالانطلاق الرسمي والبيع المباشر.</p>
-                    </div>
-
-                    <div className="flex items-baseline gap-1.5 border-y border-slate-100 py-4">
-                      <span className="font-display font-black text-4xl text-amber-600">99</span>
-                      <span className="text-sm font-extrabold text-slate-700">ر.س / شهرياً</span>
-                    </div>
-
-                    <ul className="space-y-3.5 text-xs text-slate-700">
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span className="font-bold text-slate-900">كل مميزات الباقة المجانية +</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span>عدد منتجات غير محدود 📦</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span>توثيق المتجر الرسمي وإثبات النشاط 🛡️</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span>مساعد الذكاء الاصطناعي لكتابة وصف المنتجات 🤖</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span>تتبع أوتوماتيكي للمخزون والقطع المتاحة</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-amber-700 bg-amber-100 rounded-full p-0.5 shrink-0" />
-                        <span>ربط دومين مخصص باسم متجرك</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => checkRegistrationAndExecute("templates")}
-                    className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black py-4 rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
-                  >
-                    <span>اشترك الآن وحصّل باقتك</span>
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Plan 3: Enterprise / Business */}
-                <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md hover:shadow-xl transition duration-300 p-8 flex flex-col justify-between space-y-8 relative overflow-hidden group">
-                  <div className="space-y-6">
-                    <div>
-                      <span className="bg-sky-50 text-sky-700 font-extrabold text-xs px-3 py-1 rounded-lg inline-block border border-sky-200">
-                        باقة الأعمال والشركات
-                      </span>
-                      <h3 className="font-display font-black text-2xl text-slate-900 mt-3">حلول متكاملة 🏢</h3>
-                      <p className="text-slate-500 text-xs mt-1 leading-relaxed">للشركات والمؤسسات التي تحتاج هويات مخصصة ودعماً متقدماً.</p>
-                    </div>
-
-                    <div className="flex items-baseline gap-1 border-y border-slate-100 py-4">
-                      <span className="font-display font-black text-4xl text-slate-900">249</span>
-                      <span className="text-sm font-extrabold text-slate-600">ر.س / شهرياً</span>
-                    </div>
-
-                    <ul className="space-y-3.5 text-xs text-slate-600">
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span className="font-bold text-slate-900">جميع مميزات الباقة الاحترافية +</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>تصميم واستشارة هويّة تجارية مخصصة</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>ربط مباشر ببوابات الدفع الإلكترونية 💳</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>ربط مع شركات الشحن والتوصيل</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>تقارير مبيعات وتحليلات أداء متقدمة 📊</span>
-                      </li>
-                      <li className="flex items-center gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5 shrink-0" />
-                        <span>مدير حساب خاص ودعم فني على مدار الساعة</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => checkRegistrationAndExecute("templates")}
-                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95"
-                  >
-                    <span>تواصل معنا للاشتراك</span>
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
+          <ServerPricingPlans onStart={() => checkRegistrationAndExecute("templates")} />
         </div>
       )}
 
@@ -1719,6 +1581,9 @@ export default function App() {
             onReload={loadPlatformStores}
             onUpdateStoreStatus={handleAdminUpdateStatus}
             onRetryProvisioning={handleAdminRetryProvisioning}
+            onActivateSubscription={handleAdminActivateSubscription}
+            onPublish={handleAdminPublish}
+            onUnpublish={handleAdminUnpublish}
             onClose={() => setIsAdminOpen(false)}
           />
         )}
@@ -1842,7 +1707,7 @@ export default function App() {
         themeStyle={config.themeStyle}
         config={config as unknown as Record<string, unknown>}
         onSubmitted={(submission) => {
-          const domain = submission.domain;
+          const domain = submission.requestedDomain ?? "العنوان المحجوز";
           triggerToast(`تم إرسال متجر ${submission.storeName} للمراجعة على العنوان ${domain}. سيبدأ التجهيز بعد الموافقة.`, "success");
         }}
       />

@@ -15,4 +15,19 @@ class StoreSubmissionConflict extends RuntimeException
     {
         return new self('The requested store address is no longer available.', 409);
     }
+
+    public static function domainReservationUnavailable(): self
+    {
+        return new self('The store address reservation is no longer active.', 409);
+    }
+
+    public static function tenantAlreadyHasDomainReservation(): self
+    {
+        return new self('The store already has an active address reservation.', 409);
+    }
+
+    public static function storeQuotaExceeded(): self
+    {
+        return new self('The current active package does not allow another store.', 409);
+    }
 }
