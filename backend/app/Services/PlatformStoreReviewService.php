@@ -14,6 +14,7 @@ class PlatformStoreReviewService
     public function __construct(
         private readonly AdminAuditService $audit,
         private readonly ProvisioningCoordinator $provisioning,
+        private readonly PublicationService $publications,
     ) {}
 
     public function changeStatus(
@@ -27,22 +28,32 @@ class PlatformStoreReviewService
             ->transaction(function () use ($tenant, $status, $reason, $actor, $request): Tenant {
                 $lockedTenant = Tenant::query()->whereKey($tenant->getKey())->lockForUpdate()->firstOrFail();
                 $normalizedReason = $status->requiresReason() ? trim((string) $reason) : null;
-                $oldValues = [
+                $oldPublicationStatus = $lockedTenant->getAttribute('publication_status');
+                $oldReviewValues = [
                     'verification_status' => $lockedTenant->getAttribute('verification_status'),
                     'rejection_reason' => $lockedTenant->getAttribute('rejection_reason'),
                 ];
-                $newValues = [
+                $newReviewValues = [
                     'verification_status' => $status->value,
                     'rejection_reason' => $normalizedReason,
                 ];
 
-                if ($oldValues === $newValues) {
+                if ($oldReviewValues === $newReviewValues) {
                     return $lockedTenant;
                 }
 
                 Gate::forUser($actor)->authorize('changeStatus', [$lockedTenant, $status]);
 
-                $lockedTenant->forceFill($newValues)->save();
+                $previousStatus = TenantVerificationStatus::from((string) $lockedTenant->getAttribute('verification_status'));
+                if ($previousStatus === TenantVerificationStatus::Pending && $status === TenantVerificationStatus::Rejected) {
+                    $this->publications->reject($lockedTenant, $actor, $normalizedReason);
+                } elseif ($previousStatus === TenantVerificationStatus::Rejected && $status === TenantVerificationStatus::Pending) {
+                    $this->publications->reopen($lockedTenant, $actor);
+                }
+
+                $oldValues = $oldReviewValues + ['publication_status' => $oldPublicationStatus];
+                $lockedTenant->forceFill($newReviewValues)->save();
+                $newValues = $newReviewValues + ['publication_status' => $lockedTenant->getAttribute('publication_status')];
                 $this->audit->record(
                     request: $request,
                     actor: $actor,

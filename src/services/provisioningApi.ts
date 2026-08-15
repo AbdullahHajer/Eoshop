@@ -6,7 +6,16 @@ export interface StoreSubmission {
   businessType: string;
   verificationStatus: "pending" | "approved" | "rejected" | "suspended";
   provisioningStatus: "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
-  domain: string;
+  publicationStatus: "requested" | "published" | "unpublished" | "rejected";
+  internalDomain: string | null;
+  requestedDomain: string | null;
+  plan: {
+    key: string;
+    name: string;
+    activationMode: "automatic" | "manual";
+  } | null;
+  subscriptionStatus: "pending_activation" | "active" | "cancelled" | "expired" | null;
+  publicationBlockers: string[];
   createdAt: string | null;
 }
 
@@ -15,10 +24,12 @@ interface StoreSubmissionResponse {
   meta: { replayed: boolean };
 }
 
-interface StoreSubmissionInput {
+export interface StoreSubmissionInput {
   storeName: string;
   businessType: string;
   themeStyle: "elegant" | "tech";
+  handle: string;
+  planKey: string;
   config: Record<string, unknown>;
 }
 
@@ -95,6 +106,8 @@ export const provisioningApi = {
       storeName: input.storeName,
       businessType: input.businessType,
       themeStyle: input.themeStyle,
+      handle: input.handle,
+      planKey: input.planKey,
       config: input.config,
     }, {
       headers: { "Idempotency-Key": pending.idempotencyKey },

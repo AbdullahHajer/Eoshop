@@ -3,9 +3,11 @@
 namespace App\Policies;
 
 use App\Enums\PermissionKey;
+use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class TenantPolicy
 {
@@ -56,6 +58,26 @@ class TenantPolicy
     public function retryProvisioning(User $user, Tenant $tenant): bool
     {
         return $user->hasPlatformPermission(PermissionKey::PlatformStoresManage);
+    }
+
+    public function activateSubscription(User $user, Tenant $tenant): bool
+    {
+        return $user->hasPlatformPermission(PermissionKey::PlatformStoresManage);
+    }
+
+    public function publish(User $user, Tenant $tenant): bool
+    {
+        return $user->hasPlatformPermission(PermissionKey::PlatformStoresManage);
+    }
+
+    public function viewMerchant(User $user, Tenant $tenant): bool
+    {
+        return DB::connection((string) config('tenancy.database.central_connection'))
+            ->table('tenant_user')
+            ->where('tenant_id', $tenant->getKey())
+            ->where('user_id', $user->getKey())
+            ->where('status', TenantMembershipStatus::Active->value)
+            ->exists();
     }
 
     public function updateStoreConfig(User $user, Tenant $tenant): bool

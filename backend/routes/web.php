@@ -4,6 +4,9 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\PlatformStoreController;
 use App\Http\Controllers\Auth\AuthenticationController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\DomainAvailabilityController;
+use App\Http\Controllers\MerchantStoreController;
+use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\StoreGeneratorController;
 use App\Http\Controllers\StoreSubmissionController;
@@ -21,6 +24,8 @@ Route::middleware('known.domain')->prefix('api/auth')->group(function (): void {
 });
 
 Route::middleware('central.domain')->group(function (): void {
+    Route::get('/api/plans', [PlanController::class, 'index']);
+
     Route::post('/api/auth/register', [AuthenticationController::class, 'register'])
         ->middleware('throttle:auth.register');
 
@@ -36,11 +41,25 @@ Route::middleware('central.domain')->group(function (): void {
         Route::post('/stores/{tenant}/provisioning/retry', [PlatformStoreController::class, 'retryProvisioning'])
             ->can('retryProvisioning', 'tenant')
             ->middleware('throttle:admin.mutations');
+        Route::post('/stores/{tenant}/subscription/activate', [PlatformStoreController::class, 'activateSubscription'])
+            ->can('activateSubscription', 'tenant')
+            ->middleware('throttle:admin.mutations');
+        Route::post('/stores/{tenant}/publication/publish', [PlatformStoreController::class, 'publish'])
+            ->can('publish', 'tenant')
+            ->middleware('throttle:admin.mutations');
+        Route::post('/stores/{tenant}/publication/unpublish', [PlatformStoreController::class, 'unpublish'])
+            ->can('publish', 'tenant')
+            ->middleware('throttle:admin.mutations');
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
             ->can('viewAny', AdminAuditLog::class);
     });
 
     Route::prefix('api')->middleware('auth')->group(function (): void {
+        Route::get('/domains/availability', [DomainAvailabilityController::class, 'show'])
+            ->middleware('throttle:domain.availability');
+        Route::get('/merchant/stores', [MerchantStoreController::class, 'index']);
+        Route::get('/merchant/stores/{tenant}/publication', [MerchantStoreController::class, 'show'])
+            ->can('viewMerchant', 'tenant');
         Route::post('/generate-store-ideas', [StoreGeneratorController::class, 'generate'])
             ->middleware('throttle:ai.generate');
         Route::post('/register-store', [StoreSubmissionController::class, 'store'])

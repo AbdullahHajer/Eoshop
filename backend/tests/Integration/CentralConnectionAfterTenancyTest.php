@@ -6,8 +6,12 @@ use App\Enums\PermissionKey;
 use App\Enums\SystemRole;
 use App\Enums\UserStatus;
 use App\Models\AdminAuditLog;
+use App\Models\DomainReservation;
+use App\Models\Plan;
+use App\Models\PublicationRequest;
 use App\Models\Role;
 use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\RoleAssignmentService;
 use Database\Seeders\IdentitySeeder;
@@ -50,6 +54,14 @@ class CentralConnectionAfterTenancyTest extends TestCase
             $this->assertSame('tenant', DB::getDefaultConnection());
             $this->assertTrue($owner->hasTenantPermission($tenant, PermissionKey::TenantStoreManage));
             $this->assertSame((string) config('tenancy.database.central_connection'), $owner->getConnectionName());
+            $this->assertSame(3, Plan::query()->count());
+            $this->assertSame(0, DomainReservation::query()->where('tenant_id', $tenantId)->count());
+            $this->assertSame(0, PublicationRequest::query()->where('tenant_id', $tenantId)->count());
+            $this->assertSame(0, TenantSubscription::query()->where('tenant_id', $tenantId)->count());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new Plan)->getConnectionName());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new DomainReservation)->getConnectionName());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new PublicationRequest)->getConnectionName());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new TenantSubscription)->getConnectionName());
         } finally {
             tenancy()->end();
             $central->table('tenant_user')->where('tenant_id', $tenantId)->delete();

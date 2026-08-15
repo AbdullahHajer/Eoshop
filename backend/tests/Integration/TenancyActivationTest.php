@@ -2,18 +2,30 @@
 
 namespace Tests\Integration;
 
+use App\Enums\DomainKind;
+use App\Enums\DomainReservationOrigin;
+use App\Enums\DomainReservationStatus;
 use App\Enums\ProvisioningSchemaOrigin;
 use App\Enums\ProvisioningState;
+use App\Enums\PublicationRequestOrigin;
+use App\Enums\PublicationRequestStatus;
+use App\Enums\PublicationStatus;
+use App\Enums\SubscriptionActivationSource;
+use App\Enums\SubscriptionStatus;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Enums\UserStatus;
 use App\Http\Middleware\InitializeTenancyByDomain;
+use App\Models\DomainReservation;
 use App\Models\ProvisioningRun;
+use App\Models\PublicationRequest;
 use App\Models\Role;
 use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\RoleAssignmentService;
+use App\Support\TenantRuntimeReadiness;
 use App\Support\TenantSchemaName;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Database\QueryException;
@@ -138,6 +150,8 @@ class TenancyActivationTest extends TestCase
         $second = $this->createReadyTenant('Host B', 'b-store.example.test');
         $this->insertConfig($first, 'store-a');
         $this->insertConfig($second, 'store-b');
+        $this->assertTrue(TenantRuntimeReadiness::check($first->refresh(), 'a-store.example.test'), $this->readinessSnapshot($first));
+        $this->assertTrue(TenantRuntimeReadiness::check($second->refresh(), 'b-store.example.test'), $this->readinessSnapshot($second));
 
         $this->getJson($this->urlOnHost('a-store.example.test', '/api/store/config'))
             ->assertOk()
@@ -258,7 +272,7 @@ class TenancyActivationTest extends TestCase
         bool $migrate = true,
     ): Tenant {
         $tenant = $this->createTenant($name, $status);
-        $tenant->domains()->create(['domain' => $domain]);
+        $publishedDomain = $tenant->domains()->create(['domain' => $domain, 'kind' => DomainKind::PublicSubdomain]);
         $schema = (string) $tenant->database()->getName();
         $tenant->database()->manager()->createDatabase($tenant);
         $this->schemas[] = $schema;
@@ -287,6 +301,45 @@ class TenancyActivationTest extends TestCase
                 'active_at' => now(),
             ])->save();
         }
+
+        $subscription = TenantSubscription::query()->create([
+            'tenant_id' => $tenant->id,
+            'plan_key' => 'starter',
+            'status' => SubscriptionStatus::Active,
+            'activation_source' => SubscriptionActivationSource::Wp23Adopted,
+            'starts_at' => now('UTC')->subMinute(),
+        ]);
+        $domainHandle = Str::before($domain, '.');
+        if (strlen($domainHandle) < 3) {
+            $domainHandle = 'legacy-'.substr(hash('sha256', $domain), 0, 12);
+        }
+        $reservation = DomainReservation::query()->create([
+            'tenant_id' => $tenant->id,
+            'domain' => $domain,
+            'handle' => $domainHandle,
+            'status' => DomainReservationStatus::Active,
+            'origin' => DomainReservationOrigin::Wp22Internal,
+            'reserved_at' => now(),
+            'activated_at' => now(),
+        ]);
+        $publication = PublicationRequest::query()->create([
+            'tenant_id' => $tenant->id,
+            'domain_reservation_id' => $reservation->id,
+            'tenant_subscription_id' => $subscription->id,
+            'status' => $migrate ? PublicationRequestStatus::Published : PublicationRequestStatus::Requested,
+            'origin' => PublicationRequestOrigin::Wp23Adopted,
+            'requested_at' => now(),
+            'decided_at' => $migrate ? now() : null,
+            'published_at' => $migrate ? now() : null,
+        ]);
+        $tenant->forceFill([
+            'publication_status' => $migrate ? PublicationStatus::Published->value : PublicationStatus::Requested->value,
+            'publication_requested_at' => now(),
+            'published_at' => $migrate ? now() : null,
+            'publication_request_id' => $publication->id,
+            'published_domain_id' => $migrate ? $publishedDomain->id : null,
+            'publication_subscription_id' => $migrate ? $subscription->id : null,
+        ])->save();
 
         return $tenant;
     }
@@ -320,5 +373,29 @@ class TenancyActivationTest extends TestCase
     private function urlOnHost(string $host, string $path): string
     {
         return 'http://'.$host.$path;
+    }
+
+    private function readinessSnapshot(Tenant $tenant): string
+    {
+        $tenant->load([
+            'latestProvisioningRun',
+            'currentPublicationRequest.reservation',
+            'publishedDomain',
+            'publicationSubscription',
+        ]);
+
+        return json_encode([
+            'tenant' => $tenant->only([
+                'verification_status', 'provisioning_status', 'publication_status',
+                'publication_request_id', 'published_domain_id', 'publication_subscription_id',
+            ]),
+            'run' => $tenant->latestProvisioningRun?->toArray(),
+            'publication' => $tenant->currentPublicationRequest?->toArray(),
+            'reservation' => $tenant->currentPublicationRequest?->reservation?->toArray(),
+            'domain' => $tenant->publishedDomain?->toArray(),
+            'subscription' => $tenant->publicationSubscription?->toArray(),
+            'schema' => $tenant->database()->getName(),
+            'schemaExists' => $tenant->database()->manager()->databaseExists((string) $tenant->database()->getName()),
+        ], JSON_THROW_ON_ERROR);
     }
 }

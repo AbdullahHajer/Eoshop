@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PublicationRequest;
 use App\Models\Tenant;
+use App\Support\PublicationReadiness;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -29,11 +31,39 @@ class PlatformStoreResource extends JsonResource
             'businessType' => $this->getAttribute('business_type'),
             'verificationStatus' => $this->getAttribute('verification_status'),
             'provisioningStatus' => $this->getAttribute('provisioning_status'),
+            'publicationStatus' => $this->getAttribute('publication_status'),
             'rejectionReason' => $this->getAttribute('rejection_reason'),
             'themeStyle' => $this->getAttribute('theme_style'),
             'domains' => $this->whenLoaded('domains', fn () => $this->domains->pluck('domain')->values()->all()),
+            'requestedDomain' => $this->whenLoaded('currentPublicationRequest', function (): ?string {
+                $publication = $this->currentPublicationRequest;
+
+                return $publication instanceof PublicationRequest
+                    ? (string) $publication->reservation?->getAttribute('domain')
+                    : null;
+            }),
+            'publicDomain' => $this->whenLoaded('publishedDomain', fn (): ?string => $this->publishedDomain?->getAttribute('domain')),
+            'publicationBlockers' => PublicationReadiness::blockers($this->resource),
+            'subscription' => $this->whenLoaded('currentPublicationRequest', function (): ?array {
+                $subscription = $this->currentPublicationRequest?->subscription;
+                $plan = $subscription?->plan;
+
+                return $subscription === null || $plan === null ? null : [
+                    'id' => $subscription->getKey(),
+                    'status' => $subscription->getAttribute('status')->value,
+                    'endsAt' => $subscription->getAttribute('ends_at')?->toIso8601String(),
+                    'plan' => [
+                        'key' => $plan->getKey(),
+                        'name' => $plan->getAttribute('name'),
+                        'activationMode' => $plan->getAttribute('activation_mode')->value,
+                    ],
+                ];
+            }),
             'createdAt' => $createdAt instanceof CarbonInterface ? $createdAt->toIso8601String() : null,
             'activeAt' => $activeAt instanceof CarbonInterface ? $activeAt->toIso8601String() : null,
+            'publishedAt' => $this->getAttribute('published_at') instanceof CarbonInterface
+                ? $this->getAttribute('published_at')->toIso8601String()
+                : null,
             'latestProvisioningRun' => $this->whenLoaded('latestProvisioningRun', function (): ?array {
                 $run = $this->latestProvisioningRun;
 

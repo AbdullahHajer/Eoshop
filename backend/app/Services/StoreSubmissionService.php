@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\DomainKind;
 use App\Enums\ProvisioningState;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Exceptions\StoreSubmissionConflict;
+use App\Models\Plan;
 use App\Models\Role;
 use App\Models\StoreSubmission;
 use App\Models\Tenant;
@@ -24,6 +26,9 @@ class StoreSubmissionService
     public function __construct(
         private readonly RoleAssignmentService $roles,
         private readonly AdminAuditService $audit,
+        private readonly DomainReservationService $domainReservations,
+        private readonly SubscriptionService $subscriptions,
+        private readonly PublicationService $publications,
     ) {}
 
     /**
@@ -41,11 +46,13 @@ class StoreSubmissionService
             return $this->replay($existing, $fingerprint);
         }
 
-        $baseDomain = CanonicalDomain::normalize((string) config('tenancy.tenant_base_domain'));
         $central = DB::connection((string) config('tenancy.database.central_connection'));
 
         try {
-            return $central->transaction(function () use ($input, $actor, $request, $idempotencyKey, $fingerprint, $baseDomain): array {
+            return $central->transaction(function () use ($input, $actor, $request, $idempotencyKey, $fingerprint): array {
+                User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+                $this->subscriptions->assertStoreQuota($actor);
+                $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
                 $tenant = Tenant::query()->create([
                     'id' => strtolower((string) Str::ulid()),
                     'store_name' => trim((string) $input['storeName']),
@@ -57,8 +64,12 @@ class StoreSubmissionService
                     'provisioning_status' => ProvisioningState::NotStarted->value,
                     'theme_style' => $input['themeStyle'],
                 ]);
+                $baseDomain = CanonicalDomain::normalize((string) config('tenancy.tenant_base_domain'));
                 $domain = CanonicalDomain::normalize('store-'.$tenant->getKey().'.'.$baseDomain);
-                $tenant->domains()->create(['domain' => $domain]);
+                $tenant->domains()->create(['domain' => $domain, 'kind' => DomainKind::Internal]);
+                $reservation = $this->domainReservations->reserve($tenant, (string) $input['handle'], $actor);
+                $subscription = $this->subscriptions->createForSubmission($tenant, $plan, $actor);
+                $publication = $this->publications->createRequest($tenant, $reservation, $subscription, $actor);
 
                 StoreSubmission::query()->create([
                     'tenant_id' => $tenant->getKey(),
@@ -68,7 +79,10 @@ class StoreSubmissionService
                     'payload_snapshot' => [
                         'storeName' => $tenant->getAttribute('store_name'),
                         'businessType' => $tenant->getAttribute('business_type'),
-                        'domain' => $domain,
+                        'internalDomain' => $domain,
+                        'requestedDomain' => $reservation->getAttribute('domain'),
+                        'handle' => $reservation->getAttribute('handle'),
+                        'planKey' => $plan->getKey(),
                         'themeStyle' => $tenant->getAttribute('theme_style'),
                         'config' => $input['config'],
                         'owner' => [
@@ -91,13 +105,24 @@ class StoreSubmissionService
                     tenant: $tenant,
                     oldValues: null,
                     newValues: [
-                        'domain' => $domain,
+                        'internal_domain' => $domain,
+                        'requested_domain' => $reservation->getAttribute('domain'),
+                        'plan_key' => $plan->getKey(),
+                        'subscription_status' => $subscription->getAttribute('status')->value,
+                        'publication_request_id' => $publication->getKey(),
                         'verification_status' => TenantVerificationStatus::Pending->value,
                         'provisioning_status' => ProvisioningState::NotStarted->value,
                     ],
                 );
 
-                return ['tenant' => $tenant->load('domains'), 'replayed' => false];
+                return [
+                    'tenant' => $tenant->load([
+                        'domains',
+                        'currentPublicationRequest.reservation',
+                        'currentPublicationRequest.subscription.plan',
+                    ]),
+                    'replayed' => false,
+                ];
             });
         } catch (DomainOccupiedByOtherTenantException) {
             throw StoreSubmissionConflict::domainUnavailable();
@@ -107,7 +132,10 @@ class StoreSubmissionService
                 return $this->replay($existing, $fingerprint);
             }
 
-            if (str_contains((string) ($exception->errorInfo[2] ?? ''), 'domains_domain_unique')) {
+            $detail = (string) ($exception->errorInfo[2] ?? '');
+            if (str_contains($detail, 'domains_domain_unique')
+                || str_contains($detail, 'domain_reservations_current_domain_unique')
+            ) {
                 throw StoreSubmissionConflict::domainUnavailable();
             }
 
@@ -118,7 +146,11 @@ class StoreSubmissionService
     private function existingSubmission(User $actor, string $idempotencyKey): ?StoreSubmission
     {
         return StoreSubmission::query()
-            ->with('tenant.domains')
+            ->with([
+                'tenant.domains',
+                'tenant.currentPublicationRequest.reservation',
+                'tenant.currentPublicationRequest.subscription.plan',
+            ])
             ->where('submitted_by_user_id', $actor->getKey())
             ->where('idempotency_key', $idempotencyKey)
             ->first();

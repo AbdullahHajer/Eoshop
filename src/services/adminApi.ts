@@ -2,6 +2,7 @@ import { apiGet, apiMutation } from "./authApi";
 
 export type VerificationStatus = "approved" | "pending" | "rejected" | "suspended";
 export type ProvisioningStatus = "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
+export type PublicationStatus = "requested" | "published" | "unpublished" | "rejected";
 
 export interface PlatformStore {
   id: string;
@@ -12,9 +13,23 @@ export interface PlatformStore {
   businessType: string;
   verificationStatus: VerificationStatus;
   provisioningStatus: ProvisioningStatus;
+  publicationStatus: PublicationStatus;
   rejectionReason: string | null;
   themeStyle: "elegant" | "tech";
   domains: string[];
+  requestedDomain: string | null;
+  publicDomain: string | null;
+  publicationBlockers: string[];
+  subscription: {
+    id: string;
+    status: "pending_activation" | "active" | "cancelled" | "expired";
+    endsAt: string | null;
+    plan: {
+      key: string;
+      name: string;
+      activationMode: "automatic" | "manual";
+    };
+  } | null;
   createdAt: string | null;
   activeAt: string | null;
   latestProvisioningRun: {
@@ -60,6 +75,36 @@ export const adminApi = {
   async retryProvisioning(storeId: string): Promise<PlatformStore> {
     const payload = await apiMutation<StoreResponse>(
       `/api/admin/stores/${encodeURIComponent(storeId)}/provisioning/retry`,
+      "POST",
+      {},
+    );
+
+    return payload.data;
+  },
+
+  async activateSubscription(storeId: string, endsAt: string): Promise<PlatformStore> {
+    const payload = await apiMutation<StoreResponse>(
+      `/api/admin/stores/${encodeURIComponent(storeId)}/subscription/activate`,
+      "POST",
+      { endsAt },
+    );
+
+    return payload.data;
+  },
+
+  async publish(storeId: string): Promise<PlatformStore> {
+    const payload = await apiMutation<StoreResponse>(
+      `/api/admin/stores/${encodeURIComponent(storeId)}/publication/publish`,
+      "POST",
+      {},
+    );
+
+    return payload.data;
+  },
+
+  async unpublish(storeId: string): Promise<PlatformStore> {
+    const payload = await apiMutation<StoreResponse>(
+      `/api/admin/stores/${encodeURIComponent(storeId)}/publication/unpublish`,
       "POST",
       {},
     );

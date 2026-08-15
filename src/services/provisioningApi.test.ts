@@ -14,7 +14,12 @@ describe("provisioningApi", () => {
         businessType: "retail",
         verificationStatus: "pending",
         provisioningStatus: "not_started",
-        domain: "store-one.eoshop.local",
+        publicationStatus: "requested",
+        internalDomain: "store-tenant-1.eoshop.local",
+        requestedDomain: "store-one.eoshop.local",
+        plan: { key: "starter", name: "Starter", activationMode: "automatic" },
+        subscriptionStatus: "active",
+        publicationBlockers: ["review_not_approved", "provisioning_not_ready"],
         createdAt: "2026-08-14T00:00:00Z",
       },
       meta: { replayed: false },
@@ -29,6 +34,8 @@ describe("provisioningApi", () => {
       storeName: "Store One",
       businessType: "retail",
       themeStyle: "elegant",
+      handle: "store-one",
+      planKey: "starter",
       config: { marker: "one" },
     })).resolves.toEqual(response);
 
@@ -42,6 +49,10 @@ describe("provisioningApi", () => {
         }),
       }),
     );
+    expect(JSON.parse((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string)).toMatchObject({
+      handle: "store-one",
+      planKey: "starter",
+    });
   });
 
   it("reuses the persisted key after an ambiguous network failure", async () => {
@@ -65,7 +76,14 @@ describe("provisioningApi", () => {
     vi.stubGlobal("localStorage", localStorageMock);
     vi.stubGlobal("crypto", { randomUUID: () => "22222222-2222-4222-8222-222222222222" });
     vi.stubGlobal("fetch", fetchMock);
-    const input = { storeName: "Store Two", businessType: "retail", themeStyle: "tech" as const, config: { marker: "two" } };
+    const input = {
+      storeName: "Store Two",
+      businessType: "retail",
+      themeStyle: "tech" as const,
+      handle: "store-two",
+      planKey: "pro",
+      config: { marker: "two" },
+    };
 
     await expect(provisioningApi.submit(input)).rejects.toThrow("ambiguous network failure");
     await expect(provisioningApi.submit(input)).resolves.toEqual(response);

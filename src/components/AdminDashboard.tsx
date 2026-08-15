@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  ExternalLink,
+  Globe2,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -27,6 +29,9 @@ interface AdminDashboardProps {
     reason?: string,
   ) => Promise<void>;
   onRetryProvisioning: (storeId: string) => Promise<void>;
+  onActivateSubscription: (storeId: string, endsAt: string) => Promise<void>;
+  onPublish: (storeId: string) => Promise<void>;
+  onUnpublish: (storeId: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -61,6 +66,9 @@ export default function AdminDashboard({
   onReload,
   onUpdateStoreStatus,
   onRetryProvisioning,
+  onActivateSubscription,
+  onPublish,
+  onUnpublish,
   onClose,
 }: AdminDashboardProps) {
   const [search, setSearch] = useState("");
@@ -71,6 +79,8 @@ export default function AdminDashboard({
     status: "rejected" | "suspended";
   } | null>(null);
   const [reason, setReason] = useState("");
+  const [activationStore, setActivationStore] = useState<PlatformStore | null>(null);
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState("");
 
   const canReview = permissions.includes("platform.stores.review");
   const canManage = permissions.includes("platform.stores.manage");
@@ -106,6 +116,15 @@ export default function AdminDashboard({
     setBusyStoreId(storeRecord.id);
     try {
       await onRetryProvisioning(storeRecord.id);
+    } finally {
+      setBusyStoreId(null);
+    }
+  };
+
+  const runStoreAction = async (storeRecord: PlatformStore, action: () => Promise<void>) => {
+    setBusyStoreId(storeRecord.id);
+    try {
+      await action();
     } finally {
       setBusyStoreId(null);
     }
@@ -203,6 +222,27 @@ export default function AdminDashboard({
                     )}
                   </div>
 
+                  <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 sm:grid-cols-2">
+                    <div>
+                      <span className="block font-black text-slate-900">النطاق والنشر</span>
+                      <span className="mt-1 block" dir="ltr">{storeRecord.publicDomain ?? storeRecord.requestedDomain ?? "—"}</span>
+                      <span className="mt-1 block font-bold text-indigo-700">{storeRecord.publicationStatus}</span>
+                    </div>
+                    <div>
+                      <span className="block font-black text-slate-900">الاشتراك</span>
+                      <span className="mt-1 block">{storeRecord.subscription?.plan.name ?? "—"}</span>
+                      <span className="mt-1 block font-bold text-indigo-700">{storeRecord.subscription?.status ?? "—"}</span>
+                    </div>
+                    {storeRecord.publicationBlockers.length > 0 && (
+                      <p className="sm:col-span-2 text-[11px] text-amber-700">موانع النشر: {storeRecord.publicationBlockers.join("، ")}</p>
+                    )}
+                    {storeRecord.publicDomain && storeRecord.publicationStatus === "published" && (
+                      <a href={`http://${storeRecord.publicDomain}`} target="_blank" rel="noreferrer" className="sm:col-span-2 flex items-center gap-1 font-bold text-emerald-700">
+                        <ExternalLink className="h-3.5 w-3.5" /> فتح المتجر المنشور
+                      </a>
+                    )}
+                  </div>
+
                   {storeRecord.rejectionReason && (
                     <p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs text-rose-800">السبب: {storeRecord.rejectionReason}</p>
                   )}
@@ -234,6 +274,24 @@ export default function AdminDashboard({
                         <RefreshCw className="h-4 w-4" /> إعادة محاولة التجهيز
                       </button>
                     )}
+                    {(storeRecord.subscription?.status === "pending_activation"
+                      || (storeRecord.subscription?.status === "active"
+                        && Boolean(storeRecord.subscription.endsAt)
+                        && new Date(storeRecord.subscription.endsAt as string).getTime() <= Date.now())) && canManage && (
+                      <button disabled={busy} onClick={() => setActivationStore(storeRecord)} className="flex items-center gap-1 rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">
+                        <CheckCircle2 className="h-4 w-4" /> {storeRecord.subscription?.status === "active" ? "تجديد الاشتراك" : "تفعيل الاشتراك يدويًا"}
+                      </button>
+                    )}
+                    {storeRecord.publicationStatus !== "published" && storeRecord.publicationBlockers.length === 0 && canManage && (
+                      <button disabled={busy} onClick={() => void runStoreAction(storeRecord, () => onPublish(storeRecord.id))} className="flex items-center gap-1 rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        <Globe2 className="h-4 w-4" /> نشر المتجر
+                      </button>
+                    )}
+                    {storeRecord.publicationStatus === "published" && canManage && (
+                      <button disabled={busy} onClick={() => void runStoreAction(storeRecord, () => onUnpublish(storeRecord.id))} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+                        إيقاف النشر
+                      </button>
+                    )}
                     {!canReview && !canManage && <span className="text-xs text-slate-500">عرض فقط حسب صلاحيات الحساب.</span>}
                   </div>
                 </article>
@@ -259,6 +317,32 @@ export default function AdminDashboard({
             <div className="mt-4 flex gap-2">
               <button type="submit" disabled={!reason.trim() || busyStoreId === reasonDecision.store.id} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">تأكيد القرار</button>
               <button type="button" onClick={() => { setReasonDecision(null); setReason(""); }} className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700">إلغاء</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activationStore && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!subscriptionEndsAt) return;
+              void runStoreAction(activationStore, async () => {
+                await onActivateSubscription(activationStore.id, new Date(`${subscriptionEndsAt}T23:59:59`).toISOString());
+                setActivationStore(null);
+                setSubscriptionEndsAt("");
+              });
+            }}
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+          >
+            <h3 className="font-black text-slate-950">{activationStore.subscription?.status === "active" ? "تجديد" : "تفعيل"} {activationStore.subscription?.plan.name}</h3>
+            <p className="mt-2 text-xs text-slate-500">هذا إجراء إداري يمنح الاستحقاق حتى التاريخ المحدد، ولا يمثل تحصيل دفعة إلكترونية.</p>
+            <label className="mt-4 block text-xs font-bold text-slate-700">تاريخ انتهاء الاستحقاق</label>
+            <input type="date" required value={subscriptionEndsAt} min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)} onChange={(event) => setSubscriptionEndsAt(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-sm" />
+            <div className="mt-4 flex gap-2">
+              <button type="submit" disabled={!subscriptionEndsAt || busyStoreId === activationStore.id} className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">تأكيد التفعيل</button>
+              <button type="button" onClick={() => { setActivationStore(null); setSubscriptionEndsAt(""); }} className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700">إلغاء</button>
             </div>
           </form>
         </div>

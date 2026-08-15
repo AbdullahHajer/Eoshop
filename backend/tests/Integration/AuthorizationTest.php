@@ -82,8 +82,16 @@ class AuthorizationTest extends TestCase
         $this->assertSame($reviewer->getKey(), $audit->actor_user_id);
         $this->assertSame($tenant->getKey(), $audit->tenant_id);
         $this->assertSame($tenant->getKey(), $audit->subject_id);
-        $this->assertSame(['verification_status' => 'pending', 'rejection_reason' => null], $audit->old_values);
-        $this->assertSame(['verification_status' => 'approved', 'rejection_reason' => null], $audit->new_values);
+        $this->assertSame([
+            'verification_status' => 'pending',
+            'rejection_reason' => null,
+            'publication_status' => 'requested',
+        ], $audit->old_values);
+        $this->assertSame([
+            'verification_status' => 'approved',
+            'rejection_reason' => null,
+            'publication_status' => 'requested',
+        ], $audit->new_values);
         $this->assertSame($requestId, $audit->request_id);
         $this->assertSame('127.0.0.1', $audit->ip_address);
         $this->assertSame(1024, strlen((string) $audit->user_agent));

@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Support\PublicStoreHandle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use InvalidArgumentException;
 use JsonException;
 
 class StoreSubmissionRequest extends FormRequest
@@ -24,6 +26,18 @@ class StoreSubmissionRequest extends FormRequest
             'storeName' => ['required', 'string', 'max:255'],
             'businessType' => ['required', 'string', 'max:100'],
             'themeStyle' => ['required', Rule::in(['elegant', 'tech'])],
+            'handle' => [
+                'required',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    try {
+                        PublicStoreHandle::normalize((string) $value);
+                    } catch (InvalidArgumentException $exception) {
+                        $fail($exception->getMessage());
+                    }
+                },
+            ],
+            'planKey' => ['required', 'string', Rule::exists('plans', 'key')->where('is_active', true)],
             'config' => ['required', 'array'],
         ];
     }
