@@ -52,6 +52,8 @@ Final verdict: **APPROVE** with no blocking findings. The reviewer independently
 ## GitHub delivery
 
 - Implementation commit: `a9d8dbf648ad448f23d04f9837f0eef9731f4e68`.
+- Final evidence commit on the implementation branch: `f70df087443726d26469ff24df7332830cb9a01a`.
 - Pull request: [#12 — WP 2.3 Domain, packages and publication lifecycle](https://github.com/sas-prog1/Eoshop/pull/12).
-- Pull-request CI: [run 31884501994](https://github.com/sas-prog1/Eoshop/actions/runs/31884501994); Repository safety, Frontend quality, Backend quality and Container integration all passed.
-- Delivery uses the protected `main` branch and its required-check merge gate.
+- Final pull-request CI: [run 31884696476](https://github.com/sas-prog1/Eoshop/actions/runs/31884696476); Repository safety, Frontend quality, Backend quality and Container integration all passed on the final PR head.
+- Protected-branch merge commit: `4cb5dc3b40a7da74c9ddc3f65cef9149ca0be106`.
+- Post-merge `main` CI: [run 31884860361](https://github.com/sas-prog1/Eoshop/actions/runs/31884860361); all four required jobs passed on the merge commit.
