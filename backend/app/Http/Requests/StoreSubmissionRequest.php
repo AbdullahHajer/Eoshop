@@ -3,11 +3,11 @@
 namespace App\Http\Requests;
 
 use App\Support\PublicStoreHandle;
+use App\Support\StoreWorkspaceContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use InvalidArgumentException;
-use JsonException;
 
 class StoreSubmissionRequest extends FormRequest
 {
@@ -46,17 +46,17 @@ class StoreSubmissionRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            try {
-                $encoded = json_encode($this->input('config'), JSON_THROW_ON_ERROR);
-            } catch (JsonException) {
-                $validator->errors()->add('config', 'The initial store configuration is not valid JSON.');
-
-                return;
+            $workspaceConfig = $this->input('config');
+            $workspaceValidator = StoreWorkspaceContract::validator(
+                is_array($workspaceConfig) ? $workspaceConfig : [],
+                null,
+            );
+            foreach ($workspaceValidator->errors()->toArray() as $field => $messages) {
+                foreach ($messages as $message) {
+                    $validator->errors()->add($field, $message);
+                }
             }
 
-            if (strlen($encoded) > 262_144) {
-                $validator->errors()->add('config', 'The initial store configuration may not exceed 256 KiB.');
-            }
         }];
     }
 }

@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import { apiClient, ApiError } from "./apiClient";
 import { booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
 
 export interface StoreSubmission {
@@ -25,7 +25,7 @@ interface StoreSubmissionResponse {
   meta: unknown;
 }
 
-function mapSubmission(value: unknown): StoreSubmission {
+export function mapSubmission(value: unknown): StoreSubmission {
   const dto = record(value, "طلب المتجر");
   const planValue = dto.plan;
 
@@ -130,6 +130,15 @@ function clearPendingSubmission(pending: PendingSubmission): void {
 }
 
 export const provisioningApi = {
+  async listStores(): Promise<StoreSubmission[]> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/stores");
+    const envelope = record(response, "قائمة متاجر التاجر");
+    const data = envelope.data;
+    if (!Array.isArray(data)) throw new ApiError("استجابة الخادم لا تطابق عقد قائمة متاجر التاجر.", "unexpected", 200);
+
+    return data.map(mapSubmission);
+  },
+
   async submit(input: StoreSubmissionInput): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
     const pending = acquireIdempotencyKey(input);
     const response = await apiClient.request<StoreSubmissionResponse>("/api/register-store", {

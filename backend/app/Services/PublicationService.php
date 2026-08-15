@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Support\PublicationReadiness;
+use App\Support\TenantWorkspaceReadiness;
 use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -127,6 +128,9 @@ class PublicationService
                 $lockedTenant->setRelation('latestProvisioningRun', $run);
                 if (PublicationReadiness::blockers($lockedTenant) !== []) {
                     throw new DomainException('The store is not ready for publication.');
+                }
+                if (! TenantWorkspaceReadiness::isMaterialized($lockedTenant)) {
+                    throw new DomainException('The store workspace is not materialized for publication.');
                 }
 
                 $requestStatus = $publication->getAttribute('status');

@@ -56,6 +56,7 @@ function Assert-HttpResponse {
 
 function Invoke-IdentityDatabaseTests {
     $networkName = "${ProjectName}_app"
+    $qualityImage = if ($env:BACKEND_QUALITY_IMAGE) { $env:BACKEND_QUALITY_IMAGE } else { 'eoshop/backend-quality:ci' }
     $dockerArguments = @(
         'run', '--rm',
         '--network', $networkName,
@@ -72,7 +73,7 @@ function Invoke-IdentityDatabaseTests {
         '--env', 'QUEUE_CONNECTION=database',
         '--env', 'SESSION_DRIVER=database',
         '--env', 'SESSION_CONNECTION=pgsql',
-        'eoshop/backend-quality:ci',
+        $qualityImage,
         'composer', 'test:database'
     )
 
@@ -240,10 +241,11 @@ WHERE id = '$tenantId';
 
     $configSql = @"
 SET search_path TO "$schema";
-INSERT INTO store_configs (id, config_json, created_at, updated_at)
+INSERT INTO store_configs (id, config_json, is_current, created_at, updated_at)
 VALUES (
     '00000000-0000-0000-0000-000000000021',
     json_build_object('marker', 'wp21-live'),
+    true,
     now(),
     now()
 );
@@ -369,8 +371,8 @@ CREATE SCHEMA "$adoptionSchema";
     Invoke-Compose exec -T backend php artisan tenants:migrate --tenants=$adoptionTenantId --force --no-interaction
     $adoptionConfigSql = @"
 SET search_path TO "$adoptionSchema";
-INSERT INTO store_configs (id, config_json, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp21-adopted'), now(), now());
+INSERT INTO store_configs (id, config_json, is_current, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp21-adopted'), true, now(), now());
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
@@ -465,8 +467,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     Invoke-Compose exec -T backend php artisan migrate:status --path=database/migrations/system --no-interaction
     Invoke-Compose exec -T backend php artisan route:cache --no-interaction
     $tenantRoutes = Get-ComposeOutput exec -T backend php artisan route:list --path=api/store/config --json --no-interaction | ConvertFrom-Json
-    if (@($tenantRoutes).Count -ne 2) {
-        throw "Expected exactly two cached tenant store-config routes, received $(@($tenantRoutes).Count)."
+    if (@($tenantRoutes).Count -ne 1) {
+        throw "Expected exactly one read-only cached tenant store-config route, received $(@($tenantRoutes).Count)."
     }
     Invoke-Compose exec -T backend php artisan route:clear --no-interaction
 

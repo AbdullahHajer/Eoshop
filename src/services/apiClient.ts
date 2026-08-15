@@ -12,6 +12,7 @@ export type ApiErrorCategory =
 
 interface ErrorPayload {
   message?: unknown;
+  code?: unknown;
   errors?: unknown;
   requestId?: unknown;
   meta?: { requestId?: unknown };
@@ -27,6 +28,8 @@ export interface ApiRequestOptions {
 }
 
 export class ApiError extends Error {
+  public readonly code: string | null;
+
   constructor(
     message: string,
     public readonly category: ApiErrorCategory,
@@ -35,10 +38,11 @@ export class ApiError extends Error {
     public readonly retryAfterSeconds: number | null = null,
     public readonly requestId: string | null = null,
     public readonly retryable = false,
-    options: { cause?: unknown } = {},
+    options: { cause?: unknown; code?: string | null } = {},
   ) {
     super(message, options);
     this.name = "ApiError";
+    this.code = options.code ?? null;
   }
 }
 
@@ -134,6 +138,7 @@ function responseError(response: Response, value: unknown, fallbackRequestId: st
     retryAfterSeconds(response),
     requestId(response, payload, fallbackRequestId),
     category === "csrf" || (safeToRetry && (category === "throttled" || category === "server")),
+    { code: typeof payload.code === "string" && payload.code.trim() ? payload.code : null },
   );
 }
 

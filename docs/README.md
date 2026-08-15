@@ -19,6 +19,7 @@
 - [WP 2.2 — Recoverable tenant provisioning](work-packages/WP-2.2-recoverable-tenant-provisioning.md)
 - [WP 2.3 — Domain, packages and publication](work-packages/WP-2.3-domain-packages-publication.md)
 - [WP 3.1 — Unified frontend API boundary](work-packages/WP-3.1-unified-api-client.md)
+- [WP 3.2 — Server-owned store workspace](work-packages/WP-3.2-server-owned-store-workspace.md)
 
 ## Architecture decisions
 
@@ -32,6 +33,7 @@
 - [ADR 0007 — Recoverable tenant provisioning](decisions/ADR-0007-recoverable-tenant-provisioning.md)
 - [ADR 0008 — Domain, subscription and publication boundaries](decisions/ADR-0008-domain-subscription-publication-boundaries.md)
 - [ADR 0009 — Unified frontend API boundary](decisions/ADR-0009-unified-frontend-api-boundary.md)
+- [ADR 0010 — Server-owned store workspace](decisions/ADR-0010-server-owned-store-workspace.md)
 
 ## Evidence
 
