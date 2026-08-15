@@ -45,8 +45,12 @@ Evidence covers authenticated idempotent submission, atomic approval queueing, t
 
 ## Independent review
 
-Pending final read-only verdict.
+Final verdict: **APPROVE** with no blocking findings. The reviewer specifically rechecked terminal, stale-run and advisory-lock-contention failure callbacks after the final fix and confirmed that their guards precede logging and mutation.
 
 ## GitHub delivery
 
-Pending commit, pull request, required CI checks and protected-branch merge.
+- Implementation commit: `b2fdde0945c40b8f7b05eceef13e5139baf8117f`.
+- Pull request: [#10 — WP 2.2 Recoverable tenant provisioning](https://github.com/sas-prog1/Eoshop/pull/10).
+- Pull-request CI: [run 31878126864](https://github.com/sas-prog1/Eoshop/actions/runs/31878126864), all four required jobs passed.
+- Protected-branch merge commit: `23e4f6aaa08a990b51f6edfc3023eaf1415860bc`.
+- Post-merge `main` CI: [run 31878280974](https://github.com/sas-prog1/Eoshop/actions/runs/31878280974), all four jobs passed.
