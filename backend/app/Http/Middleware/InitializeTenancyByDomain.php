@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\TenantVerificationStatus;
 use App\Models\Tenant;
 use App\Support\CanonicalDomain;
+use App\Support\TenantRuntimeReadiness;
 use Closure;
 use InvalidArgumentException;
 use Stancl\Tenancy\Contracts\TenantCouldNotBeIdentifiedException;
@@ -26,10 +26,7 @@ class InitializeTenancyByDomain
             abort(404);
         }
 
-        if (! $tenant instanceof Tenant
-            || $tenant->getAttribute('verification_status') !== TenantVerificationStatus::Approved->value
-            || ! $tenant->database()->manager()->databaseExists((string) $tenant->database()->getName())
-        ) {
+        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant)) {
             abort(404);
         }
 

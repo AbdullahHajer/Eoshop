@@ -53,6 +53,11 @@ class TenantPolicy
         return false;
     }
 
+    public function retryProvisioning(User $user, Tenant $tenant): bool
+    {
+        return $user->hasPlatformPermission(PermissionKey::PlatformStoresManage);
+    }
+
     public function updateStoreConfig(User $user, Tenant $tenant): bool
     {
         return $user->hasTenantPermission($tenant, PermissionKey::TenantStoreManage);

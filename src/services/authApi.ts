@@ -74,8 +74,9 @@ export async function apiMutation<T>(
   path: string,
   method: "POST" | "PATCH" | "DELETE",
   body: Record<string, unknown>,
-  retry = true,
+  options: { headers?: Record<string, string>; retry?: boolean } = {},
 ): Promise<T> {
+  const retry = options.retry ?? true;
   const token = csrfToken ?? await establishCsrf();
   const response = await fetch(path, {
     method,
@@ -84,6 +85,7 @@ export async function apiMutation<T>(
       Accept: "application/json",
       "Content-Type": "application/json",
       "X-CSRF-TOKEN": token,
+      ...options.headers,
     },
     body: JSON.stringify(body),
   });
@@ -92,7 +94,7 @@ export async function apiMutation<T>(
     csrfToken = null;
     await establishCsrf();
 
-    return apiMutation<T>(path, method, body, false);
+    return apiMutation<T>(path, method, body, { ...options, retry: false });
   }
 
   return parseResponse<T>(response);

@@ -219,6 +219,23 @@ export default function App() {
     }
   };
 
+  const handleAdminRetryProvisioning = async (storeId: string) => {
+    setPlatformStoresError(null);
+    try {
+      const updatedStore = await adminApi.retryProvisioning(storeId);
+      setPlatformStores((current) => current.map((storeRecord) => (
+        storeRecord.id === updatedStore.id ? updatedStore : storeRecord
+      )));
+      triggerToast("تمت جدولة إعادة محاولة تجهيز المتجر بأمان.", "success");
+    } catch (requestError) {
+      const message = requestError instanceof AuthApiError
+        ? requestError.message
+        : "تعذر جدولة إعادة محاولة تجهيز المتجر.";
+      setPlatformStoresError(message);
+      throw requestError;
+    }
+  };
+
   // Reset to default
   const resetStore = () => {
     setIsResetConfirmOpen(true);
@@ -1701,6 +1718,7 @@ export default function App() {
             error={platformStoresError}
             onReload={loadPlatformStores}
             onUpdateStoreStatus={handleAdminUpdateStatus}
+            onRetryProvisioning={handleAdminRetryProvisioning}
             onClose={() => setIsAdminOpen(false)}
           />
         )}
@@ -1820,8 +1838,12 @@ export default function App() {
         isOpen={isDomainModalOpen}
         onClose={() => setIsDomainModalOpen(false)}
         storeName={config.storeName}
-        onSaveDomain={(domain) => {
-          triggerToast(`تم حجز الدومين الفرعي (${domain}) وإرسال طلب الاعتماد وإنشاء قاعدة البيانات بنجاح! 🚀🎉`, "success");
+        businessType={registeredUser?.businessType || "retail"}
+        themeStyle={config.themeStyle}
+        config={config as unknown as Record<string, unknown>}
+        onSubmitted={(submission) => {
+          const domain = submission.domain;
+          triggerToast(`تم إرسال متجر ${submission.storeName} للمراجعة على العنوان ${domain}. سيبدأ التجهيز بعد الموافقة.`, "success");
         }}
       />
 

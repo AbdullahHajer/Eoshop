@@ -24,11 +24,4 @@ class PlatformController extends Controller
             ['Content-Type' => 'text/html; charset=UTF-8'],
         );
     }
-
-    public function provisioningUnavailable(): JsonResponse
-    {
-        return response()->json([
-            'message' => 'Store provisioning is temporarily unavailable until the recoverable WP 2.2 workflow is enabled.',
-        ], 503);
-    }
 }

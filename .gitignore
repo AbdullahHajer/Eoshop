@@ -45,6 +45,7 @@ backend/bootstrap/cache/*.php
 !backend/storage/**/.gitignore
 !backend/bootstrap/cache/.gitkeep
 .phpunit.result.cache
+backend/.phpunit.cache/
 
 # -----------------------------------------------------------------------------
 # Local tooling and operating-system files

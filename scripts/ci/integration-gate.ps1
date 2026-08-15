@@ -69,6 +69,7 @@ function Invoke-IdentityDatabaseTests {
         '--env', 'DB_CACHE_CONNECTION=pgsql',
         '--env', 'DB_CACHE_LOCK_CONNECTION=pgsql',
         '--env', 'DB_QUEUE_CONNECTION=pgsql',
+        '--env', 'QUEUE_CONNECTION=database',
         '--env', 'SESSION_DRIVER=database',
         '--env', 'SESSION_CONNECTION=pgsql',
         'eoshop/backend-quality:ci',
@@ -184,11 +185,19 @@ function Assert-TenancyBoundary {
     $schema = "tenant_wp21_live_$($hash.Substring(0, 16))"
 
     $tenantSql = @"
-INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, theme_style, created_at, updated_at)
-VALUES ('$tenantId', 'WP 2.1 Live Store', 'Live Owner', 'live-owner@example.test', 'retail', 'approved', 'elegant', now(), now());
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, active_at, theme_style, created_at, updated_at)
+VALUES ('$tenantId', 'WP 2.1 Live Store', 'Live Owner', 'live-owner@example.test', 'retail', 'approved', 'active', now(), 'elegant', now(), now());
 INSERT INTO domains (domain, tenant_id, created_at, updated_at)
 VALUES ('$tenantDomain', '$tenantId', now(), now());
 CREATE SCHEMA "$schema";
+INSERT INTO provisioning_runs (
+    id, tenant_id, status, run_number, schema_name, schema_origin, schema_created_at,
+    queued_at, started_at, completed_at, created_at, updated_at
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000022', '$tenantId', 'active', 1, '$schema', 'platform_created', now(),
+    now(), now(), now(), now(), now()
+);
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql',
@@ -244,6 +253,45 @@ VALUES (
     }
 }
 
+function Assert-ProvisioningWorker {
+    $runId = '00000000-0000-0000-0000-000000000022'
+    $dispatchCode = "App\Jobs\ProvisionTenant::dispatch('$runId');"
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'backend', 'php', 'artisan', 'tinker', "--execute=$dispatchCode"
+    )
+
+    $queued = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', 'SELECT count(*) FROM jobs;'
+    )).Trim()
+    if ($queued -ne '1') {
+        throw "Expected one live provisioning job before worker startup, received $queued."
+    }
+
+    Invoke-Compose -Arguments @('up', '-d', '--no-build', 'worker')
+    $deadline = [DateTime]::UtcNow.AddSeconds(45)
+    do {
+        Start-Sleep -Seconds 1
+        $remaining = (Get-ComposeOutput -Arguments @(
+            'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+            '-tAc', 'SELECT count(*) FROM jobs;'
+        )).Trim()
+    } while ($remaining -ne '0' -and [DateTime]::UtcNow -lt $deadline)
+
+    if ($remaining -ne '0') {
+        Invoke-Compose logs --no-color --tail=100 worker
+        throw 'The Compose provisioning worker did not consume the live database job.'
+    }
+
+    $failed = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', 'SELECT count(*) FROM failed_jobs;'
+    )).Trim()
+    if ($failed -ne '0') {
+        throw "The live Compose worker produced $failed failed job records."
+    }
+}
+
 Push-Location $repositoryRoot
 
 try {
@@ -259,16 +307,70 @@ try {
     # Mark the project for cleanup before starting so partially-created stacks
     # are removed as well when `up --wait` fails.
     $stackStarted = $true
-    Invoke-Compose up -d --no-build --wait --wait-timeout 240
+    # Keep the provisioning worker stopped while schema lifecycle and queue
+    # assertions run; otherwise it can consume test jobs and make the gate flaky.
+    Invoke-Compose up -d --no-build --wait --wait-timeout 240 db backend web
 
     Invoke-Compose exec -T backend php artisan migrate --path=database/migrations/system --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     Invoke-IdentityDatabaseTests
 
+    $adoptionTenantId = 'wp21-adopt'
+    $adoptionHashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $adoptionHashBytes = $adoptionHashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($adoptionTenantId))
+    }
+    finally {
+        $adoptionHashAlgorithm.Dispose()
+    }
+    $adoptionHash = -join ($adoptionHashBytes | ForEach-Object { $_.ToString('x2') })
+    $adoptionSchema = "tenant_wp21_adopt_$($adoptionHash.Substring(0, 16))"
+    $adoptionSql = @"
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
+VALUES ('$adoptionTenantId', 'WP 2.1 Adoption Store', 'Adoption Owner', 'adoption-owner@example.test', 'retail', 'approved', 'not_started', 'elegant', now(), now());
+CREATE SCHEMA "$adoptionSchema";
+"@
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $adoptionSql
+    )
+    Invoke-Compose exec -T backend php artisan tenants:migrate --tenants=$adoptionTenantId --force --no-interaction
+    $adoptionConfigSql = @"
+SET search_path TO "$adoptionSchema";
+INSERT INTO store_configs (id, config_json, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp21-adopted'), now(), now());
+"@
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $adoptionConfigSql
+    )
+
+    $incompleteTenantId = 'wp21-incomplete'
+    $incompleteHashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $incompleteHashBytes = $incompleteHashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($incompleteTenantId))
+    }
+    finally {
+        $incompleteHashAlgorithm.Dispose()
+    }
+    $incompleteHash = -join ($incompleteHashBytes | ForEach-Object { $_.ToString('x2') })
+    $incompleteSchema = "tenant_wp21_incomplete_$($incompleteHash.Substring(0, 16))"
+    $incompleteSql = @"
+INSERT INTO tenants (id, store_name, owner_name, owner_email, business_type, verification_status, provisioning_status, theme_style, created_at, updated_at)
+VALUES ('$incompleteTenantId', 'Incomplete WP 2.1 Store', 'Incomplete Owner', 'incomplete-owner@example.test', 'retail', 'approved', 'not_started', 'elegant', now(), now());
+CREATE SCHEMA "$incompleteSchema";
+"@
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $incompleteSql
+    )
+
     $authMigration = 'database/migrations/system/2026_08_12_000004_create_authentication_state_tables.php'
     $identityMigration = 'database/migrations/system/2026_08_12_000003_create_central_identity_tables.php'
     $authorizationMigration = 'database/migrations/system/2026_08_13_000005_harden_tenant_verification_status.php'
     $tenancyMigration = 'database/migrations/system/2026_08_14_000006_enforce_canonical_tenant_domains.php'
+    $provisioningMigration = 'database/migrations/system/2026_08_14_000007_create_tenant_provisioning_lifecycle.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$provisioningMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$tenancyMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$authorizationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$authMigration --force --no-interaction
@@ -277,7 +379,22 @@ try {
     Invoke-Compose exec -T backend php artisan migrate --path=$authMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$authorizationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$tenancyMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$provisioningMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
+    $adoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT t.provisioning_status || ':' || r.schema_origin FROM tenants t JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$adoptionTenantId';"
+    )).Trim()
+    if ($adoptionResult -ne 'active:wp21_adopted') {
+        throw "WP 2.1 schema adoption failed. Received: $adoptionResult"
+    }
+    $incompleteResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT t.provisioning_status || ':' || count(r.id)::text FROM tenants t LEFT JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$incompleteTenantId' GROUP BY t.provisioning_status;"
+    )).Trim()
+    if ($incompleteResult -ne 'not_started:0') {
+        throw "Incomplete WP 2.1 schema did not remain fail-closed. Received: $incompleteResult"
+    }
     Invoke-Compose exec -T backend php artisan migrate:status --path=database/migrations/system --no-interaction
     Invoke-Compose exec -T backend php artisan route:cache --no-interaction
     $tenantRoutes = Get-ComposeOutput exec -T backend php artisan route:list --path=api/store/config --json --no-interaction | ConvertFrom-Json
@@ -299,6 +416,7 @@ try {
         Assert-HttpResponse $client '/api/admin/stores' 401 'application/json'
         Assert-AuthenticationBoundary -Port $Port
         Assert-TenancyBoundary -Port $Port
+        Assert-ProvisioningWorker
     }
     finally {
         $client.Dispose()

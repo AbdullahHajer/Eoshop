@@ -2,11 +2,14 @@
 
 namespace Tests\Integration;
 
+use App\Enums\ProvisioningSchemaOrigin;
+use App\Enums\ProvisioningState;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Enums\UserStatus;
 use App\Http\Middleware\InitializeTenancyByDomain;
+use App\Models\ProvisioningRun;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
@@ -266,6 +269,23 @@ class TenancyActivationTest extends TestCase
                 '--force' => true,
                 '--no-interaction' => true,
             ]));
+
+            ProvisioningRun::query()->create([
+                'id' => (string) Str::uuid(),
+                'tenant_id' => $tenant->id,
+                'status' => ProvisioningState::Active,
+                'run_number' => 1,
+                'schema_name' => $schema,
+                'schema_origin' => ProvisioningSchemaOrigin::PlatformCreated,
+                'schema_created_at' => now(),
+                'queued_at' => now(),
+                'started_at' => now(),
+                'completed_at' => now(),
+            ]);
+            $tenant->forceFill([
+                'provisioning_status' => ProvisioningState::Active->value,
+                'active_at' => now(),
+            ])->save();
         }
 
         return $tenant;
