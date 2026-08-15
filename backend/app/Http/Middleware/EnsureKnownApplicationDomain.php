@@ -2,10 +2,10 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\TenantVerificationStatus;
 use App\Models\Domain;
 use App\Models\Tenant;
 use App\Support\CanonicalDomain;
+use App\Support\TenantRuntimeReadiness;
 use Closure;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -25,13 +25,10 @@ class EnsureKnownApplicationDomain
             return $next($request);
         }
 
-        $domain = Domain::query()->with('tenant')->where('domain', $host)->first();
+        $domain = Domain::query()->with('tenant.latestProvisioningRun')->where('domain', $host)->first();
         $tenant = $domain?->tenant;
 
-        if (! $tenant instanceof Tenant
-            || $tenant->getAttribute('verification_status') !== TenantVerificationStatus::Approved->value
-            || ! $tenant->database()->manager()->databaseExists((string) $tenant->database()->getName())
-        ) {
+        if (! $tenant instanceof Tenant || ! TenantRuntimeReadiness::check($tenant)) {
             abort(404);
         }
 

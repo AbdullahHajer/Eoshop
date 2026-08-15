@@ -11,7 +11,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import type { PlatformStore, VerificationStatus } from "../services/adminApi";
+import type { PlatformStore, ProvisioningStatus, VerificationStatus } from "../services/adminApi";
 
 export type { PlatformStore } from "../services/adminApi";
 
@@ -26,6 +26,7 @@ interface AdminDashboardProps {
     status: VerificationStatus,
     reason?: string,
   ) => Promise<void>;
+  onRetryProvisioning: (storeId: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -43,6 +44,15 @@ const statusClass: Record<VerificationStatus, string> = {
   suspended: "bg-slate-100 text-slate-800 border-slate-300",
 };
 
+const provisioningLabel: Record<ProvisioningStatus, string> = {
+  not_started: "بانتظار الموافقة",
+  queued: "في قائمة التجهيز",
+  provisioning: "جارٍ التجهيز",
+  retrying: "إعادة محاولة",
+  active: "قاعدة المتجر جاهزة",
+  failed: "فشل التجهيز",
+};
+
 export default function AdminDashboard({
   stores,
   permissions,
@@ -50,6 +60,7 @@ export default function AdminDashboard({
   error,
   onReload,
   onUpdateStoreStatus,
+  onRetryProvisioning,
   onClose,
 }: AdminDashboardProps) {
   const [search, setSearch] = useState("");
@@ -86,6 +97,15 @@ export default function AdminDashboard({
       setReason("");
     } catch {
       // The parent keeps the server-provided error visible and the decision open.
+    } finally {
+      setBusyStoreId(null);
+    }
+  };
+
+  const retryProvisioning = async (storeRecord: PlatformStore) => {
+    setBusyStoreId(storeRecord.id);
+    try {
+      await onRetryProvisioning(storeRecord.id);
     } finally {
       setBusyStoreId(null);
     }
@@ -176,6 +196,13 @@ export default function AdminDashboard({
                     </span>
                   </div>
 
+                  <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800">
+                    التجهيز: {provisioningLabel[storeRecord.provisioningStatus]}
+                    {storeRecord.latestProvisioningRun?.lastErrorMessage && (
+                      <span className="mt-1 block text-rose-700">{storeRecord.latestProvisioningRun.lastErrorMessage}</span>
+                    )}
+                  </div>
+
                   {storeRecord.rejectionReason && (
                     <p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs text-rose-800">السبب: {storeRecord.rejectionReason}</p>
                   )}
@@ -201,6 +228,11 @@ export default function AdminDashboard({
                     )}
                     {storeRecord.verificationStatus === "rejected" && canManage && (
                       <button disabled={busy} onClick={() => void updateStatus(storeRecord, "pending")} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">إعادة للمراجعة</button>
+                    )}
+                    {storeRecord.provisioningStatus === "failed" && canManage && (
+                      <button disabled={busy} onClick={() => void retryProvisioning(storeRecord)} className="flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        <RefreshCw className="h-4 w-4" /> إعادة محاولة التجهيز
+                      </button>
                     )}
                     {!canReview && !canManage && <span className="text-xs text-slate-500">عرض فقط حسب صلاحيات الحساب.</span>}
                   </div>

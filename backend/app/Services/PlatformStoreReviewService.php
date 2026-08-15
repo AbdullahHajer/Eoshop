@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\Gate;
 
 class PlatformStoreReviewService
 {
-    public function __construct(private readonly AdminAuditService $audit) {}
+    public function __construct(
+        private readonly AdminAuditService $audit,
+        private readonly ProvisioningCoordinator $provisioning,
+    ) {}
 
     public function changeStatus(
         Tenant $tenant,
@@ -49,6 +52,10 @@ class PlatformStoreReviewService
                     oldValues: $oldValues,
                     newValues: $newValues,
                 );
+
+                if ($status === TenantVerificationStatus::Approved) {
+                    $this->provisioning->queueAfterApproval($lockedTenant, $actor, $request);
+                }
 
                 return $lockedTenant->refresh();
             });

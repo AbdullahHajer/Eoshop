@@ -36,6 +36,8 @@ services:
       DB_DATABASE: ${POSTGRES_DB:-platform_main}
       DB_USERNAME: ${POSTGRES_USER:-eoshop}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      QUEUE_CONNECTION: database
+      DB_QUEUE_CONNECTION: pgsql
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +47,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - app_storage:/var/www/backend/storage
+    networks:
+      - app
+
+  worker:
+    image: ${BACKEND_IMAGE:-eoshop/backend:local}
+    restart: unless-stopped
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-platform_main}
+      DB_USERNAME: ${POSTGRES_USER:-eoshop}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      QUEUE_CONNECTION: database
+      DB_QUEUE_CONNECTION: pgsql
+      DB_QUEUE_RETRY_AFTER: 180
+      SESSION_CONNECTION: pgsql
+      DB_CACHE_CONNECTION: pgsql
+      DB_CACHE_LOCK_CONNECTION: pgsql
+    command: ["php", "artisan", "queue:work", "database", "--queue=provisioning", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 30s
     volumes:
       - app_storage:/var/www/backend/storage
     networks:

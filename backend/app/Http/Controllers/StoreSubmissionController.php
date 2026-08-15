@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Exceptions\StoreSubmissionConflict;
+use App\Http\Requests\StoreSubmissionRequest;
+use App\Http\Resources\StoreSubmissionResource;
+use App\Models\User;
+use App\Services\StoreSubmissionService;
+use Illuminate\Http\JsonResponse;
+
+class StoreSubmissionController extends Controller
+{
+    public function store(StoreSubmissionRequest $request, StoreSubmissionService $submissions): JsonResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        try {
+            $result = $submissions->submit($request->validated(), $actor, $request);
+        } catch (StoreSubmissionConflict $exception) {
+            return response()->json(['message' => $exception->getMessage()], 409);
+        }
+
+        return (new StoreSubmissionResource($result['tenant']))
+            ->additional(['meta' => ['replayed' => $result['replayed']]])
+            ->response()
+            ->setStatusCode($result['replayed'] ? 200 : 201);
+    }
+}
