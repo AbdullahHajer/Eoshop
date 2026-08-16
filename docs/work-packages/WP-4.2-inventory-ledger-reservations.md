@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 4 — Commerce and orders core |
 | Work Package | WP 4.2 |
-| Status | T4 gates passed; T5 delivery in progress |
+| Status | Complete and merged |
 | Started | 2026-08-16 |
 | Branch | `codex/wp-4.2-inventory-ledger` |
 | Base | Protected `main` at `d6110c3` |
@@ -80,7 +80,7 @@ Replace absolute stock overwrites with a server-owned append-only ledger, explic
 
 - [x] Record migration, backend, frontend, concurrency, rollback and cleanup evidence.
 - [x] Obtain independent read-only approval with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Acceptance criteria
 
