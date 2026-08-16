@@ -4,8 +4,9 @@
 - Branch: `codex/wp-4.1-product-pricing-inventory`
 - Base: protected `main` at `a50819c8ad92e2c152177b5ae6ab13e3c7645d28`
 - Implementation commit: `f073b5e846897cb98c6b7e817f8a6124b86a17fc`
-- Pull request: pending
-- Merge commit: pending
+- Evidence commit: `15891128b5856cd63258a12fed434f45d2369832`
+- Pull request: [#20](https://github.com/sas-prog1/Eoshop/pull/20) — merged
+- Merge commit: `47ff4f47f5ab8a028368f1d04aa57e2e69fc0cd0`
 - Scope: server-owned product lifecycle, exact pricing, managed media and inventory baseline
 
 ## Catalog authority and migration contract
@@ -76,4 +77,7 @@ Expected error logs from negative audit, invalid provisioning, unowned-schema an
 
 - Independent read-only verdict: **APPROVE — no blocking findings**.
 - Implementation commit: `f073b5e846897cb98c6b7e817f8a6124b86a17fc`.
-- Pull-request checks and protected-main checks: pending.
+- Evidence commit: `15891128b5856cd63258a12fed434f45d2369832`.
+- PR #20 CI run [31957095898](https://github.com/sas-prog1/Eoshop/actions/runs/31957095898): all four required jobs passed on the final PR head.
+- PR #20 merged to protected `main` as `47ff4f47f5ab8a028368f1d04aa57e2e69fc0cd0`.
+- Protected-main CI run [31957287782](https://github.com/sas-prog1/Eoshop/actions/runs/31957287782): all four jobs passed on the merge commit.
