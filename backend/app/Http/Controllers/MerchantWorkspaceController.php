@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ProductCatalogConflict;
 use App\Exceptions\StoreWorkspaceConflict;
 use App\Http\Requests\UpdateStoreWorkspaceRequest;
 use App\Models\Tenant;
@@ -23,7 +24,7 @@ class MerchantWorkspaceController extends Controller
             $this->recordAccess($request, $actor, $tenant, 'merchant.workspace.read', null, $workspace['revision']);
 
             return response()->json(['data' => $workspace]);
-        } catch (StoreWorkspaceConflict $exception) {
+        } catch (StoreWorkspaceConflict|ProductCatalogConflict $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
                 'code' => $exception->errorCode,
@@ -51,7 +52,7 @@ class MerchantWorkspaceController extends Controller
             );
 
             return response()->json(['data' => $workspace]);
-        } catch (StoreWorkspaceConflict $exception) {
+        } catch (StoreWorkspaceConflict|ProductCatalogConflict $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
                 'code' => $exception->errorCode,

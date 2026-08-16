@@ -4,7 +4,10 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\PlatformStoreController;
 use App\Http\Controllers\Auth\AuthenticationController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\CatalogMediaController;
 use App\Http\Controllers\DomainAvailabilityController;
+use App\Http\Controllers\MerchantCatalogMediaController;
+use App\Http\Controllers\MerchantProductCatalogController;
 use App\Http\Controllers\MerchantStoreController;
 use App\Http\Controllers\MerchantWorkspaceController;
 use App\Http\Controllers\PlanController;
@@ -23,6 +26,10 @@ Route::middleware('known.domain')->prefix('api/auth')->group(function (): void {
     Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:auth.password-reset');
     Route::post('/logout', [AuthenticationController::class, 'logout'])->middleware('auth');
 });
+
+Route::get('/api/catalog-media/{tenant}/{media}', [CatalogMediaController::class, 'show'])
+    ->middleware('known.domain')
+    ->whereUuid('media');
 
 Route::middleware('central.domain')->group(function (): void {
     Route::get('/api/plans', [PlanController::class, 'index']);
@@ -65,6 +72,14 @@ Route::middleware('central.domain')->group(function (): void {
             ->can('viewMerchant', 'tenant');
         Route::patch('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'update'])
             ->can('updateStoreWorkspace', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::get('/merchant/stores/{tenant}/catalog', [MerchantProductCatalogController::class, 'show'])
+            ->can('viewMerchant', 'tenant');
+        Route::patch('/merchant/stores/{tenant}/catalog', [MerchantProductCatalogController::class, 'update'])
+            ->can('updateProductCatalog', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::post('/merchant/stores/{tenant}/catalog/media', [MerchantCatalogMediaController::class, 'store'])
+            ->can('updateProductCatalog', 'tenant')
             ->middleware('throttle:merchant.mutations');
         Route::post('/generate-store-ideas', [StoreGeneratorController::class, 'generate'])
             ->middleware('throttle:ai.generate');

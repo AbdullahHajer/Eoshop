@@ -10,8 +10,10 @@ import { useUiAdapters } from "../adapters/UiAdaptersContext";
 
 interface ControlPanelProps {
   config: StoreConfig;
+  activeTenantId: string | null;
   handleConfigChange: (key: keyof StoreConfig, value: any) => void;
   handleProductChange: (index: number, key: keyof Product, value: any) => void;
+  handleProductMediaChange: (productId: string, urls: string[]) => void;
   addEmptyProduct: () => void;
   deleteProduct: (id: string) => void;
   activeTab: "branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export";
@@ -24,8 +26,10 @@ interface ControlPanelProps {
 
 export default function ControlPanel({
   config,
+  activeTenantId,
   handleConfigChange,
   handleProductChange,
+  handleProductMediaChange,
   addEmptyProduct,
   deleteProduct,
   activeTab,
@@ -35,7 +39,7 @@ export default function ControlPanel({
   onOpenCheckoutPreview,
   onOpenDomainModal
 }: ControlPanelProps) {
-  const { assistant } = useUiAdapters();
+  const { assistant, catalog } = useUiAdapters();
 
   // AI assistant states inside control panel
   const [assistantPrompt, setAssistantPrompt] = useState("");
@@ -48,7 +52,13 @@ export default function ControlPanel({
   const [stockFilter, setStockFilter] = useState<"all" | "inStock" | "lowStock" | "outOfStock">("all");
   const [productSort, setProductSort] = useState<"default" | "highStock" | "lowStock" | "highPrice" | "lowPrice">("default");
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const prevProductsCountRef = useRef(config.products.length);
+  const activeTenantRef = useRef(activeTenantId);
+  const uploadControllerRef = useRef<AbortController | null>(null);
+  const uploadOperationRef = useRef(0);
+  const productsRef = useRef(config.products);
+  productsRef.current = config.products;
 
   // Inventory tab states
   const [inventorySearch, setInventorySearch] = useState<string>("");
@@ -82,6 +92,16 @@ export default function ControlPanel({
     }
     prevProductsCountRef.current = config.products.length;
   }, [config.products]);
+
+  useEffect(() => {
+    activeTenantRef.current = activeTenantId;
+    uploadOperationRef.current += 1;
+    uploadControllerRef.current?.abort();
+    uploadControllerRef.current = null;
+    setUploadingProductId(null);
+
+    return () => uploadControllerRef.current?.abort();
+  }, [activeTenantId, config.products]);
 
   const getProductIconEmoji = (keyword?: string) => {
     switch (keyword) {
@@ -606,16 +626,16 @@ export default function ControlPanel({
               {/* Quick Currency Selection Buttons */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { name: "ريال سعودي", symbol: "ر.س", flag: "🇸🇦" },
-                  { name: "ريال يمني", symbol: "ر.ي", flag: "🇾🇪" },
-                  { name: "دولار أمريكي", symbol: "$", flag: "🇺🇸" }
+                  { name: "ريال سعودي", code: "SAR", symbol: "ر.س", flag: "🇸🇦" },
+                  { name: "ريال يمني", code: "YER", symbol: "ر.ي", flag: "🇾🇪" },
+                  { name: "دولار أمريكي", code: "USD", symbol: "$", flag: "🇺🇸" }
                 ].map((curr) => (
                   <button
-                    key={curr.symbol}
+                    key={curr.code}
                     type="button"
-                    onClick={() => handleConfigChange("currency", curr.symbol)}
+                    onClick={() => handleConfigChange("currency", curr.code)}
                     className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition flex flex-col items-center justify-center gap-1 ${
-                      config.currency === curr.symbol
+                      config.currency === curr.code
                         ? "bg-sky-500 text-white border-sky-600 shadow-md ring-2 ring-sky-300"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
@@ -628,13 +648,13 @@ export default function ControlPanel({
               </div>
 
               <select
-                value={config.currency || "ر.س"}
+                value={config.currency || "YER"}
                 onChange={(e) => handleConfigChange("currency", e.target.value)}
                 className="w-full min-h-[44px] bg-white border border-slate-200/90 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 rounded-xl px-4 py-2.5 text-slate-800 text-xs sm:text-sm font-bold focus:outline-none transition mt-1 touch-manipulation cursor-pointer shadow-2xs"
               >
-                <option value="ر.س">🇸🇦 ريال سعودي (ر.س)</option>
-                <option value="ر.ي">🇾🇪 ريال يمني (ر.ي)</option>
-                <option value="$">🇺🇸 دولار أمريكي ($)</option>
+                <option value="SAR">🇸🇦 ريال سعودي (ر.س)</option>
+                <option value="YER">🇾🇪 ريال يمني (ر.ي)</option>
+                <option value="USD">🇺🇸 دولار أمريكي ($)</option>
               </select>
             </div>
           </div>
@@ -1373,7 +1393,7 @@ export default function ControlPanel({
                             </div>
 
                           {/* Name & Price & Category Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             {/* Product Name */}
                             <div className="space-y-1 sm:col-span-1">
                               <label className="block text-[11px] font-extrabold text-slate-700">اسم المنتج</label>
@@ -1386,15 +1406,43 @@ export default function ControlPanel({
                               />
                             </div>
 
-                            {/* Price */}
+                            {/* Base price */}
                             <div className="space-y-1">
-                              <label className="block text-[11px] font-extrabold text-slate-700">السعر ({config.currency})</label>
+                              <label className="block text-[11px] font-extrabold text-slate-700">السعر الأساسي ({config.currency})</label>
                               <input
+                                data-testid={`product-base-price-${product.id}`}
                                 type="number"
-                                value={product.price}
-                                onChange={(e) => handleProductChange(originalIndex, "price", Number(e.target.value))}
+                                min={0}
+                                step="0.01"
+                                value={product.basePrice ?? product.price}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  handleProductChange(originalIndex, "basePrice", value);
+                                  if (product.salePrice === null || product.salePrice === undefined) {
+                                    handleProductChange(originalIndex, "price", value);
+                                  }
+                                }}
                                 className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono font-bold focus:outline-none transition shadow-2xs"
                                 placeholder="180"
+                              />
+                            </div>
+
+                            {/* Sale price */}
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-extrabold text-slate-700">سعر التخفيض (اختياري)</label>
+                              <input
+                                data-testid={`product-sale-price-${product.id}`}
+                                type="number"
+                                min={0.01}
+                                step="0.01"
+                                value={product.salePrice ?? ""}
+                                onChange={(e) => {
+                                  const value = e.target.value === "" ? null : Number(e.target.value);
+                                  handleProductChange(originalIndex, "salePrice", value);
+                                  handleProductChange(originalIndex, "price", value ?? product.basePrice ?? product.price);
+                                }}
+                                className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-800 font-mono font-bold focus:outline-none transition shadow-2xs"
+                                placeholder="150"
                               />
                             </div>
 
@@ -1408,6 +1456,23 @@ export default function ControlPanel({
                                 className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none transition shadow-2xs"
                                 placeholder="مثال: عطور شرقية"
                               />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-extrabold text-slate-700">حالة المنتج</label>
+                              <select
+                                value={product.status ?? "draft"}
+                                onChange={(e) => handleProductChange(originalIndex, "status", e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                              >
+                                <option value="draft">مسودة — غير ظاهر للزوار</option>
+                                <option value="published">منشور — ظاهر في المتجر</option>
+                              </select>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                              السعر الفعلي المعروض: <strong>{product.salePrice ?? product.basePrice ?? product.price} {config.currency}</strong>
                             </div>
                           </div>
 
@@ -1549,41 +1614,63 @@ export default function ControlPanel({
                                     accept="image/*"
                                     multiple
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    onChange={(e) => {
-                                      const files = Array.from(e.target.files || []);
+                                    disabled={uploadingProductId === product.id}
+                                    onChange={async (e) => {
+                                      const input = e.currentTarget;
+                                      const files = Array.from(e.target.files ?? []) as File[];
                                       if (files.length === 0) return;
-
-                                      let loadedCount = 0;
-                                      const newBase64s: string[] = [];
-
-                                      files.forEach((file: any) => {
-                                        if (file.size > 2 * 1024 * 1024) {
-                                          alert(`حجم الصورة "${file.name}" كبير جداً! يرجى اختيار ملفات أقل من 2 ميجابايت لضمان السرعة الأفضل.`);
-                                          return;
+                                      if (!activeTenantId) {
+                                        alert("رفع الصور إلى الخادم متاح بعد تفعيل المتجر. يمكن استخدام رابط HTTPS في المسودة.");
+                                        input.value = "";
+                                        return;
+                                      }
+                                      const remaining = Math.max(0, 8 - (product.imageUrls?.length ?? 0));
+                                      const accepted = files.slice(0, remaining);
+                                      if (accepted.some((file) => file.size > 5 * 1024 * 1024)) {
+                                        alert("الحد الأعلى للصورة الواحدة 5 ميجابايت.");
+                                        input.value = "";
+                                        return;
+                                      }
+                                      uploadControllerRef.current?.abort();
+                                      const controller = new AbortController();
+                                      uploadControllerRef.current = controller;
+                                      const operation = ++uploadOperationRef.current;
+                                      const tenantAtStart = activeTenantId;
+                                      const productIdAtStart = product.id;
+                                      const productsAtStart = productsRef.current;
+                                      setUploadingProductId(product.id);
+                                      try {
+                                        const uploads = [];
+                                        for (const file of accepted) {
+                                          uploads.push(await catalog.uploadMedia(tenantAtStart, file, controller.signal));
+                                          if (controller.signal.aborted
+                                            || operation !== uploadOperationRef.current
+                                            || activeTenantRef.current !== tenantAtStart
+                                            || productsRef.current !== productsAtStart) return;
                                         }
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => {
-                                          if (typeof reader.result === "string") {
-                                            newBase64s.push(reader.result);
-                                          }
-                                          loadedCount++;
-                                          if (loadedCount === files.length) {
-                                            const currentUrls = product.imageUrls || [];
-                                            const combined = [...currentUrls, ...newBase64s];
-                                            handleProductChange(originalIndex, "imageUrls", combined);
-                                            if (!product.imageUrl && newBase64s.length > 0) {
-                                              handleProductChange(originalIndex, "imageUrl", newBase64s[0]);
-                                            }
-                                          }
-                                        };
-                                        reader.readAsDataURL(file);
-                                      });
+                                        if (controller.signal.aborted
+                                          || operation !== uploadOperationRef.current
+                                          || activeTenantRef.current !== tenantAtStart
+                                          || productsRef.current !== productsAtStart
+                                          || !productsAtStart.some((item) => item.id === productIdAtStart)) return;
+                                        const urls = [...(product.imageUrls ?? []), ...uploads.map((upload) => upload.url)];
+                                        handleProductMediaChange(productIdAtStart, urls);
+                                      } catch (error) {
+                                        if (controller.signal.aborted) return;
+                                        alert(error instanceof Error ? error.message : "تعذر رفع صورة المنتج.");
+                                      } finally {
+                                        if (operation === uploadOperationRef.current) {
+                                          uploadControllerRef.current = null;
+                                          setUploadingProductId(null);
+                                        }
+                                        input.value = "";
+                                      }
                                     }}
                                   />
                                   <div className="flex flex-col items-center justify-center gap-1">
                                     <Upload className="w-5 h-5 text-amber-600 group-hover/upload:scale-110 transition" />
                                     <span className="text-xs font-extrabold text-slate-700 group-hover/upload:text-amber-900 transition">
-                                      اسحب صورة أو صور متعددة هنا أو اضغط للتصفح 📤
+                                      {uploadingProductId === product.id ? "جارٍ رفع الصور إلى الخادم..." : "اسحب صورة أو صور متعددة هنا أو اضغط للتصفح 📤"}
                                     </span>
                                     <span className="text-[10px] text-slate-400">يمكنك تحديد عدة صور معاً من الاستوديو</span>
                                   </div>

@@ -13,6 +13,7 @@ export interface WorkspaceConflictState {
   tenantId: string;
   base: StoreConfig;
   draft: StoreConfig;
+  archiveProductIds: string[];
   serverReloaded: boolean;
   merged: StoreConfig | null;
   conflictingFields: (keyof StoreConfig)[];
@@ -22,6 +23,7 @@ export interface WorkspaceConflictReviewState {
   tenantId: string;
   draft: StoreConfig;
   server: StoreConfig;
+  archiveProductIds: string[];
   conflictingFields: (keyof StoreConfig)[];
 }
 
@@ -60,7 +62,8 @@ export function classifyMerchantRestore(storeCount: number, failed = false): Mer
 }
 
 export function isRevisionConflict(cause: unknown): cause is UiErrorShape {
-  return isUiErrorCode(cause, "conflict", "workspace_revision_conflict");
+  return isUiErrorCode(cause, "conflict", "workspace_revision_conflict")
+    || isUiErrorCode(cause, "conflict", "catalog_revision_conflict");
 }
 
 export function shouldApplyWorkspaceResponse(
@@ -132,11 +135,13 @@ export function openWorkspaceConflict(
   tenantId: string,
   base: StoreConfig,
   draft: StoreConfig,
+  archiveProductIds: string[] = [],
 ): WorkspaceConflictState {
   return {
     tenantId,
     base: structuredClone(base),
     draft: structuredClone(draft),
+    archiveProductIds: [...archiveProductIds],
     serverReloaded: false,
     merged: null,
     conflictingFields: [],
@@ -167,6 +172,7 @@ export function resolveWorkspaceConflict(
       tenantId: conflict.tenantId,
       draft: conflict.draft,
       server,
+      archiveProductIds: [...conflict.archiveProductIds],
       conflictingFields: conflict.conflictingFields,
     },
   };

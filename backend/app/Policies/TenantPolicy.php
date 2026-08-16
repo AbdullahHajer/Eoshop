@@ -90,4 +90,9 @@ class TenantPolicy
         return $user->hasTenantPermission($tenant, PermissionKey::TenantStoreManage)
             && $user->hasTenantPermission($tenant, PermissionKey::TenantProductsManage);
     }
+
+    public function updateProductCatalog(User $user, Tenant $tenant): bool
+    {
+        return $user->hasTenantPermission($tenant, PermissionKey::TenantProductsManage);
+    }
 }

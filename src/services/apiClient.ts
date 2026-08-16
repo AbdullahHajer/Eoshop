@@ -207,7 +207,8 @@ class SameOriginApiClient {
     headers.Accept = "application/json";
     headers["X-Requested-With"] = "XMLHttpRequest";
     headers["X-Request-ID"] = logicalRequestId;
-    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
+    if (options.body !== undefined && !multipart) headers["Content-Type"] = "application/json";
     if (token) headers["X-CSRF-TOKEN"] = token;
 
     let response: Response;
@@ -216,7 +217,9 @@ class SameOriginApiClient {
         method: options.method,
         credentials: "same-origin",
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body: options.body === undefined
+          ? undefined
+          : multipart ? options.body as FormData : JSON.stringify(options.body),
         signal: options.signal,
         redirect: "error",
       });

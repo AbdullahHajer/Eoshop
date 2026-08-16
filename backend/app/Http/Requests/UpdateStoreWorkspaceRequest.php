@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ProductCatalogContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -38,6 +39,9 @@ class UpdateStoreWorkspaceRequest extends FormRequest
 
         return [
             'revision' => ['required', 'integer', 'min:1'],
+            'catalogRevision' => ['required', 'integer', 'min:1'],
+            'archiveProductIds' => ['sometimes', 'array', 'max:5000'],
+            'archiveProductIds.*' => ['required', 'uuid', 'distinct:strict'],
             'config' => ['required', 'array:'.implode(',', self::CONFIG_KEYS)],
             'config.storeName' => ['required', 'string', 'max:255'],
             'config.slogan' => ['required', 'string', 'max:500'],
@@ -121,16 +125,20 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             'config.thankYouMessage' => $longText,
             'config.enableWhatsAppNotification' => $boolean,
             'config.products' => ['present', 'array', 'max:5000'],
-            'config.products.*' => ['array:id,name,price,description,category,imageKeyword,imageUrl,imageUrls,stockQuantity,manageStock,sku,lowStockThreshold'],
+            'config.products.*' => ['array:id,revision,status,name,price,basePrice,salePrice,description,category,imageKeyword,imageUrl,imageUrls,stockQuantity,manageStock,sku,lowStockThreshold'],
             'config.products.*.id' => ['nullable', 'uuid', 'distinct:strict'],
+            'config.products.*.revision' => ['nullable', 'integer', 'min:1'],
+            'config.products.*.status' => ['nullable', 'string'],
             'config.products.*.name' => ['required', 'string', 'max:255'],
-            'config.products.*.price' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'config.products.*.price' => ['nullable'],
+            'config.products.*.basePrice' => ['nullable'],
+            'config.products.*.salePrice' => ['nullable'],
             'config.products.*.description' => $longText,
             'config.products.*.category' => $shortText,
             'config.products.*.imageKeyword' => $shortText,
-            'config.products.*.imageUrl' => $httpUrl,
+            'config.products.*.imageUrl' => ['nullable', 'string', 'max:2048'],
             'config.products.*.imageUrls' => ['nullable', 'array', 'max:8'],
-            'config.products.*.imageUrls.*' => ['required', 'url:https', 'max:2048'],
+            'config.products.*.imageUrls.*' => ['required', 'string', 'max:2048'],
             'config.products.*.stockQuantity' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'config.products.*.manageStock' => $boolean,
             'config.products.*.sku' => ['nullable', 'string', 'max:100'],
@@ -148,6 +156,18 @@ class UpdateStoreWorkspaceRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
+            $catalogValidator = ProductCatalogContract::validator([
+                'catalogRevision' => $this->input('catalogRevision'),
+                'currencyCode' => $this->input('config.currency'),
+                'products' => $this->input('config.products', []),
+                'archiveProductIds' => $this->input('archiveProductIds', []),
+            ], null, true);
+            foreach ($catalogValidator->errors()->toArray() as $field => $messages) {
+                foreach ($messages as $message) {
+                    $validator->errors()->add('catalog.'.$field, $message);
+                }
+            }
+
             try {
                 $encoded = json_encode($this->input('config'), JSON_THROW_ON_ERROR);
             } catch (JsonException) {
@@ -160,18 +180,6 @@ class UpdateStoreWorkspaceRequest extends FormRequest
                 $validator->errors()->add('config', 'The store workspace may not exceed 256 KiB.');
             }
 
-            $seenSkus = [];
-            foreach ((array) $this->input('config.products', []) as $index => $product) {
-                $sku = is_array($product) ? ($product['sku'] ?? null) : null;
-                if (! is_string($sku) || trim($sku) === '') {
-                    continue;
-                }
-                $normalized = mb_strtolower(trim($sku));
-                if (isset($seenSkus[$normalized])) {
-                    $validator->errors()->add("config.products.{$index}.sku", 'Product SKUs must be unique within the store.');
-                }
-                $seenSkus[$normalized] = true;
-            }
         }];
     }
 }

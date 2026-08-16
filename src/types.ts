@@ -1,7 +1,11 @@
 export interface Product {
   id: string;
+  revision?: number;
+  status?: "draft" | "published" | "archived";
   name: string;
   price: number;
+  basePrice?: number;
+  salePrice?: number | null;
   description: string;
   category: string;
   imageKeyword: string;
@@ -129,7 +133,7 @@ export const ELEGANT_PRESET: StoreConfig = {
   bannerText: "خصم حصري 20% بمناسبة إطلاق تشكيلة الصيف الجديدة للعود والعطور",
   fontFamily: "Cairo",
   phone: "+966 50 123 4567",
-  currency: "ر.س",
+  currency: "YER",
   aboutTitle: "قصة لورين للعطور - فخامة العبق الشرقي والفرنسي",
   aboutText: "تأسست دار 'لورين للعطور' لتكون رائدة في عالم الخلطات النادرة والنفحات الساحرة. نبتكر عطرياتنا من خلاصة أجود زيوت العود المعتق، المسك الأبيض، والورد الطائفي الفاخر، لنمنح زوارنا تجربة حسية فريدة تجسد الأصالة والهيبة.",
   aboutVision: "رؤيتنا هي الابتكار المستمر وإتاحة أرقى معايير صناعة العطور الملكية والمباخر اليدوية لكافة عملائنا في الخليج العربي.",
@@ -315,7 +319,7 @@ export const TECH_PRESET: StoreConfig = {
   bannerText: "خصم حصري 15% عند الشراء اليوم مع شحن مجاني وسريع وضمان رسمي سنتين",
   fontFamily: "Tajawal",
   phone: "+966 55 987 6543",
-  currency: "ر.س",
+  currency: "YER",
   aboutTitle: "عن متجر تِك فيو - الابتكار والحلول الذكية",
   aboutText: "تأسست منصة 'تِك فيو' لتسوق أحدث المنتجات والابتكارات الإلكترونية في المنطقة. نوفر تشكيلة منتواة من السماعات، الساعات الذكية، والشواحن عالية الكفاءة المعززة بضمان رسمي وتجربة تسوق سلسة وآمنة.",
   aboutVision: "رؤيتنا إيصال أحدث ما توصلت إليه التكنولوجيا الحديثة لعملائنا بأسعار تنافسية وأعلى معايير الخدمة بعد البيع.",
