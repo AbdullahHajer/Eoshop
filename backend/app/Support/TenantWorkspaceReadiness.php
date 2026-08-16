@@ -13,14 +13,31 @@ final class TenantWorkspaceReadiness
 {
     public static function check(Tenant $tenant): bool
     {
+        if ($tenant->getAttribute('verification_status') !== TenantVerificationStatus::Approved->value
+            || ! self::maintenanceCheck($tenant)) {
+            return false;
+        }
+
+        $editorReady = static fn (): bool => Schema::hasColumns('store_configs', [
+            'revision', 'products_materialized', 'is_current',
+        ]) && DB::table('store_configs')->where('is_current', true)->count() === 1;
+
+        if (tenancy()->initialized && (string) tenant('id') === (string) $tenant->getKey()) {
+            return $editorReady();
+        }
+
+        return $tenant->run($editorReady);
+    }
+
+    public static function maintenanceCheck(Tenant $tenant): bool
+    {
         $tenant->loadMissing('latestProvisioningRun');
         $run = $tenant->latestProvisioningRun;
         $tenantId = (string) $tenant->getKey();
         $schema = TenantSchemaName::for($tenantId);
         $alreadyInitialized = tenancy()->initialized && (string) tenant('id') === $tenantId;
 
-        $centralReady = $tenant->getAttribute('verification_status') === TenantVerificationStatus::Approved->value
-            && $tenant->getAttribute('provisioning_status') === ProvisioningState::Active->value
+        $provenanceReady = $tenant->getAttribute('provisioning_status') === ProvisioningState::Active->value
             && $run instanceof ProvisioningRun
             && $run->getAttribute('tenant_id') === $tenantId
             && $run->getAttribute('status') === ProvisioningState::Active
@@ -29,20 +46,19 @@ final class TenantWorkspaceReadiness
             && $run->getAttribute('schema_created_at') !== null
             && ($alreadyInitialized || $tenant->database()->manager()->databaseExists($schema));
 
-        if (! $centralReady) {
+        if (! $provenanceReady) {
             return false;
         }
 
-        $schemaReady = static fn (): bool => Schema::hasColumns('store_configs', [
-            'revision', 'products_materialized', 'is_current',
-        ]) && Schema::hasColumns('products', ['image_urls', 'position'])
-            && DB::table('store_configs')->where('is_current', true)->count() === 1;
+        $catalogReady = static fn (): bool => Schema::hasColumns('products', [
+            'image_urls', 'position', 'status', 'base_price_minor', 'sale_price_minor', 'revision',
+        ])
+            && Schema::hasTable('catalog_settings')
+            && Schema::hasTable('product_media')
+            && Schema::hasColumn('product_media', 'cleanup_started_at')
+            && DB::table('catalog_settings')->where('id', 1)->count() === 1;
 
-        if ($alreadyInitialized) {
-            return $schemaReady();
-        }
-
-        return $tenant->run($schemaReady);
+        return $alreadyInitialized ? $catalogReady() : $tenant->run($catalogReady);
     }
 
     public static function isMaterialized(Tenant $tenant): bool

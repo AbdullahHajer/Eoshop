@@ -61,8 +61,9 @@ class TenantProvisioningExecutor
                 throw new ProvisioningFailure('initial_config_invalid', 'The initial store configuration does not satisfy the current server contract.');
             }
 
-            $lockedTenant->run(function () use ($lockedSubmission, $config): void {
+            $lockedTenant->run(function () use ($lockedTenant, $lockedSubmission, $config): void {
                 $this->workspaces->initialize(
+                    $lockedTenant,
                     (string) $lockedSubmission->getAttribute('initial_config_id'),
                     $config,
                 );
@@ -74,6 +75,9 @@ class TenantProvisioningExecutor
     {
         $ready = $tenant->run(static fn (): bool => Schema::hasTable('store_configs')
             && Schema::hasTable('products')
+            && Schema::hasTable('catalog_settings')
+            && Schema::hasTable('product_media')
+            && DB::table('catalog_settings')->where('id', 1)->count() === 1
             && DB::table('store_configs')
                 ->where('id', $submission->getAttribute('initial_config_id'))
                 ->where('is_current', true)

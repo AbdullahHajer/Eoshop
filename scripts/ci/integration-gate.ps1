@@ -241,10 +241,11 @@ WHERE id = '$tenantId';
 
     $configSql = @"
 SET search_path TO "$schema";
-INSERT INTO store_configs (id, config_json, is_current, created_at, updated_at)
+INSERT INTO store_configs (id, config_json, products_materialized, is_current, created_at, updated_at)
 VALUES (
     '00000000-0000-0000-0000-000000000021',
     json_build_object('marker', 'wp21-live'),
+    true,
     true,
     now(),
     now()
@@ -371,8 +372,8 @@ CREATE SCHEMA "$adoptionSchema";
     Invoke-Compose exec -T backend php artisan tenants:migrate --tenants=$adoptionTenantId --force --no-interaction
     $adoptionConfigSql = @"
 SET search_path TO "$adoptionSchema";
-INSERT INTO store_configs (id, config_json, is_current, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp21-adopted'), true, now(), now());
+INSERT INTO store_configs (id, config_json, products_materialized, is_current, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000020', json_build_object('marker', 'wp21-adopted'), true, true, now(), now());
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',

@@ -19,6 +19,10 @@ COPY src ./src
 
 RUN npm run build
 
+FROM frontend-build AS frontend-quality
+
+RUN npm run test
+
 FROM nginx:1.30.4-alpine3.24
 
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf

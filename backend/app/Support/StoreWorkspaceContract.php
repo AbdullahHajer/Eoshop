@@ -26,26 +26,20 @@ final class StoreWorkspaceContract
         }
 
         $validator = ValidatorFacade::make(
-            ['revision' => 1, 'config' => $normalized],
+            ['revision' => 1, 'catalogRevision' => 1, 'config' => $normalized],
             UpdateStoreWorkspaceRequest::contractRules(),
         );
         $validator->after(static function (Validator $validator) use ($config, $maxProducts): void {
             $products = is_array($config['products'] ?? null) ? $config['products'] : [];
-            if ($maxProducts !== null && count($products) > $maxProducts) {
-                $validator->errors()->add('config.products', "The selected plan allows at most {$maxProducts} products.");
-            }
-
-            $seenSkus = [];
-            foreach ($products as $index => $product) {
-                $sku = is_array($product) ? ($product['sku'] ?? null) : null;
-                if (! is_string($sku) || trim($sku) === '') {
-                    continue;
+            $catalog = ProductCatalogContract::validator([
+                'currencyCode' => $config['currency'] ?? null,
+                'products' => $products,
+                'archiveProductIds' => [],
+            ], $maxProducts, true);
+            foreach ($catalog->errors()->toArray() as $field => $messages) {
+                foreach ($messages as $message) {
+                    $validator->errors()->add('config.'.$field, $message);
                 }
-                $normalizedSku = mb_strtolower(trim($sku));
-                if (isset($seenSkus[$normalizedSku])) {
-                    $validator->errors()->add("config.products.{$index}.sku", 'Product SKUs must be unique within the store.');
-                }
-                $seenSkus[$normalizedSku] = true;
             }
 
             try {

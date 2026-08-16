@@ -352,6 +352,7 @@ class TenancyActivationTest extends TestCase
             DB::table('store_configs')->insert([
                 'id' => (string) Str::uuid(),
                 'config_json' => json_encode(['marker' => $marker], JSON_THROW_ON_ERROR),
+                'products_materialized' => true,
                 'is_current' => true,
                 'created_at' => now(),
                 'updated_at' => now(),

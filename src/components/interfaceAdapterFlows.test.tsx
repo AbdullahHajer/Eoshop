@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -48,6 +48,7 @@ const submission: StoreSubmission = {
 const workspace: StoreWorkspace = {
   tenantId: submission.id,
   revision: 7,
+  catalogRevision: 3,
   config: { ...ELEGANT_PRESET, storeName: "متجر الخادم" },
   updatedAt: null,
 };
@@ -180,8 +181,10 @@ describe("adapter-backed interface flows", () => {
     renderInterface(
       <ControlPanel
         config={ELEGANT_PRESET}
+        activeTenantId={null}
         handleConfigChange={vi.fn()}
         handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
         addEmptyProduct={vi.fn()}
         deleteProduct={vi.fn()}
         activeTab="ai"
@@ -200,19 +203,172 @@ describe("adapter-backed interface flows", () => {
     expect(screen.getByText(/عرض من الخادم/)).toBeTruthy();
   });
 
+  it("aborts an in-flight catalog upload when the active tenant changes", async () => {
+    let resolveUpload!: (value: { id: string; url: string; mimeType: string; byteSize: number }) => void;
+    let capturedSignal: AbortSignal | undefined;
+    const uploadMedia = vi.fn((_tenantId: string, _file: File, signal?: AbortSignal) => {
+      capturedSignal = signal;
+
+      return new Promise<{ id: string; url: string; mimeType: string; byteSize: number }>((resolve) => {
+        resolveUpload = resolve;
+      });
+    });
+    const handleProductChange = vi.fn();
+    const handleProductMediaChange = vi.fn();
+    const adapters = createFakeUiAdapters({ catalog: { uploadMedia } });
+    const catalogConfig = {
+      ...ELEGANT_PRESET,
+      products: [{
+        ...ELEGANT_PRESET.products[0],
+        imageKeyword: "custom",
+        imageUrl: "https://images.example.test/current.jpg",
+        imageUrls: ["https://images.example.test/current.jpg"],
+      }],
+    };
+    const panel = (tenantId: string) => (
+      <UiAdaptersProvider adapters={adapters}>
+        <ControlPanel
+          config={catalogConfig}
+          activeTenantId={tenantId}
+          handleConfigChange={vi.fn()}
+          handleProductChange={handleProductChange}
+          handleProductMediaChange={handleProductMediaChange}
+          addEmptyProduct={vi.fn()}
+          deleteProduct={vi.fn()}
+          activeTab="products"
+          setActiveTab={vi.fn()}
+          previewDevice="desktop"
+          setPreviewDevice={vi.fn()}
+        />
+      </UiAdaptersProvider>
+    );
+    const view = render(panel("tenant-a"));
+    const productCard = screen.getByText(catalogConfig.products[0].name).closest("div.rounded-2xl");
+    const editButton = productCard?.querySelector("button");
+    expect(editButton).toBeTruthy();
+    fireEvent.click(editButton as HTMLButtonElement);
+    const input = view.container.querySelector('input[type="file"]');
+    expect(input).toBeTruthy();
+    fireEvent.change(input as HTMLInputElement, {
+      target: { files: [new File(["image"], "product.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(uploadMedia).toHaveBeenCalledTimes(1));
+
+    view.rerender(panel("tenant-b"));
+    expect(capturedSignal?.aborted).toBe(true);
+    resolveUpload({
+      id: "7b32b037-b35e-4be2-b799-0737f4dbe8c5",
+      url: "/api/catalog-media/tenant-a/7b32b037-b35e-4be2-b799-0737f4dbe8c5",
+      mimeType: "image/png",
+      byteSize: 5,
+    });
+    await Promise.resolve();
+    expect(handleProductChange).not.toHaveBeenCalled();
+    expect(handleProductMediaChange).not.toHaveBeenCalled();
+  });
+
+  it("rejects a deferred catalog upload when the product collection changes", async () => {
+    let resolveUpload!: (value: { id: string; url: string; mimeType: string; byteSize: number }) => void;
+    let capturedSignal: AbortSignal | undefined;
+    const uploadMedia = vi.fn((_tenantId: string, _file: File, signal?: AbortSignal) => {
+      capturedSignal = signal;
+
+      return new Promise<{ id: string; url: string; mimeType: string; byteSize: number }>((resolve) => {
+        resolveUpload = resolve;
+      });
+    });
+    const handleProductMediaChange = vi.fn();
+    const adapters = createFakeUiAdapters({ catalog: { uploadMedia } });
+    const catalogConfig = {
+      ...ELEGANT_PRESET,
+      products: [{
+        ...ELEGANT_PRESET.products[0],
+        imageKeyword: "custom",
+        imageUrl: "https://images.example.test/current.jpg",
+        imageUrls: ["https://images.example.test/current.jpg"],
+      }],
+    };
+    const panel = (config: typeof catalogConfig) => (
+      <UiAdaptersProvider adapters={adapters}>
+        <ControlPanel
+          config={config}
+          activeTenantId="tenant-a"
+          handleConfigChange={vi.fn()}
+          handleProductChange={vi.fn()}
+          handleProductMediaChange={handleProductMediaChange}
+          addEmptyProduct={vi.fn()}
+          deleteProduct={vi.fn()}
+          activeTab="products"
+          setActiveTab={vi.fn()}
+          previewDevice="desktop"
+          setPreviewDevice={vi.fn()}
+        />
+      </UiAdaptersProvider>
+    );
+    const view = render(panel(catalogConfig));
+    const productCard = screen.getByText(catalogConfig.products[0].name).closest("div.rounded-2xl");
+    fireEvent.click(productCard?.querySelector("button") as HTMLButtonElement);
+    fireEvent.change(view.container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File(["image"], "product.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(uploadMedia).toHaveBeenCalledTimes(1));
+
+    view.rerender(panel({
+      ...catalogConfig,
+      products: [{ ...catalogConfig.products[0], id: "new-draft", name: "New draft" }, ...catalogConfig.products],
+    }));
+    expect(capturedSignal?.aborted).toBe(true);
+    resolveUpload({
+      id: "7b32b037-b35e-4be2-b799-0737f4dbe8c5",
+      url: "/api/catalog-media/tenant-a/7b32b037-b35e-4be2-b799-0737f4dbe8c5",
+      mimeType: "image/png",
+      byteSize: 5,
+    });
+    await Promise.resolve();
+    expect(handleProductMediaChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps base and sale price edits together in the saved workspace", async () => {
+    const save = vi.fn(async (_tenantId, _revision, _catalogRevision, config) => ({
+      ...workspace,
+      revision: 8,
+      catalogRevision: 4,
+      config,
+    }));
+    const user = userEvent.setup();
+    await openRestoredBuilder(appAdapters(save), user);
+    await user.click(screen.getByTestId("products-tab"));
+    const product = workspace.config.products[0];
+    const productCard = screen.getAllByText(product.name)[0].closest("div.rounded-2xl");
+    fireEvent.click(productCard?.querySelector("button") as HTMLButtonElement);
+
+    fireEvent.change(screen.getByTestId(`product-base-price-${product.id}`), { target: { value: "200" } });
+    fireEvent.change(screen.getByTestId(`product-sale-price-${product.id}`), { target: { value: "150" } });
+    await user.click(screen.getByTestId("save-workspace"));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const savedConfig = save.mock.calls[0][3];
+    expect(savedConfig.products[0]).toMatchObject({ basePrice: 200, salePrice: 150, price: 150 });
+  });
+
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {
     const save = vi.fn()
-      .mockImplementationOnce(async (_tenantId, _revision, config) => ({ ...workspace, revision: 8, config }))
+      .mockImplementationOnce(async (_tenantId, _revision, _catalogRevision, config) => ({
+        ...workspace,
+        revision: 8,
+        catalogRevision: 4,
+        config,
+      }))
       .mockRejectedValueOnce(new UiAdapterError("نسخة أحدث موجودة.", "conflict", "workspace_revision_conflict"));
     const adapters = appAdapters(save);
     const user = userEvent.setup();
     await openRestoredBuilder(adapters, user);
 
     await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
-    await waitFor(() => expect(save).toHaveBeenCalledWith(submission.id, 7, expect.any(Object)));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(submission.id, 7, 3, expect.any(Object), []));
     await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
 
-    await waitFor(() => expect(save).toHaveBeenCalledWith(submission.id, 8, expect.any(Object)));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(submission.id, 8, 4, expect.any(Object), []));
     expect(await screen.findByText("تعارضت تعديلاتك مع نسخة أحدث")).toBeTruthy();
     expect(localStorage.getItem("mobtaker_custom_store")).toBeNull();
   });

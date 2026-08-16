@@ -4,6 +4,7 @@ import { authApi, toUserProfile } from "../services/authApi";
 import { plansApi } from "../services/plansApi";
 import { provisioningApi } from "../services/provisioningApi";
 import { workspaceApi } from "../services/workspaceApi";
+import { catalogApi } from "../services/catalogApi";
 
 export type {
   PlatformStore,
@@ -52,6 +53,7 @@ export interface UiAdapters {
   plans: typeof plansApi;
   provisioning: typeof provisioningApi;
   workspace: typeof workspaceApi;
+  catalog: typeof catalogApi;
 }
 
 export const productionUiAdapters: UiAdapters = {
@@ -75,4 +77,5 @@ export const productionUiAdapters: UiAdapters = {
   plans: plansApi,
   provisioning: provisioningApi,
   workspace: workspaceApi,
+  catalog: catalogApi,
 };

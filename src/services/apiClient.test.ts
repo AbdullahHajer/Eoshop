@@ -299,4 +299,24 @@ describe("apiClient", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/read", expect.objectContaining({ redirect: "error" }));
   });
+
+  it("sends FormData without overriding the browser multipart boundary", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "multipart-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const form = new FormData();
+    form.append("idempotencyKey", "upload-key");
+
+    await apiClient.request("/api/upload", {
+      method: "POST",
+      body: form,
+      headers: { "Idempotency-Key": "upload-key" },
+      retrySafety: "idempotent",
+    });
+
+    const request = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(request.body).toBe(form);
+    expect(new Headers(request.headers).has("Content-Type")).toBe(false);
+  });
 });

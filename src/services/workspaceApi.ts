@@ -5,6 +5,7 @@ import { arrayField, enumField, numberField, record, stringField } from "./apiCo
 export interface StoreWorkspace {
   tenantId: string;
   revision: number;
+  catalogRevision: number;
   config: StoreConfig;
   updatedAt: string | null;
 }
@@ -51,8 +52,14 @@ function mapProduct(value: unknown): Product {
 
   return {
     id: stringField(dto, "id", "منتج مساحة العمل"),
+    revision: optionalNumber(dto, "revision", "منتج مساحة العمل"),
+    status: dto.status === undefined || dto.status === null
+      ? "published"
+      : enumField(dto, "status", ["draft", "published", "archived"] as const, "منتج مساحة العمل"),
     name: stringField(dto, "name", "منتج مساحة العمل"),
     price,
+    basePrice: optionalNumber(dto, "basePrice", "منتج مساحة العمل") ?? price,
+    salePrice: optionalNumber(dto, "salePrice", "منتج مساحة العمل") ?? null,
     description: optionalString(dto, "description", "منتج مساحة العمل") ?? "",
     category: optionalString(dto, "category", "منتج مساحة العمل") ?? "",
     imageKeyword: optionalString(dto, "imageKeyword", "منتج مساحة العمل") ?? "default",
@@ -150,6 +157,7 @@ function mapWorkspace(value: unknown): StoreWorkspace {
   return {
     tenantId: stringField(dto, "tenantId", "مساحة العمل"),
     revision: numberField(dto, "revision", "مساحة العمل"),
+    catalogRevision: numberField(dto, "catalogRevision", "مساحة العمل"),
     config: mapStoreConfig(dto.config),
     updatedAt: updatedAt as string | null,
   };
@@ -161,8 +169,20 @@ function configForServer(config: StoreConfig): Record<string, unknown> {
     products: config.products.map((product) => ({
       ...product,
       id: uuidPattern.test(product.id) ? product.id : undefined,
+      revision: uuidPattern.test(product.id) ? product.revision : undefined,
+      status: product.status ?? "draft",
+      basePrice: canonicalMoney(product.basePrice ?? product.price),
+      salePrice: product.salePrice === null || product.salePrice === undefined
+        ? null
+        : canonicalMoney(product.salePrice),
+      price: undefined,
     })),
   };
+}
+
+function canonicalMoney(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "";
+  return value.toFixed(2);
 }
 
 export const workspaceApi = {
@@ -170,10 +190,16 @@ export const workspaceApi = {
     return mapWorkspace(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/workspace`, { signal }));
   },
 
-  async save(tenantId: string, revision: number, config: StoreConfig): Promise<StoreWorkspace> {
+  async save(
+    tenantId: string,
+    revision: number,
+    catalogRevision: number,
+    config: StoreConfig,
+    archiveProductIds: string[] = [],
+  ): Promise<StoreWorkspace> {
     return mapWorkspace(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/workspace`, {
       method: "PATCH",
-      body: { revision, config: configForServer(config) },
+      body: { revision, catalogRevision, config: configForServer(config), archiveProductIds },
     }));
   },
 };

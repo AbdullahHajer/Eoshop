@@ -58,9 +58,11 @@ describe("merchant workspace account and request isolation", () => {
 
   it("opens conflict recovery only for the revision machine code", () => {
     const revision = new UiAdapterError("stale", "conflict", "workspace_revision_conflict");
+    const catalogRevision = new UiAdapterError("stale catalog", "conflict", "catalog_revision_conflict");
     const quota = new UiAdapterError("quota", "conflict", "workspace_quota_exceeded");
 
     expect(isRevisionConflict(revision)).toBe(true);
+    expect(isRevisionConflict(catalogRevision)).toBe(true);
     expect(isRevisionConflict(quota)).toBe(false);
     expect(isRevisionConflict(new Error("network"))).toBe(false);
   });
@@ -110,7 +112,7 @@ describe("merchant workspace account and request isolation", () => {
     const draft = { ...base, storeName: "Merchant draft" };
     const server = { ...base, storeName: "Other writer" };
 
-    const opened = openWorkspaceConflict("tenant-a", base, draft);
+    const opened = openWorkspaceConflict("tenant-a", base, draft, ["68d9959d-5101-4d4f-9cd7-196c7a778230"]);
     expect(hasRecoverableWorkspaceChanges(false, true, false)).toBe(true);
 
     const reloaded = reloadWorkspaceConflict(opened, server);
@@ -120,6 +122,8 @@ describe("merchant workspace account and request isolation", () => {
     expect(resolution?.review?.draft.storeName).toBe("Merchant draft");
     expect(resolution?.review?.server.storeName).toBe("Other writer");
     expect(resolution?.review?.conflictingFields).toEqual(["storeName"]);
+    expect(reloaded.archiveProductIds).toEqual(["68d9959d-5101-4d4f-9cd7-196c7a778230"]);
+    expect(resolution?.review?.archiveProductIds).toEqual(["68d9959d-5101-4d4f-9cd7-196c7a778230"]);
     expect(hasRecoverableWorkspaceChanges(false, false, resolution?.review !== null)).toBe(true);
     expect(mayDiscardDirtyWorkspace(true, false)).toBe(false);
   });

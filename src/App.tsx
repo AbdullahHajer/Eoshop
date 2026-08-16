@@ -155,6 +155,7 @@ export default function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceConflict, setWorkspaceConflict] = useState<WorkspaceConflictState | null>(null);
   const [workspaceConflictReview, setWorkspaceConflictReview] = useState<WorkspaceConflictReviewState | null>(null);
+  const [pendingArchivedProductIds, setPendingArchivedProductIds] = useState<string[]>([]);
   const workspaceEditGeneration = useRef(0);
   const workspaceOperationSequence = useRef(0);
   const merchantRestoreSequence = useRef(0);
@@ -167,8 +168,11 @@ export default function App() {
     data?: any;
   } | null>(null);
   const workspaceDirty = useMemo(
-    () => activeWorkspace !== null && JSON.stringify(config) !== JSON.stringify(activeWorkspace.config),
-    [activeWorkspace, config],
+    () => activeWorkspace !== null && (
+      JSON.stringify(config) !== JSON.stringify(activeWorkspace.config)
+      || pendingArchivedProductIds.length > 0
+    ),
+    [activeWorkspace, config, pendingArchivedProductIds],
   );
   const workspaceEditorLocked = workspaceLoading || workspaceSaving || workspaceConflict !== null;
   const recoverableWorkspaceChanges = hasRecoverableWorkspaceChanges(
@@ -261,6 +265,7 @@ export default function App() {
     setWorkspaceSaving(false);
     setWorkspaceConflict(null);
     setWorkspaceConflictReview(null);
+    setPendingArchivedProductIds([]);
     setActiveWorkspace(null);
     setMerchantStores([]);
     setRegisteredUser(null);
@@ -298,7 +303,10 @@ export default function App() {
       setRegisteredUser(merchantProfile(user, store));
       if (preserveConflict && workspaceConflict?.tenantId === workspace.tenantId) {
         setWorkspaceConflict(reloadWorkspaceConflict(workspaceConflict, workspace.config));
-      } else if (!preserveConflict) {
+      } else {
+        setPendingArchivedProductIds([]);
+      }
+      if (!preserveConflict) {
         setWorkspaceConflict(null);
         setWorkspaceConflictReview(null);
       }
@@ -385,6 +393,7 @@ export default function App() {
     if (!resolution) return;
     workspaceEditGeneration.current += 1;
     setConfig(resolution.config);
+    setPendingArchivedProductIds([...workspaceConflict.archiveProductIds]);
     const conflictCount = workspaceConflict.conflictingFields.length;
     setWorkspaceConflictReview(resolution.review);
     setWorkspaceConflict(null);
@@ -425,12 +434,19 @@ export default function App() {
     const operation = ++workspaceOperationSequence.current;
     setWorkspaceSaving(true);
     try {
-      const saved = await workspaceActions.save(workspace.tenantId, workspace.revision, configToSave);
+      const saved = await workspaceActions.save(
+        workspace.tenantId,
+        workspace.revision,
+        workspace.catalogRevision,
+        configToSave,
+        pendingArchivedProductIds,
+      );
       if (operation !== workspaceOperationSequence.current) return false;
       setActiveWorkspace(saved);
       setConfig(saved.config);
       setWorkspaceConflict(null);
       setWorkspaceConflictReview(null);
+      setPendingArchivedProductIds([]);
       if (importingDraft) {
         localStorage.removeItem("mobtaker_custom_store");
         setLocalDraft(null);
@@ -440,7 +456,12 @@ export default function App() {
     } catch (requestError) {
       if (operation !== workspaceOperationSequence.current) return false;
       if (isRevisionConflict(requestError)) {
-        setWorkspaceConflict(openWorkspaceConflict(workspace.tenantId, workspace.config, configToSave));
+        setWorkspaceConflict(openWorkspaceConflict(
+          workspace.tenantId,
+          workspace.config,
+          configToSave,
+          pendingArchivedProductIds,
+        ));
       }
       if (isUiError(requestError, "unauthenticated")) {
         setAuthUser(null);
@@ -694,11 +715,14 @@ export default function App() {
         bannerText: generatedData.bannerText || "أهلاً بكم في متجرنا الجديد",
         fontFamily: generatedData.themeStyle === "tech" ? "Tajawal" : "Cairo",
         phone: "+966 50 111 2222",
-        currency: "ر.س",
+        currency: "YER",
         products: generatedData.products.map((p, idx) => ({
           id: `ai-p-${idx}`,
           name: p.name,
           price: Number(p.price) || 99,
+          basePrice: Number(p.price) || 99,
+          salePrice: null,
+          status: "draft",
           description: p.description,
           category: p.category || "منتجات عامة",
           imageKeyword: p.imageKeyword || "default"
@@ -770,12 +794,32 @@ export default function App() {
   const handleProductChange = (index: number, key: keyof Product, value: any) => {
     if (workspaceEditorLocked) return;
     workspaceEditGeneration.current += 1;
-    const updatedProducts = [...config.products];
-    updatedProducts[index] = {
-      ...updatedProducts[index],
-      [key]: value
-    };
-    setConfig(prev => ({ ...prev, products: updatedProducts }));
+    setConfig(prev => {
+      if (!prev.products[index]) return prev;
+      const updatedProducts = [...prev.products];
+      updatedProducts[index] = {
+        ...updatedProducts[index],
+        [key]: value
+      };
+      return { ...prev, products: updatedProducts };
+    });
+  };
+
+  const handleProductMediaChange = (productId: string, urls: string[]) => {
+    if (workspaceEditorLocked) return;
+    workspaceEditGeneration.current += 1;
+    setConfig(prev => {
+      const index = prev.products.findIndex((product) => product.id === productId);
+      if (index < 0) return prev;
+      const updatedProducts = [...prev.products];
+      const product = updatedProducts[index];
+      updatedProducts[index] = {
+        ...product,
+        imageUrl: product.imageUrl || urls[0],
+        imageUrls: urls,
+      };
+      return { ...prev, products: updatedProducts };
+    });
   };
 
   const addEmptyProduct = () => {
@@ -785,6 +829,9 @@ export default function App() {
       id: `custom-p-${Date.now()}`,
       name: "منتج جديد للتعديل",
       price: 150,
+      basePrice: 150,
+      salePrice: null,
+      status: "draft",
       description: "وصف جذاب يوضح تفاصيل منتجك الجديد لتشجيع العملاء على الشراء.",
       category: "منتجات عامة",
       imageKeyword: "default"
@@ -800,6 +847,9 @@ export default function App() {
   const deleteProduct = (id: string) => {
     if (workspaceEditorLocked) return;
     workspaceEditGeneration.current += 1;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      setPendingArchivedProductIds((current) => current.includes(id) ? current : [...current, id]);
+    }
     setConfig(prev => ({
         ...prev,
         products: prev.products.filter(p => p.id !== id)
@@ -1613,6 +1663,7 @@ export default function App() {
               </button>
 
               <button
+                data-testid="save-workspace"
                 disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
                 onClick={() => void saveStore()}
                 className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
@@ -1690,6 +1741,7 @@ export default function App() {
                     <span>الهوية والألوان 🎨</span>
                   </button>
                   <button
+                    data-testid="products-tab"
                     onClick={() => setActiveTab("products")}
                     className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
                       activeTab === "products" ? "border-slate-900 text-slate-900 bg-white shadow-2xs" : "border-transparent text-slate-600 hover:text-slate-900"
@@ -1746,8 +1798,10 @@ export default function App() {
                 >
                   <ControlPanel 
                     config={config}
+                    activeTenantId={activeWorkspace?.tenantId ?? null}
                     handleConfigChange={handleConfigChange}
                     handleProductChange={handleProductChange}
+                    handleProductMediaChange={handleProductMediaChange}
                     addEmptyProduct={addEmptyProduct}
                     deleteProduct={deleteProduct}
                     activeTab={activeTab}

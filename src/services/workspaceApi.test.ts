@@ -35,6 +35,7 @@ describe("workspaceApi", () => {
       data: {
         tenantId: "tenant-1",
         revision: 7,
+        catalogRevision: 3,
         updatedAt: "2026-08-15T12:00:00Z",
         databasePassword: "must-not-escape",
         config: {
@@ -59,6 +60,7 @@ describe("workspaceApi", () => {
       data: {
         tenantId: "tenant-1",
         revision: 8,
+        catalogRevision: 4,
         updatedAt: "2026-08-15T12:01:00Z",
         config: {
           ...config,
@@ -72,12 +74,16 @@ describe("workspaceApi", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("crypto", { randomUUID: () => "33333333-3333-4333-8333-333333333333" });
 
-    await workspaceApi.save("tenant-1", 7, config);
+    await workspaceApi.save("tenant-1", 7, 3, config, ["44444444-4444-4444-8444-444444444444"]);
 
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     const body = JSON.parse(request.body as string);
     expect(body.revision).toBe(7);
+    expect(body.catalogRevision).toBe(3);
+    expect(body.archiveProductIds).toEqual(["44444444-4444-4444-8444-444444444444"]);
     expect(body.config.products[0].id).toBeUndefined();
+    expect(body.config.products[0].basePrice).toBe("12.50");
+    expect(body.config.products[0].status).toBe("draft");
     expect(request.headers).toMatchObject({ "X-CSRF-TOKEN": "workspace-csrf" });
   });
 
