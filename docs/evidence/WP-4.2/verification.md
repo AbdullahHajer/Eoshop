@@ -4,7 +4,7 @@
 - Branch: `codex/wp-4.2-inventory-ledger`
 - Base: protected `main` at `d6110c34eb81cd5d99f44a6a1740bbd1e9a62ab3`
 - Scope: append-only inventory ledger, reservations, concurrency and server-backed inventory adjustments
-- Delivery: implementation is locally verified; commit, PR and protected-branch evidence are pending T5
+- Delivery: complete and merged through the protected branch workflow
 
 ## Inventory authority and data model
 
@@ -76,5 +76,7 @@ Expected error logs from negative audit, invalid provisioning, unowned schema an
 
 - Independent read-only final review: **APPROVE**, with no blocking findings after the final integration pass.
 - Implementation commit: `6d7d2bd` (`feat(wp4.2): establish inventory ledger and reservations`).
-- Pull request and protected CI: pending.
-- Merge and protected-main CI: pending.
+- Pull request: [#22](https://github.com/sas-prog1/Eoshop/pull/22), merged from final head `4dd4c1edb39ffd6be860bbf0878fb894708d9a5e`.
+- Pull-request CI: run `31967120123`; Repository safety, Backend quality, Frontend quality and Container integration all passed.
+- Merge commit: `98da5c1e04d7798342387c71a0aae8684cb6ca3a` on protected `main`.
+- Protected-main CI: push run `31967379956`; all four required jobs passed.
