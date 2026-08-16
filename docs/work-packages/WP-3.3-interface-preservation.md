@@ -67,7 +67,7 @@ Preserve the existing Arabic storefront builder and platform screens while makin
 
 ### T5 — Evidence and delivery
 
-- [ ] Record verification evidence and rollback observations.
+- [x] Record verification evidence and rollback observations.
 - [x] Complete independent read-only review with no blocking findings.
 - [ ] Commit, push, open PR, pass the four required checks and merge.
 
