@@ -44,6 +44,11 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
     catalog: {
       uploadMedia: async () => unexpected("catalog.uploadMedia"),
     },
+    inventory: {
+      load: async () => unexpected("inventory.load"),
+      adjust: async () => unexpected("inventory.adjust"),
+      updatePolicy: async () => unexpected("inventory.updatePolicy"),
+    },
   };
 
   return {
@@ -54,5 +59,6 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
     provisioning: { ...adapters.provisioning, ...overrides.provisioning },
     workspace: { ...adapters.workspace, ...overrides.workspace },
     catalog: { ...adapters.catalog, ...overrides.catalog },
+    inventory: { ...adapters.inventory, ...overrides.inventory },
   };
 }

@@ -36,6 +36,7 @@ describe("workspaceApi", () => {
         tenantId: "tenant-1",
         revision: 7,
         catalogRevision: 3,
+        capabilities: { inventoryView: true, inventoryManage: false },
         updatedAt: "2026-08-15T12:00:00Z",
         databasePassword: "must-not-escape",
         config: {
@@ -50,6 +51,7 @@ describe("workspaceApi", () => {
     const workspace = await workspaceApi.load("tenant-1");
 
     expect(workspace.config.products[0].price).toBe(12.5);
+    expect(workspace.capabilities).toEqual({ inventoryView: true, inventoryManage: false });
     expect(workspace).not.toHaveProperty("databasePassword");
     expect(workspace.config).not.toHaveProperty("databasePassword");
     expect(workspace.config.products[0]).not.toHaveProperty("internalCost");
@@ -61,6 +63,7 @@ describe("workspaceApi", () => {
         tenantId: "tenant-1",
         revision: 8,
         catalogRevision: 4,
+        capabilities: { inventoryView: true, inventoryManage: true },
         updatedAt: "2026-08-15T12:01:00Z",
         config: {
           ...config,

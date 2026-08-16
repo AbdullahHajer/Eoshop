@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\CatalogMediaController;
 use App\Http\Controllers\DomainAvailabilityController;
 use App\Http\Controllers\MerchantCatalogMediaController;
+use App\Http\Controllers\MerchantInventoryController;
 use App\Http\Controllers\MerchantProductCatalogController;
 use App\Http\Controllers\MerchantStoreController;
 use App\Http\Controllers\MerchantWorkspaceController;
@@ -80,6 +81,17 @@ Route::middleware('central.domain')->group(function (): void {
             ->middleware('throttle:merchant.mutations');
         Route::post('/merchant/stores/{tenant}/catalog/media', [MerchantCatalogMediaController::class, 'store'])
             ->can('updateProductCatalog', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::get('/merchant/stores/{tenant}/inventory', [MerchantInventoryController::class, 'index'])
+            ->can('viewInventory', 'tenant');
+        Route::get('/merchant/stores/{tenant}/inventory/movements', [MerchantInventoryController::class, 'movements'])
+            ->can('viewInventory', 'tenant');
+        Route::post('/merchant/stores/{tenant}/inventory/adjustments', [MerchantInventoryController::class, 'adjust'])
+            ->can('updateInventory', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::patch('/merchant/stores/{tenant}/inventory/products/{product}/policy', [MerchantInventoryController::class, 'updatePolicy'])
+            ->can('updateInventory', 'tenant')
+            ->whereUuid('product')
             ->middleware('throttle:merchant.mutations');
         Route::post('/generate-store-ideas', [StoreGeneratorController::class, 'generate'])
             ->middleware('throttle:ai.generate');

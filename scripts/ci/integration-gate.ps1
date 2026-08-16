@@ -250,6 +250,49 @@ VALUES (
     now(),
     now()
 );
+SET session_replication_role = replica;
+INSERT INTO products (
+    id, name, price, base_price_minor, description, category, image_keyword, image_urls,
+    stock_quantity, reserved_quantity, manage_stock, sku, low_stock_threshold, position,
+    status, revision, inventory_revision, published_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000038', 'Scheduler fixture', 1.00, 100,
+    'Scheduler expiration fixture', 'CI', 'fixture', '[]'::json, 1, 1, true,
+    'SCHEDULER-1', 1, 0, 'published', 1, 2, now(), now(), now()
+);
+INSERT INTO inventory_operations (
+    id, kind, idempotency_scope, idempotency_key, request_fingerprint, actor_type,
+    source, reason_code, created_at
+) VALUES
+    ('00000000-0000-0000-0000-000000000031', 'opening', 'system:ci-opening',
+     '00000000-0000-0000-0000-000000000031', repeat('a', 64), 'system', 'integration_gate', 'ci_opening', now() - interval '3 minutes'),
+    ('00000000-0000-0000-0000-000000000032', 'reservation_create', 'system:ci-reservation',
+     '00000000-0000-0000-0000-000000000032', repeat('b', 64), 'system', 'integration_gate', 'ci_reserve', now() - interval '2 minutes');
+INSERT INTO inventory_reservations (
+    id, status, reference_type, reference_id, expires_at, created_by_operation_id, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000037', 'active', 'ci_scheduler', 'due-fixture',
+    now() - interval '30 seconds', '00000000-0000-0000-0000-000000000032',
+    now() - interval '90 seconds', now() - interval '90 seconds'
+);
+INSERT INTO inventory_reservation_items (reservation_id, product_id, quantity)
+VALUES ('00000000-0000-0000-0000-000000000037', '00000000-0000-0000-0000-000000000038', 1);
+INSERT INTO inventory_movements (
+    id, operation_id, product_id, reservation_id, kind, before_on_hand, before_reserved,
+    on_hand_delta, reserved_delta, after_on_hand, after_reserved,
+    before_inventory_revision, after_inventory_revision, created_at
+) VALUES
+    ('00000000-0000-0000-0000-000000000033', '00000000-0000-0000-0000-000000000031',
+     '00000000-0000-0000-0000-000000000038', NULL, 'opening', 0, 0, 1, 0, 1, 0, 1, 1, now() - interval '3 minutes'),
+    ('00000000-0000-0000-0000-000000000034', '00000000-0000-0000-0000-000000000032',
+     '00000000-0000-0000-0000-000000000038', '00000000-0000-0000-0000-000000000037',
+     'reserve', 1, 0, 0, 1, 1, 1, 1, 2, now() - interval '90 seconds');
+INSERT INTO inventory_application_receipts (id, operation_id, product_id, movement_id, created_at) VALUES
+    ('00000000-0000-0000-0000-000000000035', '00000000-0000-0000-0000-000000000031',
+     '00000000-0000-0000-0000-000000000038', '00000000-0000-0000-0000-000000000033', now() - interval '3 minutes'),
+    ('00000000-0000-0000-0000-000000000036', '00000000-0000-0000-0000-000000000032',
+     '00000000-0000-0000-0000-000000000038', '00000000-0000-0000-0000-000000000034', now() - interval '90 seconds');
+SET session_replication_role = origin;
 "@
     Invoke-Compose -Arguments @(
         'exec', '-T', 'db', 'psql',
@@ -322,6 +365,127 @@ function Assert-ProvisioningWorker {
     )).Trim()
     if ($failed -ne '0') {
         throw "The live Compose worker produced $failed failed job records."
+    }
+}
+
+function Assert-InventoryHttpBoundary {
+    param([int]$Port)
+
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.CookieContainer = [System.Net.CookieContainer]::new()
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.BaseAddress = [Uri]"http://127.0.0.1:$Port"
+    $jsonContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/json')
+
+    try {
+        $csrfResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
+        $csrfPayload = $csrfResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$csrfResponse.StatusCode -ne 200 -or -not $csrfPayload.csrf_token) {
+            throw 'Failed to establish the inventory boundary CSRF session.'
+        }
+        $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$csrfPayload.csrf_token)
+        $registration = [System.Net.Http.StringContent]::new('{"name":"WP 4.2 Inventory Gate","email":"wp42-inventory-gate@example.test","phone":"+967700000042","password":"inventory-gate-password","password_confirmation":"inventory-gate-password"}')
+        $registration.Headers.ContentType = $jsonContentType
+        $registrationResponse = $client.PostAsync('/api/auth/register', $registration).GetAwaiter().GetResult()
+        if ([int]$registrationResponse.StatusCode -ne 201) {
+            throw "Expected WP 4.2 gate registration HTTP 201, received $([int]$registrationResponse.StatusCode)."
+        }
+
+        $client.DefaultRequestHeaders.Remove('X-CSRF-TOKEN') | Out-Null
+        $authenticatedCsrfResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
+        $authenticatedCsrfPayload = $authenticatedCsrfResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$authenticatedCsrfResponse.StatusCode -ne 200 -or -not $authenticatedCsrfPayload.csrf_token) {
+            throw 'Failed to refresh the inventory boundary CSRF token after session rotation.'
+        }
+
+        $membershipSql = @"
+INSERT INTO tenant_user (tenant_id, user_id, role_id, role_scope, status, invited_by, joined_at, created_at, updated_at)
+SELECT 'wp21-live', u.id, r.id, 'tenant', 'active', u.id, now(), now(), now()
+FROM users u CROSS JOIN roles r
+WHERE u.email = 'wp42-inventory-gate@example.test' AND r.key = 'merchant_owner';
+"@
+        Invoke-Compose -Arguments @(
+            'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+            '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $membershipSql
+        )
+
+        $client.DefaultRequestHeaders.Remove('X-CSRF-TOKEN') | Out-Null
+        $missingCsrf = [System.Net.Http.StringContent]::new('{}')
+        $missingCsrf.Headers.ContentType = $jsonContentType
+        $missingCsrfResponse = $client.PostAsync('/api/merchant/stores/wp21-live/inventory/adjustments', $missingCsrf).GetAwaiter().GetResult()
+        if ([int]$missingCsrfResponse.StatusCode -ne 419) {
+            throw "Expected inventory mutation HTTP 419 without CSRF, received $([int]$missingCsrfResponse.StatusCode)."
+        }
+
+        $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$authenticatedCsrfPayload.csrf_token)
+        for ($attempt = 1; $attempt -le 31; $attempt++) {
+            $invalid = [System.Net.Http.StringContent]::new('{"reasonCode":"invalid"}')
+            $invalid.Headers.ContentType = $jsonContentType
+            $response = $client.PostAsync('/api/merchant/stores/wp21-live/inventory/adjustments', $invalid).GetAwaiter().GetResult()
+            $expected = if ($attempt -le 30) { 422 } else { 429 }
+            if ([int]$response.StatusCode -ne $expected) {
+                throw "Expected inventory mutation HTTP $expected on attempt $attempt, received $([int]$response.StatusCode)."
+            }
+        }
+    }
+    finally {
+        $client.Dispose()
+        $handler.Dispose()
+    }
+}
+
+function Assert-InventoryScheduler {
+    $tenantId = 'wp21-live'
+    $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($tenantId))
+    }
+    finally {
+        $hashAlgorithm.Dispose()
+    }
+    $hash = -join ($hashBytes | ForEach-Object { $_.ToString('x2') })
+    $schema = "tenant_wp21_live_$($hash.Substring(0, 16))"
+    $stateQuery = "SELECT r.status || ':' || p.reserved_quantity FROM `"$schema`".inventory_reservations r JOIN `"$schema`".inventory_reservation_items i ON i.reservation_id = r.id JOIN `"$schema`".products p ON p.id = i.product_id WHERE r.id = '00000000-0000-0000-0000-000000000037';"
+
+    $initial = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', $stateQuery
+    )).Trim()
+    if ($initial -ne 'active:1') {
+        throw "Expected a due active scheduler fixture with one held unit, received $initial."
+    }
+
+    $schedule = Get-ComposeOutput exec -T backend php artisan schedule:list --no-interaction
+    if (-not $schedule.Contains('inventory:expire-reservations')) {
+        throw 'The inventory expiration command is absent from Laravel schedule:list.'
+    }
+
+    Invoke-Compose -Arguments @('up', '-d', '--no-build', 'scheduler')
+    $running = Get-ComposeOutput ps --status running --services
+    if (-not ($running -split "`n").Contains('scheduler')) {
+        throw 'The Compose scheduler service did not remain running.'
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(80)
+    do {
+        Start-Sleep -Seconds 2
+        $state = (Get-ComposeOutput -Arguments @(
+            'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+            '-tAc', $stateQuery
+        )).Trim()
+    } while ($state -ne 'expired:0' -and [DateTime]::UtcNow -lt $deadline)
+
+    if ($state -ne 'expired:0') {
+        Invoke-Compose logs --no-color --tail=100 scheduler
+        throw "The live scheduler did not release the due reservation; final state was $state."
+    }
+
+    $systemExpiry = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT count(*) FROM `"$schema`".inventory_operations WHERE kind = 'reservation_expire' AND actor_type = 'system' AND actor_user_id IS NULL AND source = 'inventory_expiry';"
+    )).Trim()
+    if ($systemExpiry -ne '1') {
+        throw "Expected one system-attributed expiry operation, received $systemExpiry."
     }
 }
 
@@ -417,6 +581,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $tenancyMigration = 'database/migrations/system/2026_08_14_000006_enforce_canonical_tenant_domains.php'
     $provisioningMigration = 'database/migrations/system/2026_08_14_000007_create_tenant_provisioning_lifecycle.php'
     $publicationMigration = 'database/migrations/system/2026_08_15_000008_create_domain_subscription_publication_lifecycle.php'
+    $inventoryPermissionsMigration = 'database/migrations/system/2026_08_16_000009_add_inventory_permissions.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$inventoryPermissionsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$publicationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$provisioningMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$tenancyMigration --force --no-interaction
@@ -429,6 +595,7 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     Invoke-Compose exec -T backend php artisan migrate --path=$tenancyMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$provisioningMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$publicationMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$inventoryPermissionsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     $adoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
@@ -486,6 +653,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
         Assert-HttpResponse $client '/api/admin/stores' 401 'application/json'
         Assert-AuthenticationBoundary -Port $Port
         Assert-TenancyBoundary -Port $Port
+        Assert-InventoryHttpBoundary -Port $Port
+        Assert-InventoryScheduler
         Assert-ProvisioningWorker
     }
     finally {

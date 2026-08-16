@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 Schedule::command('catalog:prune-media')
     ->dailyAt('02:30')
     ->withoutOverlapping();
+
+Schedule::command('inventory:expire-reservations')
+    ->everyMinute()
+    ->withoutOverlapping();

@@ -13,6 +13,9 @@ export interface Product {
   imageUrls?: string[];
   // Inventory Management
   stockQuantity?: number;
+  reservedQuantity?: number;
+  availableQuantity?: number | null;
+  inventoryRevision?: number;
   manageStock?: boolean;
   sku?: string;
   lowStockThreshold?: number;

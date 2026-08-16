@@ -23,10 +23,18 @@ class StoreWorkspaceService
     /** @return array{tenantId: string, revision: int, catalogRevision: int, config: array<string, mixed>, updatedAt: ?string} */
     public function read(Tenant $tenant, User $actor): array
     {
-        return $this->withLockedMembership($tenant, $actor, false, function (Tenant $lockedTenant): array {
+        return $this->withLockedMembership($tenant, $actor, false, function (Tenant $lockedTenant) use ($actor): array {
             $this->assertReady($lockedTenant);
 
-            return $lockedTenant->run(fn (): array => $this->composeSnapshot($lockedTenant, false));
+            $workspace = $lockedTenant->run(fn (): array => $this->composeSnapshot($lockedTenant, false));
+            $workspace['config']['products'] = $this->catalogs->projectProductsForActor(
+                $workspace['config']['products'],
+                $lockedTenant,
+                $actor,
+            );
+            $workspace['capabilities'] = $this->inventoryCapabilities($lockedTenant, $actor);
+
+            return $workspace;
         });
     }
 
@@ -54,7 +62,7 @@ class StoreWorkspaceService
      */
     public function update(Tenant $tenant, User $actor, array $payload): array
     {
-        return $this->withLockedMembership($tenant, $actor, true, function (Tenant $lockedTenant) use ($payload): array {
+        return $this->withLockedMembership($tenant, $actor, true, function (Tenant $lockedTenant) use ($actor, $payload): array {
             $this->assertReady($lockedTenant);
             $limit = $this->lockedProductLimit($lockedTenant);
             $products = $payload['config']['products'];
@@ -68,7 +76,7 @@ class StoreWorkspaceService
                 );
             }
 
-            return $lockedTenant->run(function () use ($lockedTenant, $payload, $products, $limit): array {
+            $workspace = $lockedTenant->run(function () use ($lockedTenant, $payload, $products, $limit): array {
                 return DB::transaction(function () use ($lockedTenant, $payload, $products, $limit): array {
                     $record = $this->currentConfig(true);
 
@@ -101,6 +109,14 @@ class StoreWorkspaceService
                     return $this->compose($lockedTenant, $catalog);
                 });
             });
+            $workspace['config']['products'] = $this->catalogs->projectProductsForActor(
+                $workspace['config']['products'],
+                $lockedTenant,
+                $actor,
+            );
+            $workspace['capabilities'] = $this->inventoryCapabilities($lockedTenant, $actor);
+
+            return $workspace;
         });
     }
 
@@ -260,5 +276,14 @@ class StoreWorkspaceService
         }
 
         return $record;
+    }
+
+    /** @return array{inventoryView: bool, inventoryManage: bool} */
+    private function inventoryCapabilities(Tenant $tenant, User $actor): array
+    {
+        return [
+            'inventoryView' => $actor->hasTenantPermission($tenant, PermissionKey::TenantInventoryView),
+            'inventoryManage' => $actor->hasTenantPermission($tenant, PermissionKey::TenantInventoryManage),
+        ];
     }
 }

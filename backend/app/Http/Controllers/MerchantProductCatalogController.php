@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InventoryConflict;
 use App\Exceptions\ProductCatalogConflict;
 use App\Http\Requests\UpdateProductCatalogRequest;
 use App\Models\Tenant;
@@ -36,7 +37,7 @@ class MerchantProductCatalogController extends Controller
     {
         try {
             return response()->json(['data' => $operation()]);
-        } catch (ProductCatalogConflict $exception) {
+        } catch (ProductCatalogConflict|InventoryConflict $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
                 'code' => $exception->errorCode,
