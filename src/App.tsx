@@ -12,18 +12,20 @@ import { Product, StoreConfig, ELEGANT_PRESET, TECH_PRESET } from "./types";
 import StorePreview from "./components/StorePreview";
 import ControlPanel from "./components/ControlPanel";
 import RegistrationGateway from "./components/RegistrationGateway";
-import AuthGateway, { UserProfile } from "./components/AuthGateway";
+import AuthGateway from "./components/AuthGateway";
 import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
 import DomainSetupModal from "./components/DomainSetupModal";
 import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
 import ResetPasswordGateway from "./components/ResetPasswordGateway";
-import { authApi, toUserProfile } from "./services/authApi";
-import { ApiError } from "./services/apiClient";
-import { adminApi } from "./services/adminApi";
-import { assistantApi } from "./services/assistantApi";
-import { provisioningApi, type StoreSubmission } from "./services/provisioningApi";
-import { workspaceApi, type StoreWorkspace } from "./services/workspaceApi";
+import { useUiAdapters } from "./adapters/UiAdaptersContext";
+import {
+  isUiError,
+  uiErrorMessage,
+  type StoreSubmission,
+  type StoreWorkspace,
+  type UserProfile,
+} from "./adapters/uiAdapters";
 import {
   LatestWorkspaceLoad,
   classifyMerchantRestore,
@@ -40,9 +42,16 @@ import {
   type MerchantRestoreResult,
   type WorkspaceConflictReviewState,
   type WorkspaceConflictState,
-} from "./services/merchantWorkspaceState";
+} from "./workflows/merchantWorkspaceState";
 
 export default function App() {
+  const {
+    auth,
+    administration,
+    assistant,
+    provisioning,
+    workspace: workspaceActions,
+  } = useUiAdapters();
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
   const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard">("landing");
   
@@ -214,9 +223,8 @@ export default function App() {
     }
 
     localStorage.removeItem("mobtaker_user_registration");
-    authApi.session()
-      .then((user) => {
-        const profile = user ? toUserProfile(user) : null;
+    auth.session()
+      .then((profile) => {
         setAuthUser(profile);
         if (profile) void restoreMerchantState(profile);
       })
@@ -274,7 +282,7 @@ export default function App() {
     setWorkspaceLoading(true);
 
     try {
-      const workspace = await workspaceApi.load(store.id, request.signal);
+      const workspace = await workspaceActions.load(store.id, request.signal);
       if (!shouldApplyWorkspaceResponse(
         startingEditGeneration,
         workspaceEditGeneration.current,
@@ -307,7 +315,7 @@ export default function App() {
   const restoreMerchantState = async (user: UserProfile): Promise<MerchantRestoreResult> => {
     const restoreSequence = ++merchantRestoreSequence.current;
     try {
-      const stores = await provisioningApi.listStores();
+      const stores = await provisioning.listStores();
       if (restoreSequence !== merchantRestoreSequence.current) return "error";
       setMerchantStores(stores);
       if (stores.length === 0) return classifyMerchantRestore(0);
@@ -325,11 +333,11 @@ export default function App() {
       return classifyMerchantRestore(stores.length);
     } catch (requestError) {
       if (restoreSequence !== merchantRestoreSequence.current) return "error";
-      if (requestError instanceof ApiError && requestError.category === "unauthenticated") {
+      if (isUiError(requestError, "unauthenticated")) {
         setAuthUser(null);
         resetTenantOwnedState();
       }
-      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر استعادة متاجر الحساب من الخادم.", "error");
+      triggerToast(uiErrorMessage(requestError, "تعذر استعادة متاجر الحساب من الخادم."), "error");
       return classifyMerchantRestore(0, true);
     }
   };
@@ -344,8 +352,8 @@ export default function App() {
       const loaded = await loadMerchantWorkspace(store, authUser);
       if (loaded) triggerToast(`تم تحميل بيانات ${store.storeName} من الخادم.`, "info");
     } catch (requestError) {
-      if (requestError instanceof ApiError && requestError.category === "aborted") return;
-      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر تحميل مساحة عمل المتجر.", "error");
+      if (isUiError(requestError, "aborted")) return;
+      triggerToast(uiErrorMessage(requestError, "تعذر تحميل مساحة عمل المتجر."), "error");
     }
   };
 
@@ -366,8 +374,8 @@ export default function App() {
       }
       triggerToast("تم تحميل أحدث نسخة من الخادم.", "info");
     } catch (requestError) {
-      if (requestError instanceof ApiError && requestError.category === "aborted") return;
-      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر تحميل أحدث نسخة من الخادم.", "error");
+      if (isUiError(requestError, "aborted")) return;
+      triggerToast(uiErrorMessage(requestError, "تعذر تحميل أحدث نسخة من الخادم."), "error");
     }
   };
 
@@ -417,7 +425,7 @@ export default function App() {
     const operation = ++workspaceOperationSequence.current;
     setWorkspaceSaving(true);
     try {
-      const saved = await workspaceApi.save(workspace.tenantId, workspace.revision, configToSave);
+      const saved = await workspaceActions.save(workspace.tenantId, workspace.revision, configToSave);
       if (operation !== workspaceOperationSequence.current) return false;
       setActiveWorkspace(saved);
       setConfig(saved.config);
@@ -434,11 +442,11 @@ export default function App() {
       if (isRevisionConflict(requestError)) {
         setWorkspaceConflict(openWorkspaceConflict(workspace.tenantId, workspace.config, configToSave));
       }
-      if (requestError instanceof ApiError && requestError.category === "unauthenticated") {
+      if (isUiError(requestError, "unauthenticated")) {
         setAuthUser(null);
         resetTenantOwnedState();
       }
-      triggerToast(requestError instanceof ApiError ? requestError.message : "تعذر حفظ مساحة عمل المتجر في الخادم.", "error");
+      triggerToast(uiErrorMessage(requestError, "تعذر حفظ مساحة عمل المتجر في الخادم."), "error");
       return false;
     } finally {
       if (operation === workspaceOperationSequence.current) setWorkspaceSaving(false);
@@ -449,11 +457,9 @@ export default function App() {
     setPlatformStoresLoading(true);
     setPlatformStoresError(null);
     try {
-      setPlatformStores(await adminApi.listStores());
+      setPlatformStores(await administration.listStores());
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof ApiError
-        ? requestError.message
-        : "تعذر تحميل متاجر المنصة من الخادم.");
+      setPlatformStoresError(uiErrorMessage(requestError, "تعذر تحميل متاجر المنصة من الخادم."));
     } finally {
       setPlatformStoresLoading(false);
     }
@@ -466,15 +472,13 @@ export default function App() {
   ) => {
     setPlatformStoresError(null);
     try {
-      const updatedStore = await adminApi.updateStoreStatus(storeId, status, reason);
+      const updatedStore = await administration.updateStoreStatus(storeId, status, reason);
       setPlatformStores((current) => current.map((storeRecord) => (
         storeRecord.id === updatedStore.id ? updatedStore : storeRecord
       )));
       triggerToast("تم تحديث حالة المتجر وتسجيل العملية في سجل التدقيق.", "success");
     } catch (requestError) {
-      const message = requestError instanceof ApiError
-        ? requestError.message
-        : "تعذر تحديث حالة المتجر.";
+      const message = uiErrorMessage(requestError, "تعذر تحديث حالة المتجر.");
       setPlatformStoresError(message);
       throw requestError;
     }
@@ -483,15 +487,13 @@ export default function App() {
   const handleAdminRetryProvisioning = async (storeId: string) => {
     setPlatformStoresError(null);
     try {
-      const updatedStore = await adminApi.retryProvisioning(storeId);
+      const updatedStore = await administration.retryProvisioning(storeId);
       setPlatformStores((current) => current.map((storeRecord) => (
         storeRecord.id === updatedStore.id ? updatedStore : storeRecord
       )));
       triggerToast("تمت جدولة إعادة محاولة تجهيز المتجر بأمان.", "success");
     } catch (requestError) {
-      const message = requestError instanceof ApiError
-        ? requestError.message
-        : "تعذر جدولة إعادة محاولة تجهيز المتجر.";
+      const message = uiErrorMessage(requestError, "تعذر جدولة إعادة محاولة تجهيز المتجر.");
       setPlatformStoresError(message);
       throw requestError;
     }
@@ -506,10 +508,10 @@ export default function App() {
   const handleAdminActivateSubscription = async (storeId: string, endsAt: string) => {
     setPlatformStoresError(null);
     try {
-      replacePlatformStore(await adminApi.activateSubscription(storeId, endsAt));
+      replacePlatformStore(await administration.activateSubscription(storeId, endsAt));
       triggerToast("تم تفعيل استحقاق الباقة وتسجيل العملية في سجل التدقيق.", "success");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر تفعيل الاشتراك.");
+      setPlatformStoresError(uiErrorMessage(requestError, "تعذر تفعيل الاشتراك."));
       throw requestError;
     }
   };
@@ -517,10 +519,10 @@ export default function App() {
   const handleAdminPublish = async (storeId: string) => {
     setPlatformStoresError(null);
     try {
-      replacePlatformStore(await adminApi.publish(storeId));
+      replacePlatformStore(await administration.publish(storeId));
       triggerToast("تم نشر المتجر على النطاق المحجوز بعد اجتياز جميع الشروط.", "success");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر نشر المتجر.");
+      setPlatformStoresError(uiErrorMessage(requestError, "تعذر نشر المتجر."));
       throw requestError;
     }
   };
@@ -528,10 +530,10 @@ export default function App() {
   const handleAdminUnpublish = async (storeId: string) => {
     setPlatformStoresError(null);
     try {
-      replacePlatformStore(await adminApi.unpublish(storeId));
+      replacePlatformStore(await administration.unpublish(storeId));
       triggerToast("تم إيقاف نشر المتجر مع الاحتفاظ ببياناته ونطاقه.", "info");
     } catch (requestError) {
-      setPlatformStoresError(requestError instanceof ApiError ? requestError.message : "تعذر إيقاف نشر المتجر.");
+      setPlatformStoresError(uiErrorMessage(requestError, "تعذر إيقاف نشر المتجر."));
       throw requestError;
     }
   };
@@ -645,7 +647,7 @@ export default function App() {
     if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
     workspaceOperationSequence.current += 1;
     try {
-      await authApi.logout();
+      await auth.logout();
     } catch {
       triggerToast("تعذر إنهاء الجلسة على الخادم. تحقق من الاتصال ثم حاول مجددًا.", "error");
       return;
@@ -670,7 +672,7 @@ export default function App() {
     triggerToast("جاري صياغة الفكرة وتصميم الهوية بالذكاء الاصطناعي... 🧠⚡", "info");
 
     try {
-      const generatedData = await assistantApi.generateStoreIdeas(promptText);
+      const generatedData = await assistant.generateStoreIdeas(promptText);
       if (!isAsyncWorkspaceResultCurrent(
         startingOperation,
         workspaceOperationSequence.current,
@@ -2162,7 +2164,7 @@ export default function App() {
           const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
           if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
           workspaceOperationSequence.current += 1;
-          await authApi.logout();
+          await auth.logout();
           setAuthUser(null);
           resetTenantOwnedState();
           setView("landing");

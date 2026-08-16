@@ -53,15 +53,16 @@ interface DomainAvailabilityResponse {
 }
 
 export const plansApi = {
-  async list(): Promise<StorePlan[]> {
-    const payload = await apiClient.request<PlanCollectionResponse>("/api/plans");
+  async list(signal?: AbortSignal): Promise<StorePlan[]> {
+    const payload = await apiClient.request<PlanCollectionResponse>("/api/plans", { signal });
 
     return arrayField(record(payload, "قائمة الباقات"), "data", "قائمة الباقات").map(mapPlan);
   },
 
-  async domainAvailability(handle: string): Promise<DomainAvailabilityResponse["data"]> {
+  async domainAvailability(handle: string, signal?: AbortSignal): Promise<DomainAvailabilityResponse["data"]> {
     const payload = await apiClient.request<DomainAvailabilityResponse>(
       `/api/domains/availability?handle=${encodeURIComponent(handle)}`,
+      { signal },
     );
 
     const dto = record(record(payload, "توفر النطاق").data, "توفر النطاق");

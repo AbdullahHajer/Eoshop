@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StoreConfig } from "../types";
 import { ELEGANT_PRESET } from "../types";
-import { ApiError } from "./apiClient";
+import { UiAdapterError } from "../contracts/uiError";
 import {
   LatestWorkspaceLoad,
   classifyMerchantRestore,
@@ -16,7 +16,7 @@ import {
   shouldApplyWorkspaceResponse,
   shouldClaimAiSave,
   tenantSafeConfig,
-} from "./merchantWorkspaceState";
+} from "../workflows/merchantWorkspaceState";
 
 describe("merchant workspace account and request isolation", () => {
   it("aborts an older store load and accepts only the latest response", () => {
@@ -57,12 +57,8 @@ describe("merchant workspace account and request isolation", () => {
   });
 
   it("opens conflict recovery only for the revision machine code", () => {
-    const revision = new ApiError("stale", "conflict", 409, {}, null, null, false, {
-      code: "workspace_revision_conflict",
-    });
-    const quota = new ApiError("quota", "conflict", 409, {}, null, null, false, {
-      code: "workspace_quota_exceeded",
-    });
+    const revision = new UiAdapterError("stale", "conflict", "workspace_revision_conflict");
+    const quota = new UiAdapterError("quota", "conflict", "workspace_quota_exceeded");
 
     expect(isRevisionConflict(revision)).toBe(true);
     expect(isRevisionConflict(quota)).toBe(false);

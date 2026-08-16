@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Globe, RefreshCw, ShieldCheck, X, XCircle } from "lucide-react";
-import { ApiError } from "../services/apiClient";
-import { plansApi, type StorePlan } from "../services/plansApi";
-import { provisioningApi, type StoreSubmission } from "../services/provisioningApi";
+import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import { isUiError, uiErrorMessage, type StorePlan, type StoreSubmission } from "../adapters/uiAdapters";
 
 interface DomainSetupModalProps {
   isOpen: boolean;
@@ -38,6 +37,7 @@ export default function DomainSetupModal({
   config,
   onSubmitted,
 }: DomainSetupModalProps) {
+  const { plans: planActions, provisioning } = useUiAdapters();
   const [plans, setPlans] = useState<StorePlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState("starter");
   const [handle, setHandle] = useState("");
@@ -46,24 +46,42 @@ export default function DomainSetupModal({
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const plansRequest = useRef(0);
+  const availabilityRequest = useRef(0);
 
   useEffect(() => {
     if (!isOpen) return;
+    const request = ++plansRequest.current;
+    const controller = new AbortController();
     setError("");
     setLoadingPlans(true);
-    plansApi.list()
+    planActions.list(controller.signal)
       .then((items) => {
+        if (request !== plansRequest.current) return;
         setPlans(items);
         if (!items.some((plan) => plan.key === selectedPlan)) {
           setSelectedPlan(items[0]?.key ?? "");
         }
       })
-      .catch((caught) => setError(caught instanceof ApiError ? caught.message : "تعذر تحميل الباقات من الخادم."))
-      .finally(() => setLoadingPlans(false));
-  }, [isOpen]);
+      .catch((caught) => {
+        if (request === plansRequest.current && !isUiError(caught, "aborted")) {
+          setError(uiErrorMessage(caught, "تعذر تحميل الباقات من الخادم."));
+        }
+      })
+      .finally(() => {
+        if (request === plansRequest.current) setLoadingPlans(false);
+      });
+
+    return () => {
+      controller.abort();
+      if (request === plansRequest.current) plansRequest.current += 1;
+    };
+  }, [isOpen, planActions]);
 
   useEffect(() => {
     if (!isOpen) return;
+    const request = ++availabilityRequest.current;
+    const controller = new AbortController();
     const normalized = handle.trim().toLowerCase();
     setAvailability(null);
     if (normalized.length < 3) {
@@ -73,14 +91,26 @@ export default function DomainSetupModal({
 
     setCheckingHandle(true);
     const timer = window.setTimeout(() => {
-      plansApi.domainAvailability(normalized)
-        .then((result) => setAvailability({ domain: result.domain, available: result.available }))
-        .catch(() => setAvailability(null))
-        .finally(() => setCheckingHandle(false));
+      planActions.domainAvailability(normalized, controller.signal)
+        .then((result) => {
+          if (request === availabilityRequest.current) {
+            setAvailability({ domain: result.domain, available: result.available });
+          }
+        })
+        .catch(() => {
+          if (request === availabilityRequest.current) setAvailability(null);
+        })
+        .finally(() => {
+          if (request === availabilityRequest.current) setCheckingHandle(false);
+        });
     }, 450);
 
-    return () => window.clearTimeout(timer);
-  }, [handle, isOpen]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      if (request === availabilityRequest.current) availabilityRequest.current += 1;
+    };
+  }, [handle, isOpen, planActions]);
 
   const plan = useMemo(() => plans.find((item) => item.key === selectedPlan) ?? null, [plans, selectedPlan]);
 
@@ -96,7 +126,7 @@ export default function DomainSetupModal({
     setError("");
     setSubmitting(true);
     try {
-      const response = await provisioningApi.submit({
+      const response = await provisioning.submit({
         storeName,
         businessType,
         themeStyle,
@@ -107,8 +137,8 @@ export default function DomainSetupModal({
       onSubmitted?.(response.data);
       onClose();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "تعذر إرسال طلب المتجر. حاول مرة أخرى.");
-      if (caught instanceof ApiError && caught.category === "conflict") setAvailability(null);
+      setError(uiErrorMessage(caught, "تعذر إرسال طلب المتجر. حاول مرة أخرى."));
+      if (isUiError(caught, "conflict")) setAvailability(null);
     } finally {
       setSubmitting(false);
     }

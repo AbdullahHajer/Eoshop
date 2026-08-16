@@ -13,9 +13,9 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import type { PlatformStore, ProvisioningStatus, VerificationStatus } from "../services/adminApi";
+import type { PlatformStore, ProvisioningStatus, VerificationStatus } from "../adapters/uiAdapters";
 
-export type { PlatformStore } from "../services/adminApi";
+export type { PlatformStore } from "../adapters/uiAdapters";
 
 interface AdminDashboardProps {
   stores: PlatformStore[];

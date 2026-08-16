@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
-import { authApi } from "../services/authApi";
-import { ApiError } from "../services/apiClient";
+import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import { uiErrorMessage } from "../adapters/uiAdapters";
 
 export default function ResetPasswordGateway() {
+  const { auth } = useUiAdapters();
   const parameters = useMemo(() => new URLSearchParams(window.location.search), []);
   const token = parameters.get("token") ?? "";
   const email = parameters.get("email") ?? "";
@@ -28,7 +29,7 @@ export default function ResetPasswordGateway() {
     setLoading(true);
 
     try {
-      setMessage(await authApi.resetPassword({
+      setMessage(await auth.resetPassword({
         token,
         email,
         password,
@@ -36,7 +37,7 @@ export default function ResetPasswordGateway() {
       }));
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "تعذر تحديث كلمة المرور.");
+      setError(uiErrorMessage(requestError, "تعذر تحديث كلمة المرور."));
     } finally {
       setLoading(false);
     }
