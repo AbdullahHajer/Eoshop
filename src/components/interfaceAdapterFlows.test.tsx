@@ -49,6 +49,7 @@ const workspace: StoreWorkspace = {
   tenantId: submission.id,
   revision: 7,
   catalogRevision: 3,
+  capabilities: { inventoryView: true, inventoryManage: true },
   config: { ...ELEGANT_PRESET, storeName: "متجر الخادم" },
   updatedAt: null,
 };
@@ -349,6 +350,131 @@ describe("adapter-backed interface flows", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const savedConfig = save.mock.calls[0][3];
     expect(savedConfig.products[0]).toMatchObject({ basePrice: 200, salePrice: 150, price: 150 });
+  });
+
+  it("keeps an inventory mutation bound to its tenant and updates the saved baseline", async () => {
+    const product = workspace.config.products[0];
+    const inventoryWorkspace: StoreWorkspace = {
+      ...workspace,
+      config: {
+        ...workspace.config,
+        products: [{
+          ...product,
+          stockQuantity: 10,
+          reservedQuantity: 0,
+          availableQuantity: 10,
+          inventoryRevision: 1,
+          manageStock: true,
+          lowStockThreshold: 3,
+        }, ...workspace.config.products.slice(1)],
+      },
+    };
+    let resolveAdjustment!: (result: {
+      tenantId: string;
+      operationId: string;
+      replayed: boolean;
+      items: Array<{
+        productId: string;
+        onHand: number;
+        reserved: number;
+        available: number | null;
+        manageStock: boolean;
+        lowStockThreshold: number;
+        inventoryRevision: number;
+      }>;
+    }) => void;
+    const adjust = vi.fn(() => new Promise<Parameters<typeof resolveAdjustment>[0]>((resolve) => {
+      resolveAdjustment = resolve;
+    }));
+    const adapters = appAdapters(vi.fn());
+    adapters.workspace.load = vi.fn().mockResolvedValue(inventoryWorkspace);
+    adapters.inventory.adjust = adjust;
+    vi.spyOn(window, "prompt").mockReturnValue("12");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const user = userEvent.setup();
+    await openRestoredBuilder(adapters, user);
+    await user.click(screen.getByRole("button", { name: "أحدث نسخة" }));
+    await waitFor(() => expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0));
+    await user.click(screen.getByTestId("inventory-tab"));
+    await user.click(screen.getAllByRole("button", { name: "تسجيل حركة تصحيح" })[0]);
+    await waitFor(() => expect(adjust).toHaveBeenCalledWith(
+      submission.id,
+      [{
+        productId: product.id,
+        expectedInventoryRevision: 1,
+        movementKind: "correction",
+        delta: 2,
+      }],
+      "merchant_manual_correction",
+      expect.any(String),
+    ));
+    expect((screen.getByTestId("save-workspace") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "خروج" }) as HTMLButtonElement).disabled).toBe(true);
+
+    resolveAdjustment({
+      tenantId: submission.id,
+      operationId: "00000000-0000-0000-0000-000000000099",
+      replayed: false,
+      items: [{
+        productId: product.id,
+        onHand: 12,
+        reserved: 0,
+        available: 12,
+        manageStock: true,
+        lowStockThreshold: 3,
+        inventoryRevision: 2,
+      }],
+    });
+
+    expect(await screen.findByText("الرصيد الفعلي: 12")).toBeTruthy();
+    await waitFor(() => expect((screen.getByTestId("save-workspace") as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByText("تعديلات أو تعارضات غير محفوظة")).toBeNull();
+  });
+
+  it("hides inventory for missing view permission and disables mutations for view-only access", async () => {
+    const adapters = appAdapters(vi.fn());
+    adapters.workspace.load = vi.fn().mockResolvedValue({
+      ...workspace,
+      capabilities: { inventoryView: false, inventoryManage: false },
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    await openRestoredBuilder(adapters, user);
+    await user.click(screen.getByRole("button", { name: "أحدث نسخة" }));
+    await waitFor(() => expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0));
+    expect(screen.queryByTestId("inventory-tab")).toBeNull();
+
+    const inventoryProduct = {
+      ...workspace.config.products[0],
+      stockQuantity: 10,
+      reservedQuantity: 0,
+      availableQuantity: 10,
+      inventoryRevision: 1,
+      manageStock: true,
+      lowStockThreshold: 3,
+    };
+    renderInterface(
+      <ControlPanel
+        config={{ ...workspace.config, products: [inventoryProduct] }}
+        activeTenantId={submission.id}
+        canViewInventory
+        canManageInventory={false}
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        adjustInventory={vi.fn()}
+        updateInventoryPolicy={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="inventory"
+        setActiveTab={vi.fn()}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+      />,
+      createFakeUiAdapters(),
+    );
+    expect((screen.getAllByRole("button", { name: "تحديث عدد الكمية للكل" }).at(-1) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {

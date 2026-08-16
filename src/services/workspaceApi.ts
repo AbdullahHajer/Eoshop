@@ -6,6 +6,10 @@ export interface StoreWorkspace {
   tenantId: string;
   revision: number;
   catalogRevision: number;
+  capabilities: {
+    inventoryView: boolean;
+    inventoryManage: boolean;
+  };
   config: StoreConfig;
   updatedAt: string | null;
 }
@@ -66,6 +70,9 @@ function mapProduct(value: unknown): Product {
     imageUrl: optionalString(dto, "imageUrl", "منتج مساحة العمل"),
     imageUrls,
     stockQuantity: optionalNumber(dto, "stockQuantity", "منتج مساحة العمل"),
+    reservedQuantity: optionalNumber(dto, "reservedQuantity", "منتج مساحة العمل"),
+    availableQuantity: dto.availableQuantity === null ? null : optionalNumber(dto, "availableQuantity", "منتج مساحة العمل"),
+    inventoryRevision: optionalNumber(dto, "inventoryRevision", "منتج مساحة العمل"),
     manageStock: optionalBoolean(dto, "manageStock", "منتج مساحة العمل"),
     sku: optionalString(dto, "sku", "منتج مساحة العمل"),
     lowStockThreshold: optionalNumber(dto, "lowStockThreshold", "منتج مساحة العمل"),
@@ -152,12 +159,17 @@ function mapWorkspace(value: unknown): StoreWorkspace {
   const envelope = record(value, "استجابة مساحة العمل");
   const dto = record(envelope.data, "مساحة العمل");
   const updatedAt = dto.updatedAt;
+  const capabilities = record(dto.capabilities, "صلاحيات مساحة العمل");
   if (updatedAt !== null && typeof updatedAt !== "string") return invalid("مساحة العمل");
 
   return {
     tenantId: stringField(dto, "tenantId", "مساحة العمل"),
     revision: numberField(dto, "revision", "مساحة العمل"),
     catalogRevision: numberField(dto, "catalogRevision", "مساحة العمل"),
+    capabilities: {
+      inventoryView: optionalBoolean(capabilities, "inventoryView", "صلاحيات مساحة العمل") ?? false,
+      inventoryManage: optionalBoolean(capabilities, "inventoryManage", "صلاحيات مساحة العمل") ?? false,
+    },
     config: mapStoreConfig(dto.config),
     updatedAt: updatedAt as string | null,
   };

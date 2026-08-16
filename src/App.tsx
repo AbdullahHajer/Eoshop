@@ -51,6 +51,7 @@ export default function App() {
     assistant,
     provisioning,
     workspace: workspaceActions,
+    inventory: inventoryActions,
   } = useUiAdapters();
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
   const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard">("landing");
@@ -153,11 +154,13 @@ export default function App() {
   const [localDraft, setLocalDraft] = useState<StoreConfig | null>(null);
   const [workspaceSaving, setWorkspaceSaving] = useState(false);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [inventoryPending, setInventoryPending] = useState(false);
   const [workspaceConflict, setWorkspaceConflict] = useState<WorkspaceConflictState | null>(null);
   const [workspaceConflictReview, setWorkspaceConflictReview] = useState<WorkspaceConflictReviewState | null>(null);
   const [pendingArchivedProductIds, setPendingArchivedProductIds] = useState<string[]>([]);
   const workspaceEditGeneration = useRef(0);
   const workspaceOperationSequence = useRef(0);
+  const inventoryRequestPending = useRef(false);
   const merchantRestoreSequence = useRef(0);
   const workspaceLoads = useRef(new LatestWorkspaceLoad());
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -174,7 +177,13 @@ export default function App() {
     ),
     [activeWorkspace, config, pendingArchivedProductIds],
   );
-  const workspaceEditorLocked = workspaceLoading || workspaceSaving || workspaceConflict !== null;
+  const workspaceEditorLocked = workspaceLoading || workspaceSaving || inventoryPending || workspaceConflict !== null;
+  const canViewInventory = activeWorkspace?.capabilities.inventoryView ?? activeWorkspace === null;
+  const canManageInventory = activeWorkspace?.capabilities.inventoryManage ?? activeWorkspace === null;
+
+  useEffect(() => {
+    if (activeWorkspace && !canViewInventory && activeTab === "inventory") setActiveTab("products");
+  }, [activeWorkspace, activeTab, canViewInventory]);
   const recoverableWorkspaceChanges = hasRecoverableWorkspaceChanges(
     workspaceDirty,
     workspaceConflict !== null,
@@ -263,6 +272,8 @@ export default function App() {
     workspaceLoads.current.invalidate();
     setWorkspaceLoading(false);
     setWorkspaceSaving(false);
+    inventoryRequestPending.current = false;
+    setInventoryPending(false);
     setWorkspaceConflict(null);
     setWorkspaceConflictReview(null);
     setPendingArchivedProductIds([]);
@@ -351,7 +362,7 @@ export default function App() {
   };
 
   const selectMerchantStore = async (tenantId: string): Promise<void> => {
-    if (!authUser || workspaceLoading || workspaceSaving || activeWorkspace?.tenantId === tenantId) return;
+    if (!authUser || workspaceLoading || workspaceSaving || inventoryRequestPending.current || activeWorkspace?.tenantId === tenantId) return;
     const store = merchantStores.find((candidate) => candidate.id === tenantId);
     if (!store) return;
     const confirmed = !recoverableWorkspaceChanges || window.confirm("لديك تعديلات أو لقطة تعارض غير محفوظة. هل تريد تجاهلها والانتقال إلى متجر آخر؟");
@@ -366,7 +377,7 @@ export default function App() {
   };
 
   const reloadActiveWorkspace = async (discardConflict = false): Promise<void> => {
-    if (!authUser || !activeWorkspace || workspaceLoading || workspaceSaving) return;
+    if (!authUser || !activeWorkspace || workspaceLoading || workspaceSaving || inventoryRequestPending.current) return;
     const store = merchantStores.find((candidate) => candidate.id === activeWorkspace.tenantId);
     if (!store) return;
     if (!workspaceConflict && recoverableWorkspaceChanges
@@ -429,7 +440,7 @@ export default function App() {
       return true;
     }
 
-    if (workspaceLoading || workspaceSaving || workspaceConflict) return false;
+    if (workspaceLoading || workspaceSaving || inventoryRequestPending.current || workspaceConflict) return false;
     const workspace = activeWorkspace;
     const operation = ++workspaceOperationSequence.current;
     setWorkspaceSaving(true);
@@ -664,6 +675,10 @@ export default function App() {
   };
 
   const executeLogout = async () => {
+    if (inventoryRequestPending.current) {
+      triggerToast("انتظر اكتمال عملية المخزون قبل تسجيل الخروج.", "info");
+      return;
+    }
     const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
     if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
     workspaceOperationSequence.current += 1;
@@ -820,6 +835,124 @@ export default function App() {
       };
       return { ...prev, products: updatedProducts };
     });
+  };
+
+  type InventoryProjection = {
+    productId: string;
+    onHand: number;
+    reserved: number;
+    available: number | null;
+    manageStock: boolean;
+    lowStockThreshold: number;
+    inventoryRevision: number;
+  };
+
+  const mergeInventoryConfig = (source: StoreConfig, items: InventoryProjection[]): StoreConfig => {
+    const byId = new Map(items.map((item) => [item.productId, item]));
+    return {
+      ...source,
+      products: source.products.map((product) => {
+        const item = byId.get(product.id);
+        return item ? {
+          ...product,
+          stockQuantity: item.onHand,
+          reservedQuantity: item.reserved,
+          availableQuantity: item.available,
+          manageStock: item.manageStock,
+          lowStockThreshold: item.lowStockThreshold,
+          inventoryRevision: item.inventoryRevision,
+        } : product;
+      }),
+    };
+  };
+
+  const mergeInventoryItems = (tenantId: string, operation: number, items: InventoryProjection[]): boolean => {
+    if (operation !== workspaceOperationSequence.current) return false;
+    setConfig((previous) => mergeInventoryConfig(previous, items));
+    setActiveWorkspace((previous) => previous?.tenantId === tenantId
+      ? { ...previous, config: mergeInventoryConfig(previous.config, items) }
+      : previous);
+    return true;
+  };
+
+  const handleInventoryAdjustment = async (targets: Array<{ productId: string; targetOnHand: number }>): Promise<boolean> => {
+    if (!activeWorkspace || inventoryRequestPending.current) return false;
+    const tenantId = activeWorkspace.tenantId;
+    const lines = targets.map(({ productId, targetOnHand }) => {
+      const product = config.products.find((item) => item.id === productId);
+      if (!product?.inventoryRevision) return null;
+      const delta = targetOnHand - (product.stockQuantity ?? 0);
+      return delta === 0 ? null : {
+        productId,
+        expectedInventoryRevision: product.inventoryRevision,
+        movementKind: "correction" as const,
+        delta,
+      };
+    }).filter((line): line is NonNullable<typeof line> => line !== null);
+    if (lines.length === 0) return true;
+    const operation = ++workspaceOperationSequence.current;
+    inventoryRequestPending.current = true;
+    setInventoryPending(true);
+    try {
+      const result = await inventoryActions.adjust(
+        tenantId,
+        lines,
+        "merchant_manual_correction",
+        "Manual inventory correction from the merchant control panel",
+      );
+      if (!mergeInventoryItems(tenantId, operation, result.items)) return false;
+      triggerToast("تم تسجيل حركة المخزون وحفظ الرصيد الجديد.", "success");
+      return true;
+    } catch (error) {
+      if (operation !== workspaceOperationSequence.current) return false;
+      triggerToast(uiErrorMessage(error, "تعذر تحديث المخزون. أعد تحميل الرصيد وحاول مجددًا."), "error");
+      try {
+        mergeInventoryItems(tenantId, operation, await inventoryActions.load(tenantId));
+      } catch {
+        // Keep the visible server snapshot when refresh is unavailable; no mutation is retried automatically.
+      }
+      return false;
+    } finally {
+      if (operation === workspaceOperationSequence.current) {
+        inventoryRequestPending.current = false;
+        setInventoryPending(false);
+      }
+    }
+  };
+
+  const handleInventoryPolicyChange = async (
+    productId: string,
+    manageStock: boolean,
+    lowStockThreshold: number,
+  ): Promise<boolean> => {
+    if (!activeWorkspace || inventoryRequestPending.current) return false;
+    const tenantId = activeWorkspace.tenantId;
+    const product = config.products.find((item) => item.id === productId);
+    if (!product?.inventoryRevision) return false;
+    const operation = ++workspaceOperationSequence.current;
+    inventoryRequestPending.current = true;
+    setInventoryPending(true);
+    try {
+      const item = await inventoryActions.updatePolicy(
+        tenantId,
+        productId,
+        product.inventoryRevision,
+        manageStock,
+        lowStockThreshold,
+      );
+      if (!mergeInventoryItems(tenantId, operation, [item])) return false;
+      triggerToast("تم حفظ سياسة تتبع المخزون.", "success");
+      return true;
+    } catch (error) {
+      if (operation !== workspaceOperationSequence.current) return false;
+      triggerToast(uiErrorMessage(error, "تعذر حفظ سياسة المخزون."), "error");
+      return false;
+    } finally {
+      if (operation === workspaceOperationSequence.current) {
+        inventoryRequestPending.current = false;
+        setInventoryPending(false);
+      }
+    }
   };
 
   const addEmptyProduct = () => {
@@ -1606,7 +1739,7 @@ export default function App() {
                     <span>المتجر:</span>
                     <select
                       value={activeWorkspace.tenantId}
-                      disabled={workspaceLoading || workspaceSaving}
+                      disabled={workspaceLoading || workspaceSaving || inventoryPending}
                       onChange={(event) => void selectMerchantStore(event.target.value)}
                       className="rounded-lg border border-sky-200 bg-white px-2 py-1 disabled:opacity-50"
                     >
@@ -1618,7 +1751,7 @@ export default function App() {
                 )}
                 <button
                   type="button"
-                  disabled={workspaceLoading || workspaceSaving}
+                  disabled={workspaceLoading || workspaceSaving || inventoryPending}
                   onClick={() => void reloadActiveWorkspace(false)}
                   className="flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 py-1 disabled:opacity-50"
                 >
@@ -1638,8 +1771,9 @@ export default function App() {
                   </span>
                 </div>
                 <button 
+                  disabled={inventoryPending}
                   onClick={handleLogout}
-                  className="mr-2 bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded-lg transition text-[10px] font-bold border border-rose-200 flex items-center gap-1"
+                  className="mr-2 bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded-lg transition text-[10px] font-bold border border-rose-200 flex items-center gap-1 disabled:opacity-50"
                   title="تسجيل الخروج وإلغاء توثيق النشاط"
                 >
                   <LogOut className="w-3 h-3 text-rose-500" />
@@ -1651,7 +1785,7 @@ export default function App() {
             {/* Quick Actions (Finished Customization, Save, Reset, Export, Fullscreen) */}
             <div className="flex items-center flex-wrap gap-2">
               <button
-                disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
+                disabled={workspaceSaving || workspaceLoading || inventoryPending || workspaceConflict !== null}
                 onClick={() => void saveStore().then((saved) => {
                   if (saved) setIsDomainModalOpen(true);
                 })}
@@ -1664,7 +1798,7 @@ export default function App() {
 
               <button
                 data-testid="save-workspace"
-                disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
+                disabled={workspaceSaving || workspaceLoading || inventoryPending || workspaceConflict !== null}
                 onClick={() => void saveStore()}
                 className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
                 title={activeWorkspace ? "حفظ الإعدادات والمنتجات في الخادم" : "حفظ مسودة غير منشورة في المتصفح"}
@@ -1749,14 +1883,17 @@ export default function App() {
                   >
                     <span>المنتجات المعروضة</span>
                   </button>
-                  <button
-                    onClick={() => setActiveTab("inventory")}
-                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
-                      activeTab === "inventory" ? "border-amber-600 text-amber-900 bg-amber-50 shadow-2xs" : "border-transparent text-amber-800 hover:text-amber-950 font-black"
-                    }`}
-                  >
-                    <span>المخزون 📦</span>
-                  </button>
+                  {canViewInventory && (
+                    <button
+                      data-testid="inventory-tab"
+                      onClick={() => setActiveTab("inventory")}
+                      className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
+                        activeTab === "inventory" ? "border-amber-600 text-amber-900 bg-amber-50 shadow-2xs" : "border-transparent text-amber-800 hover:text-amber-950 font-black"
+                      }`}
+                    >
+                      <span>المخزون 📦</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveTab("checkout")}
                     className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${
@@ -1799,9 +1936,13 @@ export default function App() {
                   <ControlPanel 
                     config={config}
                     activeTenantId={activeWorkspace?.tenantId ?? null}
+                    canViewInventory={canViewInventory}
+                    canManageInventory={canManageInventory}
                     handleConfigChange={handleConfigChange}
                     handleProductChange={handleProductChange}
                     handleProductMediaChange={handleProductMediaChange}
+                    adjustInventory={handleInventoryAdjustment}
+                    updateInventoryPolicy={handleInventoryPolicyChange}
                     addEmptyProduct={addEmptyProduct}
                     deleteProduct={deleteProduct}
                     activeTab={activeTab}
@@ -2215,6 +2356,10 @@ export default function App() {
           triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
         }}
         onLogout={async () => {
+          if (inventoryRequestPending.current) {
+            triggerToast("انتظر اكتمال عملية المخزون قبل تسجيل الخروج.", "info");
+            return;
+          }
           const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
           if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
           workspaceOperationSequence.current += 1;

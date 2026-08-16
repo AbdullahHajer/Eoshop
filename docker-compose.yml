@@ -81,6 +81,32 @@ services:
     networks:
       - app
 
+  scheduler:
+    image: ${BACKEND_IMAGE:-eoshop/backend:local}
+    restart: unless-stopped
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-platform_main}
+      DB_USERNAME: ${POSTGRES_USER:-eoshop}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      SESSION_CONNECTION: pgsql
+      DB_CACHE_CONNECTION: pgsql
+      DB_CACHE_LOCK_CONNECTION: pgsql
+    command: ["php", "artisan", "schedule:work", "--no-interaction"]
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 30s
+    volumes:
+      - app_storage:/var/www/backend/storage
+    networks:
+      - app
+
   web:
     image: ${WEB_IMAGE:-eoshop/web:local}
     build:

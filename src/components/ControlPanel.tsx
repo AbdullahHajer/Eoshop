@@ -11,9 +11,13 @@ import { useUiAdapters } from "../adapters/UiAdaptersContext";
 interface ControlPanelProps {
   config: StoreConfig;
   activeTenantId: string | null;
+  canViewInventory?: boolean;
+  canManageInventory?: boolean;
   handleConfigChange: (key: keyof StoreConfig, value: any) => void;
   handleProductChange: (index: number, key: keyof Product, value: any) => void;
   handleProductMediaChange: (productId: string, urls: string[]) => void;
+  adjustInventory?: (targets: Array<{ productId: string; targetOnHand: number }>) => Promise<boolean>;
+  updateInventoryPolicy?: (productId: string, manageStock: boolean, lowStockThreshold: number) => Promise<boolean>;
   addEmptyProduct: () => void;
   deleteProduct: (id: string) => void;
   activeTab: "branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export";
@@ -27,9 +31,13 @@ interface ControlPanelProps {
 export default function ControlPanel({
   config,
   activeTenantId,
+  canViewInventory = activeTenantId === null,
+  canManageInventory = activeTenantId === null,
   handleConfigChange,
   handleProductChange,
   handleProductMediaChange,
+  adjustInventory,
+  updateInventoryPolicy,
   addEmptyProduct,
   deleteProduct,
   activeTab,
@@ -116,6 +124,33 @@ export default function ControlPanel({
       case "coffee-cup": return "☕";
       default: return "👜";
     }
+  };
+
+  const requestStockTarget = async (product: Product, originalIndex: number, suggested?: number) => {
+    const value = prompt("أدخل الرصيد الفعلي الجديد لهذا المنتج:", String(suggested ?? product.stockQuantity ?? 0));
+    if (value === null || !Number.isInteger(Number(value)) || Number(value) < 0) return;
+    const target = Number(value);
+    if (activeTenantId) {
+      if (!canManageInventory || !product.inventoryRevision || !adjustInventory) return;
+      await adjustInventory([{ productId: product.id, targetOnHand: target }]);
+      return;
+    }
+    handleProductChange(originalIndex, "stockQuantity", target);
+  };
+
+  const requestPolicyChange = async (
+    product: Product,
+    originalIndex: number,
+    manageStock: boolean,
+    lowStockThreshold: number,
+  ) => {
+    if (activeTenantId) {
+      if (!canManageInventory || !product.inventoryRevision || !updateInventoryPolicy) return;
+      await updateInventoryPolicy(product.id, manageStock, lowStockThreshold);
+      return;
+    }
+    handleProductChange(originalIndex, "manageStock", manageStock);
+    handleProductChange(originalIndex, "lowStockThreshold", lowStockThreshold);
   };
 
   const handleHeroBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1099,10 +1134,10 @@ export default function ControlPanel({
         {/* --- PRODUCTS MANAGEMENT TAB --- */}
         {activeTab === "products" && (() => {
           const totalProds = config.products.length;
-          const totalUnits = config.products.reduce((acc, p) => acc + (p.manageStock !== false ? (p.stockQuantity ?? 10) : 0), 0);
-          const outOfStockCount = config.products.filter(p => p.manageStock !== false && (p.stockQuantity ?? 10) <= 0).length;
-          const lowStockCount = config.products.filter(p => p.manageStock !== false && (p.stockQuantity ?? 10) > 0 && (p.stockQuantity ?? 10) <= (p.lowStockThreshold ?? 5)).length;
-          const inStockCount = config.products.filter(p => p.manageStock === false || (p.stockQuantity ?? 10) > (p.lowStockThreshold ?? 5)).length;
+          const totalUnits = config.products.reduce((acc, p) => acc + (p.manageStock !== false ? (p.availableQuantity ?? p.stockQuantity ?? 10) : 0), 0);
+          const outOfStockCount = config.products.filter(p => p.manageStock !== false && (p.availableQuantity ?? p.stockQuantity ?? 10) <= 0).length;
+          const lowStockCount = config.products.filter(p => p.manageStock !== false && (p.availableQuantity ?? p.stockQuantity ?? 10) > 0 && (p.availableQuantity ?? p.stockQuantity ?? 10) <= (p.lowStockThreshold ?? 5)).length;
+          const inStockCount = config.products.filter(p => p.manageStock === false || (p.availableQuantity ?? p.stockQuantity ?? 10) > (p.lowStockThreshold ?? 5)).length;
 
           const filteredProducts = config.products
             .map((product, originalIndex) => ({ product, originalIndex }))
@@ -1120,7 +1155,7 @@ export default function ControlPanel({
               }
 
               // Stock Status Filter
-              const qty = product.stockQuantity ?? 10;
+              const qty = product.availableQuantity ?? product.stockQuantity ?? 10;
               const isManaged = product.manageStock !== false;
               if (stockFilter === "inStock") return !isManaged || qty > (product.lowStockThreshold ?? 5);
               if (stockFilter === "lowStock") return isManaged && qty > 0 && qty <= (product.lowStockThreshold ?? 5);
@@ -1500,7 +1535,12 @@ export default function ControlPanel({
                                 <input
                                   type="checkbox"
                                   checked={product.manageStock !== false}
-                                  onChange={(e) => handleProductChange(originalIndex, "manageStock", e.target.checked)}
+                                  onChange={(e) => void requestPolicyChange(
+                                    product,
+                                    originalIndex,
+                                    e.target.checked,
+                                    product.lowStockThreshold ?? 5,
+                                  )}
                                   className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
                                 />
                               </label>
@@ -1514,7 +1554,15 @@ export default function ControlPanel({
                                     type="number"
                                     min={0}
                                     value={product.stockQuantity ?? 10}
-                                    onChange={(e) => handleProductChange(originalIndex, "stockQuantity", Math.max(0, Number(e.target.value)))}
+                                    readOnly={Boolean(activeTenantId && product.inventoryRevision)}
+                                    onChange={(e) => {
+                                      if (!activeTenantId || !product.inventoryRevision) {
+                                        handleProductChange(originalIndex, "stockQuantity", Math.max(0, Number(e.target.value)));
+                                      }
+                                    }}
+                                    onClick={() => {
+                                      if (activeTenantId && product.inventoryRevision) void requestStockTarget(product, originalIndex);
+                                    }}
                                     className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-amber-500/20 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-mono font-bold"
                                   />
                                 </div>
@@ -1534,7 +1582,19 @@ export default function ControlPanel({
                                     type="number"
                                     min={1}
                                     value={product.lowStockThreshold ?? 5}
-                                    onChange={(e) => handleProductChange(originalIndex, "lowStockThreshold", Number(e.target.value))}
+                                    readOnly={Boolean(activeTenantId && product.inventoryRevision)}
+                                    onChange={(e) => {
+                                      if (!activeTenantId || !product.inventoryRevision) {
+                                        handleProductChange(originalIndex, "lowStockThreshold", Number(e.target.value));
+                                      }
+                                    }}
+                                    onClick={() => {
+                                      if (!activeTenantId || !product.inventoryRevision) return;
+                                      const value = prompt("أدخل حد التنبيه الجديد:", String(product.lowStockThreshold ?? 5));
+                                      if (value !== null && Number.isInteger(Number(value)) && Number(value) >= 0) {
+                                        void requestPolicyChange(product, originalIndex, product.manageStock !== false, Number(value));
+                                      }
+                                    }}
                                     className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-amber-500/20 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-mono"
                                   />
                                 </div>
@@ -1945,14 +2005,21 @@ export default function ControlPanel({
 
         {/* --- INVENTORY MANAGEMENT TAB (إدارة المخزون والمستودع) --- */}
         {activeTab === "inventory" && (() => {
+          if (!canViewInventory) {
+            return (
+              <div data-testid="inventory-access-denied" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm font-bold text-amber-950">
+                لا تملك صلاحية عرض المخزون لهذا المتجر.
+              </div>
+            );
+          }
           const products = config.products || [];
           const defaultThreshold = config.lowStockWarningThreshold ?? 5;
 
           const totalProducts = products.length;
-          const totalUnitsInWarehouse = products.reduce((acc, p) => acc + (p.manageStock !== false ? (p.stockQuantity ?? 10) : 0), 0);
-          const outOfStockCount = products.filter(p => p.manageStock !== false && (p.stockQuantity ?? 10) <= 0).length;
-          const lowStockCount = products.filter(p => p.manageStock !== false && (p.stockQuantity ?? 10) > 0 && (p.stockQuantity ?? 10) <= (p.lowStockThreshold ?? defaultThreshold)).length;
-          const inStockCount = products.filter(p => p.manageStock !== false && (p.stockQuantity ?? 10) > (p.lowStockThreshold ?? defaultThreshold)).length;
+          const totalUnitsInWarehouse = products.reduce((acc, p) => acc + (p.manageStock !== false ? (p.availableQuantity ?? p.stockQuantity ?? 10) : 0), 0);
+          const outOfStockCount = products.filter(p => p.manageStock !== false && (p.availableQuantity ?? p.stockQuantity ?? 10) <= 0).length;
+          const lowStockCount = products.filter(p => p.manageStock !== false && (p.availableQuantity ?? p.stockQuantity ?? 10) > 0 && (p.availableQuantity ?? p.stockQuantity ?? 10) <= (p.lowStockThreshold ?? defaultThreshold)).length;
+          const inStockCount = products.filter(p => p.manageStock !== false && (p.availableQuantity ?? p.stockQuantity ?? 10) > (p.lowStockThreshold ?? defaultThreshold)).length;
           const unlimitedCount = products.filter(p => p.manageStock === false).length;
 
           // Search and filter products for inventory view
@@ -1971,7 +2038,7 @@ export default function ControlPanel({
               }
 
               // Filter
-              const qty = product.stockQuantity ?? 10;
+              const qty = product.availableQuantity ?? product.stockQuantity ?? 10;
               const isManaged = product.manageStock !== false;
               if (inventoryFilter === "inStock") return isManaged && qty > (product.lowStockThreshold ?? defaultThreshold);
               if (inventoryFilter === "lowStock") return isManaged && qty > 0 && qty <= (product.lowStockThreshold ?? defaultThreshold);
@@ -2024,18 +2091,21 @@ export default function ControlPanel({
 
                     <button
                       type="button"
+                      disabled={Boolean(activeTenantId && !canManageInventory)}
                       onClick={() => {
-                        const val = prompt("أدخل عدد القطع الموحد المراد تعيينه لجميع المنتجات في المستودع:", "50");
+                        const val = prompt("أدخل الرصيد الفعلي الموحد المطلوب لجميع المنتجات المتتبعة:", "50");
                         if (val !== null && !isNaN(Number(val))) {
                           const num = Math.max(0, Number(val));
-                          products.forEach((_, idx) => {
-                            handleProductChange(idx, "stockQuantity", num);
-                            handleProductChange(idx, "manageStock", true);
-                          });
-                          alert(`تم تعيين الكمية المتاحة لجميع المنتجات إلى ${num} قطعة بنجاح! 📦🎉`);
+                          if (activeTenantId && canManageInventory && adjustInventory) {
+                            void adjustInventory(products
+                              .filter((product) => product.inventoryRevision && product.manageStock !== false)
+                              .map((product) => ({ productId: product.id, targetOnHand: num })));
+                          } else if (!activeTenantId) {
+                            products.forEach((_, idx) => handleProductChange(idx, "stockQuantity", num));
+                          }
                         }
                       }}
-                      className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[40px]"
+                      className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[40px]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>تحديث عدد الكمية للكل</span>
@@ -2114,7 +2184,7 @@ export default function ControlPanel({
                   <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
                     <div>
                       <span className="font-bold text-slate-800 block">تفعيل نظام المخزون التلقائي</span>
-                      <span className="text-[10px] text-slate-500">خصم القطع تلقائياً عند إتمام الطلبات</span>
+                      <span className="text-[10px] text-slate-500">سجل المخزون فعّال؛ ربط الخصم بدورة الطلب سيُنجز في WP 4.3</span>
                     </div>
                     <input
                       type="checkbox"
@@ -2128,7 +2198,7 @@ export default function ControlPanel({
                   <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
                     <div>
                       <span className="font-bold text-slate-800 block">السماح بالطلب عند نفاد المخزون</span>
-                      <span className="text-[10px] text-slate-500">تمكين الشراء المسبق حتى لو كانت الكمية 0</span>
+                      <span className="text-[10px] text-slate-500">إعداد عرض فقط حاليًا؛ سياسة الطلب عند النفاد مؤجلة إلى WP 4.3</span>
                     </div>
                     <input
                       type="checkbox"
@@ -2215,7 +2285,7 @@ export default function ControlPanel({
                     </div>
                   ) : (
                     filteredInventory.map(({ product, originalIndex }) => {
-                      const qty = product.stockQuantity ?? 10;
+                      const qty = product.availableQuantity ?? product.stockQuantity ?? 10;
                       const isManaged = product.manageStock !== false;
                       const threshold = product.lowStockThreshold ?? defaultThreshold;
                       const isOut = isManaged && qty <= 0;
@@ -2280,6 +2350,23 @@ export default function ControlPanel({
                             </div>
                           </div>
 
+                          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                            <div className="text-[11px] text-slate-600">
+                              <span className="font-black text-slate-900">الرصيد الفعلي: {product.stockQuantity ?? 0}</span>
+                              <span className="mx-2">•</span>
+                              <span>محجوز: {product.reservedQuantity ?? 0}</span>
+                              <span className="mx-2">•</span>
+                              <span>متاح: {product.availableQuantity ?? (product.stockQuantity ?? 0)}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void requestStockTarget(product, originalIndex)}
+                              className="rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-black text-white transition hover:bg-slate-800"
+                            >
+                              تسجيل حركة تصحيح
+                            </button>
+                          </div>
+
                           {/* Row Bottom: Manual Control Inputs Grid (Manual SKU + Mode + Threshold) */}
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200/80">
                             {/* 1. MANUAL SKU Symbol / Code Input */}
@@ -2303,8 +2390,14 @@ export default function ControlPanel({
                                 طبيعة تتبع المخزون:
                               </label>
                               <select
+                                disabled={Boolean(activeTenantId && !canManageInventory)}
                                 value={isManaged ? "managed" : "unlimited"}
-                                onChange={(e) => handleProductChange(originalIndex, "manageStock", e.target.value === "managed")}
+                                onChange={(e) => void requestPolicyChange(
+                                  product,
+                                  originalIndex,
+                                  e.target.value === "managed",
+                                  product.lowStockThreshold ?? defaultThreshold,
+                                )}
                                 className="w-full min-h-[44px] bg-white border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-slate-800 focus:outline-none transition cursor-pointer touch-manipulation shadow-2xs"
                               >
                                 <option value="managed">📦 محدودة بعدد قطع محدد</option>
@@ -2320,9 +2413,21 @@ export default function ControlPanel({
                               <input
                                 type="number"
                                 min={1}
-                                disabled={!isManaged}
+                                disabled={!isManaged || Boolean(activeTenantId && !canManageInventory)}
                                 value={product.lowStockThreshold ?? defaultThreshold}
-                                onChange={(e) => handleProductChange(originalIndex, "lowStockThreshold", Math.max(1, Number(e.target.value)))}
+                                readOnly={Boolean(activeTenantId && product.inventoryRevision)}
+                                onChange={(e) => {
+                                  if (!activeTenantId || !product.inventoryRevision) {
+                                    handleProductChange(originalIndex, "lowStockThreshold", Math.max(1, Number(e.target.value)));
+                                  }
+                                }}
+                                onClick={() => {
+                                  if (!activeTenantId || !product.inventoryRevision) return;
+                                  const value = prompt("أدخل حد التنبيه الجديد:", String(product.lowStockThreshold ?? defaultThreshold));
+                                  if (value !== null && Number.isInteger(Number(value)) && Number(value) >= 0) {
+                                    void requestPolicyChange(product, originalIndex, isManaged, Number(value));
+                                  }
+                                }}
                                 className="w-full min-h-[44px] bg-white border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-mono font-bold text-slate-800 text-center focus:outline-none transition disabled:opacity-50 touch-manipulation"
                               />
                             </div>

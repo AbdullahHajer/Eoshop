@@ -5,17 +5,20 @@ namespace Tests\Integration;
 use App\Enums\DomainKind;
 use App\Enums\DomainReservationOrigin;
 use App\Enums\DomainReservationStatus;
+use App\Enums\InventoryActorType;
 use App\Enums\ProvisioningSchemaOrigin;
 use App\Enums\ProvisioningState;
 use App\Enums\PublicationRequestOrigin;
 use App\Enums\PublicationRequestStatus;
 use App\Enums\PublicationStatus;
+use App\Enums\RoleScope;
 use App\Enums\SubscriptionActivationSource;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Enums\UserStatus;
+use App\Exceptions\InventoryConflict;
 use App\Models\DomainReservation;
 use App\Models\ProvisioningRun;
 use App\Models\PublicationRequest;
@@ -23,6 +26,8 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
+use App\Services\InventoryLedgerService;
+use App\Services\InventoryReservationService;
 use App\Services\ProductCatalogService;
 use App\Services\RoleAssignmentService;
 use App\Services\StoreWorkspaceService;
@@ -49,6 +54,9 @@ class StoreWorkspaceTest extends TestCase
 
     /** @var list<string> */
     private array $userIds = [];
+
+    /** @var list<int> */
+    private array $roleIds = [];
 
     protected function setUp(): void
     {
@@ -77,6 +85,9 @@ class StoreWorkspaceTest extends TestCase
             $central->table('role_user')->where('user_id', $userId)->delete();
             $central->table('admin_audit_logs')->where('actor_user_id', $userId)->delete();
             $central->table('users')->where('id', $userId)->delete();
+        }
+        foreach ($this->roleIds as $roleId) {
+            $central->table('roles')->where('id', $roleId)->delete();
         }
 
         parent::tearDown();
@@ -136,6 +147,578 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('products.0.sku', 'SKU-1');
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
         $this->assertFalse(tenancy()->initialized);
+    }
+
+    public function test_inventory_adjustment_is_atomic_revisioned_and_idempotent(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-adjust');
+        $inventory = $this->actingAs($owner)
+            ->getJson("/api/merchant/stores/{$tenant->id}/inventory")
+            ->assertOk()->assertJsonPath('data.items.0.onHand', 10)
+            ->assertJsonPath('data.items.0.reserved', 0)->json('data');
+        $product = $inventory['items'][0];
+        $key = (string) Str::uuid();
+        $payload = [
+            'reasonCode' => 'stock_received',
+            'note' => 'Supplier delivery',
+            'lines' => [[
+                'productId' => $product['productId'],
+                'expectedInventoryRevision' => $product['inventoryRevision'],
+                'movementKind' => 'receive',
+                'delta' => 5,
+            ]],
+        ];
+
+        $this->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", $payload, ['Idempotency-Key' => $key])
+            ->assertOk()->assertJsonPath('data.replayed', false)
+            ->assertJsonPath('data.items.0.onHand', 15)
+            ->assertJsonPath('data.items.0.inventoryRevision', 2);
+        $this->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", $payload, ['Idempotency-Key' => $key])
+            ->assertOk()->assertJsonPath('data.replayed', true)
+            ->assertJsonPath('data.items.0.onHand', 15);
+        $payload['lines'][0]['delta'] = 6;
+        $this->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", $payload, ['Idempotency-Key' => $key])
+            ->assertConflict()->assertJsonPath('code', 'inventory_idempotency_conflict');
+
+        $tenant->run(function (): void {
+            $this->assertSame(2, DB::table('inventory_operations')->count());
+            $this->assertSame(2, DB::table('inventory_movements')->count());
+        });
+    }
+
+    public function test_internal_reservation_hold_commit_and_public_available_stock_are_consistent(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-reserve');
+        $productId = $tenant->run(fn (): string => (string) DB::table('products')->value('id'));
+        $service = app(InventoryReservationService::class);
+        $reserveKey = (string) Str::uuid();
+        $reserved = $service->reserve(
+            $tenant,
+            'wp43_order_draft',
+            'draft-1',
+            [['productId' => $productId, 'quantity' => 3]],
+            300,
+            $reserveKey,
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        );
+        $this->assertSame('active', $reserved['reservation']['status']);
+        $this->actingAs($owner)->getJson("/api/merchant/stores/{$tenant->id}/inventory")
+            ->assertOk()->assertJsonPath('data.items.0.onHand', 10)
+            ->assertJsonPath('data.items.0.reserved', 3)
+            ->assertJsonPath('data.items.0.available', 7);
+
+        $committed = $service->commit(
+            $tenant,
+            $reserved['reservation']['id'],
+            (string) Str::uuid(),
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        );
+        $this->assertSame('committed', $committed['reservation']['status']);
+        $replayedReserve = $service->reserve(
+            $tenant,
+            'wp43_order_draft',
+            'draft-1',
+            [['productId' => $productId, 'quantity' => 3]],
+            300,
+            $reserveKey,
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        );
+        $this->assertTrue($replayedReserve['replayed']);
+        $this->assertSame('active', $replayedReserve['reservation']['status'], 'Creation replay must not drift to the later terminal state.');
+        $tenant->run(function () use ($productId): void {
+            $product = DB::table('products')->where('id', $productId)->first();
+            $this->assertSame(7, (int) $product->stock_quantity);
+            $this->assertSame(0, (int) $product->reserved_quantity);
+            $this->assertSame(3, (int) $product->inventory_revision);
+            $this->assertSame(1, DB::table('inventory_movements')->where('product_id', $productId)->where('kind', 'opening')->count());
+            $this->assertSame(1, DB::table('inventory_movements')->where('product_id', $productId)->where('kind', 'reserve')->count());
+            $this->assertSame(1, DB::table('inventory_movements')->where('product_id', $productId)->where('kind', 'commit')->count());
+        });
+        $public = app(StoreWorkspaceService::class)->readPublic($tenant);
+        $this->assertSame(7, $public['config']['products'][0]['stockQuantity']);
+        $this->assertArrayNotHasKey('reservedQuantity', $public['config']['products'][0]);
+    }
+
+    public function test_inventory_reservations_are_atomic_and_terminal_transitions_fail_closed(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-atomic');
+        $primaryId = $tenant->run(fn (): string => (string) DB::table('products')->value('id'));
+        $secondaryId = $this->addInventoryProduct($tenant, 'ATOMIC-2', 1);
+        $service = app(InventoryReservationService::class);
+
+        try {
+            $service->reserve(
+                $tenant,
+                'wp43_order_draft',
+                'atomic-failure',
+                [
+                    ['productId' => $primaryId, 'quantity' => 2],
+                    ['productId' => $secondaryId, 'quantity' => 2],
+                ],
+                300,
+                (string) Str::uuid(),
+                InventoryActorType::User,
+                (string) $owner->id,
+                'integration_test',
+            );
+            $this->fail('A multi-product reservation must roll back when any line lacks stock.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('inventory_insufficient_available', $exception->errorCode);
+        }
+
+        $tenant->run(function () use ($primaryId, $secondaryId): void {
+            $this->assertSame([0, 0], DB::table('products')->whereIn('id', [$primaryId, $secondaryId])
+                ->orderBy('id')->pluck('reserved_quantity')->map('intval')->all());
+            $this->assertSame(0, DB::table('inventory_reservations')->count());
+            $this->assertSame(0, DB::table('inventory_operations')->where('kind', 'reservation_create')
+                ->where('idempotency_scope', 'integration_test')->count());
+        });
+
+        $held = $service->reserve(
+            $tenant,
+            'wp43_order_draft',
+            'terminal-race',
+            [['productId' => $primaryId, 'quantity' => 1]],
+            300,
+            (string) Str::uuid(),
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        );
+        $reservationId = (string) $held['reservation']['id'];
+
+        try {
+            app(InventoryLedgerService::class)->adjust($tenant, $owner, [
+                'reasonCode' => 'reserved_floor',
+                'lines' => [[
+                    'productId' => $primaryId,
+                    'expectedInventoryRevision' => 2,
+                    'movementKind' => 'issue',
+                    'delta' => -10,
+                ]],
+            ], (string) Str::uuid(), null);
+            $this->fail('An adjustment must not reduce on-hand below an active hold.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('inventory_insufficient_available', $exception->errorCode);
+        }
+        try {
+            app(InventoryLedgerService::class)->updatePolicy(
+                $tenant,
+                $owner,
+                $primaryId,
+                2,
+                false,
+                3,
+                (string) Str::uuid(),
+                null,
+            );
+            $this->fail('Tracking must not be disabled while a hold is active.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('inventory_tracking_conflict', $exception->errorCode);
+        }
+        try {
+            $service->expire($tenant, $reservationId);
+            $this->fail('A reservation must not expire before the database clock reaches its deadline.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('inventory_reservation_not_due', $exception->errorCode);
+        }
+
+        $releaseKey = (string) Str::uuid();
+        $released = $service->release(
+            $tenant,
+            $reservationId,
+            $releaseKey,
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        );
+        $this->assertSame('released', $released['reservation']['status']);
+        $this->assertTrue($service->release(
+            $tenant,
+            $reservationId,
+            $releaseKey,
+            InventoryActorType::User,
+            (string) $owner->id,
+            'integration_test',
+        )['replayed']);
+        try {
+            $service->commit(
+                $tenant,
+                $reservationId,
+                (string) Str::uuid(),
+                InventoryActorType::User,
+                (string) $owner->id,
+                'integration_test',
+            );
+            $this->fail('Only one terminal reservation transition may win.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('inventory_reservation_terminal', $exception->errorCode);
+        }
+
+        $tenant->run(function () use ($primaryId): void {
+            $product = DB::table('products')->where('id', $primaryId)->firstOrFail();
+            $this->assertSame(10, (int) $product->stock_quantity);
+            $this->assertSame(0, (int) $product->reserved_quantity);
+            $this->assertSame(3, (int) $product->inventory_revision);
+            $this->assertSame(1, DB::table('inventory_operations')->where('kind', 'reservation_release')->count());
+            $this->assertSame(0, DB::table('inventory_operations')->where('kind', 'reservation_commit')->count());
+        });
+    }
+
+    public function test_independent_connections_serialize_the_final_unit_before_conflict(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-final-unit');
+        $productId = $tenant->run(fn (): string => (string) DB::table('products')->value('id'));
+        $tenantId = (string) $tenant->getKey();
+        $ownerId = (string) $owner->getKey();
+        $outcomes = $this->runConcurrentInventoryOperations([
+            fn (): array => app(InventoryReservationService::class)->reserve(
+                Tenant::query()->findOrFail($tenantId), 'wp43_order_draft', 'last-unit-a',
+                [['productId' => $productId, 'quantity' => 10]], 300, (string) Str::uuid(),
+                InventoryActorType::User, $ownerId, 'integration_test',
+            ),
+            fn (): array => app(InventoryReservationService::class)->reserve(
+                Tenant::query()->findOrFail($tenantId), 'wp43_order_draft', 'last-unit-b',
+                [['productId' => $productId, 'quantity' => 10]], 300, (string) Str::uuid(),
+                InventoryActorType::User, $ownerId, 'integration_test',
+            ),
+        ]);
+        $this->assertCount(1, array_filter($outcomes, fn (array $outcome): bool => $outcome['status'] === 'ok'));
+        $this->assertCount(1, array_filter($outcomes, fn (array $outcome): bool => ($outcome['code'] ?? null) === 'inventory_insufficient_available'));
+        $tenant->run(function () use ($productId): void {
+            $product = DB::table('products')->where('id', $productId)->firstOrFail();
+            $this->assertSame(10, (int) $product->stock_quantity);
+            $this->assertSame(10, (int) $product->reserved_quantity);
+            $this->assertSame(0, (int) $product->stock_quantity - (int) $product->reserved_quantity);
+            $this->assertSame(1, DB::table('inventory_reservations')->where('status', 'active')->count());
+        });
+
+        $reservationId = $tenant->run(fn (): string => (string) DB::table('inventory_reservations')->value('id'));
+        $terminal = $this->runConcurrentInventoryOperations([
+            fn (): array => app(InventoryReservationService::class)->release(
+                Tenant::query()->findOrFail($tenantId), $reservationId, (string) Str::uuid(),
+                InventoryActorType::User, $ownerId, 'integration_test',
+            ),
+            fn (): array => app(InventoryReservationService::class)->commit(
+                Tenant::query()->findOrFail($tenantId), $reservationId, (string) Str::uuid(),
+                InventoryActorType::User, $ownerId, 'integration_test',
+            ),
+        ]);
+        $this->assertCount(1, array_filter($terminal, fn (array $outcome): bool => $outcome['status'] === 'ok'));
+        $this->assertCount(1, array_filter($terminal, fn (array $outcome): bool => ($outcome['code'] ?? null) === 'inventory_reservation_terminal'));
+
+        [$oppositeTenant, $oppositeOwner] = $this->readyTenant('inventory-opposite-lock-order');
+        $firstId = $oppositeTenant->run(fn (): string => (string) DB::table('products')->value('id'));
+        $secondId = $this->addInventoryProduct($oppositeTenant, 'OPPOSITE-2', 10);
+        $oppositeTenantId = (string) $oppositeTenant->getKey();
+        $oppositeOwnerId = (string) $oppositeOwner->getKey();
+        $opposite = $this->runConcurrentInventoryOperations([
+            fn (): array => app(InventoryReservationService::class)->reserve(
+                Tenant::query()->findOrFail($oppositeTenantId), 'wp43_order_draft', 'opposite-a',
+                [['productId' => $firstId, 'quantity' => 1], ['productId' => $secondId, 'quantity' => 1]],
+                300, (string) Str::uuid(), InventoryActorType::User, $oppositeOwnerId, 'integration_test',
+            ),
+            fn (): array => app(InventoryReservationService::class)->reserve(
+                Tenant::query()->findOrFail($oppositeTenantId), 'wp43_order_draft', 'opposite-b',
+                [['productId' => $secondId, 'quantity' => 1], ['productId' => $firstId, 'quantity' => 1]],
+                300, (string) Str::uuid(), InventoryActorType::User, $oppositeOwnerId, 'integration_test',
+            ),
+        ]);
+        $this->assertCount(2, array_filter($opposite, fn (array $outcome): bool => $outcome['status'] === 'ok'));
+        $oppositeTenant->run(function () use ($firstId, $secondId): void {
+            $this->assertSame([2, 2], DB::table('products')->whereIn('id', [$firstId, $secondId])
+                ->orderBy('id')->pluck('reserved_quantity')->map('intval')->all());
+        });
+    }
+
+    public function test_inventory_history_count_and_page_share_one_repeatable_read_snapshot(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-history-snapshot');
+        $productId = $tenant->run(fn (): string => (string) DB::table('products')->value('id'));
+        $writerConfig = $tenant->run(static fn (): array => config('database.connections.tenant'));
+        config()->set('database.connections.inventory_history_writer', $writerConfig);
+        $writer = DB::connection('inventory_history_writer');
+        $writeCommitted = false;
+
+        DB::listen(function (QueryExecuted $query) use ($writer, $productId, &$writeCommitted): void {
+            $sql = mb_strtolower($query->sql);
+            if ($writeCommitted || $query->connectionName !== 'tenant'
+                || ! str_contains($sql, 'count(*) as aggregate')
+                || ! str_contains($sql, 'inventory_movements')) {
+                return;
+            }
+            $writeCommitted = true;
+            $writer->transaction(function () use ($writer, $productId): void {
+                $product = $writer->table('products')->where('id', $productId)->lockForUpdate()->firstOrFail();
+                $operationId = (string) Str::uuid();
+                $writer->table('inventory_operations')->insert([
+                    'id' => $operationId,
+                    'kind' => 'manual_adjustment',
+                    'idempotency_scope' => 'system:history-snapshot',
+                    'idempotency_key' => (string) Str::uuid(),
+                    'request_fingerprint' => str_repeat('a', 64),
+                    'actor_type' => 'system',
+                    'source' => 'integration_test',
+                    'reason_code' => 'snapshot_probe',
+                    'created_at' => now(),
+                ]);
+                $writer->table('inventory_movements')->insert([
+                    'id' => (string) Str::uuid(),
+                    'operation_id' => $operationId,
+                    'product_id' => $productId,
+                    'kind' => 'correction',
+                    'before_on_hand' => (int) $product->stock_quantity,
+                    'before_reserved' => (int) $product->reserved_quantity,
+                    'on_hand_delta' => 1,
+                    'reserved_delta' => 0,
+                    'after_on_hand' => (int) $product->stock_quantity + 1,
+                    'after_reserved' => (int) $product->reserved_quantity,
+                    'before_inventory_revision' => (int) $product->inventory_revision,
+                    'after_inventory_revision' => (int) $product->inventory_revision + 1,
+                    'created_at' => now(),
+                ]);
+                $writer->selectOne("SELECT set_config('eoshop.inventory_operation_id', ?, true)", [$operationId]);
+                $writer->table('products')->where('id', $productId)->update([
+                    'stock_quantity' => (int) $product->stock_quantity + 1,
+                    'inventory_revision' => (int) $product->inventory_revision + 1,
+                    'updated_at' => now(),
+                ]);
+            });
+        });
+
+        try {
+            $snapshot = app(InventoryLedgerService::class)->history($tenant, $owner, null, 1, 20);
+            $this->assertTrue($writeCommitted);
+            $this->assertSame(1, $snapshot['total']);
+            $this->assertCount(1, $snapshot['data']);
+
+            $latest = app(InventoryLedgerService::class)->history($tenant, $owner, null, 1, 20);
+            $this->assertSame(2, $latest['total']);
+            $this->assertCount(2, $latest['data']);
+        } finally {
+            DB::purge('inventory_history_writer');
+        }
+    }
+
+    public function test_inventory_database_guards_reject_direct_snapshot_and_history_mutation(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-guards');
+        $secondaryId = $this->addInventoryProduct($tenant, 'GUARD-2', 5);
+        $held = app(InventoryReservationService::class)->reserve(
+            $tenant, 'wp43_order_draft', 'late-item',
+            [['productId' => $tenant->run(fn (): string => (string) DB::table('products')->orderBy('position')->value('id')), 'quantity' => 1]],
+            300, (string) Str::uuid(), InventoryActorType::User, (string) $owner->id, 'integration_test',
+        );
+        $tenant->run(function () use ($secondaryId, $held): void {
+            $productId = (string) DB::table('products')->value('id');
+            try {
+                DB::table('products')->where('id', $productId)->update(['stock_quantity' => 999]);
+                $this->fail('Direct inventory snapshot mutation must be rejected.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory snapshot update requires an operation', $exception->getMessage());
+            }
+            try {
+                DB::table('products')->where('id', $productId)->update(['reserved_quantity' => 11]);
+                $this->fail('The database must reject over-reserved product snapshots.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory snapshot update requires an operation', $exception->getMessage());
+            }
+            $movementId = (string) DB::table('inventory_movements')->value('id');
+            $movement = DB::table('inventory_movements')->where('id', $movementId)->firstOrFail();
+            try {
+                DB::table('inventory_application_receipts')->insert([
+                    'id' => (string) Str::uuid(),
+                    'operation_id' => $movement->operation_id,
+                    'product_id' => $movement->product_id,
+                    'movement_id' => $movementId,
+                    'created_at' => now(),
+                ]);
+                $this->fail('Application code must not forge a ledger application receipt.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory application receipts are trigger-owned', $exception->getMessage());
+            }
+            try {
+                DB::table('inventory_movements')->where('id', $movementId)->delete();
+                $this->fail('Inventory history deletion must be rejected.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory history is append-only', $exception->getMessage());
+            }
+            $operationId = (string) DB::table('inventory_operations')->where('kind', 'opening')->value('id');
+            try {
+                DB::table('inventory_reservations')->insert([
+                    'id' => (string) Str::uuid(),
+                    'status' => 'active',
+                    'reference_type' => 'invalid',
+                    'reference_id' => 'invalid-ttl',
+                    'expires_at' => now()->addYear(),
+                    'created_by_operation_id' => $operationId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $this->fail('The database must enforce the reservation TTL boundary.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory_reservations_ttl_valid', $exception->getMessage());
+            }
+            try {
+                DB::table('inventory_reservation_items')->insert([
+                    'reservation_id' => $held['reservation']['id'],
+                    'product_id' => $secondaryId,
+                    'quantity' => 1,
+                ]);
+                $this->fail('Reservation items must not be appended after reservation creation commits.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('reservation items may only be inserted by their creation operation', $exception->getMessage());
+            }
+
+            $openingOperationId = (string) Str::uuid();
+            DB::table('inventory_operations')->insert([
+                'id' => $openingOperationId,
+                'kind' => 'opening',
+                'idempotency_scope' => 'system:duplicate-opening',
+                'idempotency_key' => (string) Str::uuid(),
+                'request_fingerprint' => str_repeat('b', 64),
+                'actor_type' => 'system',
+                'source' => 'integration_test',
+                'reason_code' => 'duplicate_opening',
+                'created_at' => now(),
+            ]);
+            $product = DB::table('products')->where('id', $productId)->firstOrFail();
+            try {
+                DB::table('inventory_movements')->insert([
+                    'id' => (string) Str::uuid(), 'operation_id' => $openingOperationId,
+                    'product_id' => $productId, 'kind' => 'opening',
+                    'before_on_hand' => 0, 'before_reserved' => 0,
+                    'on_hand_delta' => (int) $product->stock_quantity, 'reserved_delta' => 0,
+                    'after_on_hand' => (int) $product->stock_quantity,
+                    'after_reserved' => (int) $product->reserved_quantity,
+                    'before_inventory_revision' => (int) $product->inventory_revision,
+                    'after_inventory_revision' => (int) $product->inventory_revision,
+                    'created_at' => now(),
+                ]);
+                $this->fail('Each product must have exactly one opening movement.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('inventory_movements_one_opening_per_product', $exception->getMessage());
+            }
+
+            try {
+                DB::transaction(function () use ($productId, $product): void {
+                    $operationId = (string) Str::uuid();
+                    DB::table('inventory_operations')->insert([
+                        'id' => $operationId, 'kind' => 'manual_adjustment',
+                        'idempotency_scope' => 'system:wrong-policy-kind',
+                        'idempotency_key' => (string) Str::uuid(),
+                        'request_fingerprint' => str_repeat('c', 64),
+                        'actor_type' => 'system', 'source' => 'integration_test',
+                        'reason_code' => 'wrong_policy_kind', 'created_at' => now(),
+                    ]);
+                    DB::table('inventory_policy_changes')->insert([
+                        'id' => (string) Str::uuid(), 'operation_id' => $operationId,
+                        'product_id' => $productId,
+                        'before_manage_stock' => (bool) $product->manage_stock,
+                        'after_manage_stock' => ! (bool) $product->manage_stock,
+                        'before_low_stock_threshold' => (int) $product->low_stock_threshold,
+                        'after_low_stock_threshold' => (int) $product->low_stock_threshold,
+                        'before_inventory_revision' => (int) $product->inventory_revision,
+                        'after_inventory_revision' => (int) $product->inventory_revision + 1,
+                        'created_at' => now(),
+                    ]);
+                });
+                $this->fail('Policy history must be coupled to a policy operation.');
+            } catch (QueryException|\PDOException $exception) {
+                $this->assertStringContainsString('inventory policy change requires a policy operation', $exception->getMessage());
+            }
+        });
+    }
+
+    public function test_inventory_permissions_hide_private_projections_and_fail_closed(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-permissions');
+        $outsider = $this->user('inventory-outsider@example.test');
+
+        $this->getJson("/api/merchant/stores/{$tenant->id}/inventory")->assertUnauthorized();
+        $this->actingAs($outsider)->getJson("/api/merchant/stores/{$tenant->id}/inventory")->assertForbidden();
+
+        $metadataRole = Role::query()->create([
+            'key' => 'tenant_metadata_only_'.Str::lower(Str::random(8)),
+            'name' => 'Tenant metadata only',
+            'scope' => RoleScope::Tenant,
+            'system' => false,
+        ]);
+        $this->roleIds[] = (int) $metadataRole->id;
+        app(RoleAssignmentService::class)->assignTenantRole($tenant, $outsider, $metadataRole, $owner);
+
+        $workspace = $this->actingAs($outsider)
+            ->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->json('data.config.products.0');
+        $this->actingAs($outsider)->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->assertJsonPath('data.capabilities.inventoryView', false)
+            ->assertJsonPath('data.capabilities.inventoryManage', false);
+        $catalog = $this->actingAs($outsider)
+            ->getJson("/api/merchant/stores/{$tenant->id}/catalog")
+            ->assertOk()
+            ->json('data.products.0');
+        foreach (['stockQuantity', 'reservedQuantity', 'availableQuantity', 'inventoryRevision', 'manageStock', 'lowStockThreshold'] as $field) {
+            $this->assertArrayNotHasKey($field, $workspace);
+            $this->assertArrayNotHasKey($field, $catalog);
+        }
+        $this->actingAs($outsider)->getJson("/api/merchant/stores/{$tenant->id}/inventory")->assertForbidden();
+
+        DB::connection((string) config('tenancy.database.central_connection'))
+            ->table('tenant_user')->where('tenant_id', $tenant->id)->where('user_id', $owner->id)
+            ->update(['status' => TenantMembershipStatus::Suspended->value]);
+        Auth::forgetGuards();
+        $this->flushSession();
+        $this->actingAs($owner)->getJson("/api/merchant/stores/{$tenant->id}/inventory")->assertForbidden();
+
+        $routes = collect(app('router')->getRoutes()->getRoutes())->map(fn ($route): string => $route->uri())->all();
+        $this->assertFalse(collect($routes)->contains(fn (string $uri): bool => str_contains($uri, 'reservation')));
+        $this->assertNotContains('api/store/orders', $routes);
+    }
+
+    public function test_inventory_mutation_http_validation_authorization_and_throttle_boundaries(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('inventory-http-boundaries');
+        $outsider = $this->user('inventory-http-outsider@example.test');
+        $product = $this->actingAs($owner)->getJson("/api/merchant/stores/{$tenant->id}/inventory")
+            ->assertOk()->json('data.items.0');
+        $valid = [
+            'reasonCode' => 'boundary_probe',
+            'lines' => [[
+                'productId' => $product['productId'],
+                'expectedInventoryRevision' => $product['inventoryRevision'],
+                'movementKind' => 'receive',
+                'delta' => 1,
+            ]],
+        ];
+
+        Auth::forgetGuards();
+        $this->flushSession();
+        $this->actingAs($outsider)
+            ->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", $valid, ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertForbidden();
+        Auth::forgetGuards();
+        $this->flushSession();
+        $this->actingAs($owner)
+            ->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", ['reasonCode' => 'invalid'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['idempotencyKey', 'lines']);
+
+        for ($attempt = 2; $attempt <= 30; $attempt++) {
+            $this->actingAs($owner)
+                ->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", ['reasonCode' => 'invalid'])
+                ->assertUnprocessable();
+        }
+        $this->actingAs($owner)
+            ->postJson("/api/merchant/stores/{$tenant->id}/inventory/adjustments", ['reasonCode' => 'invalid'])
+            ->assertTooManyRequests();
     }
 
     public function test_workspace_authorization_quota_and_media_validation_fail_closed(): void
@@ -741,6 +1324,80 @@ class StoreWorkspaceTest extends TestCase
         });
     }
 
+    public function test_inventory_migration_adopts_populated_products_refuses_history_loss_and_reapplies_when_empty(): void
+    {
+        $createLegacyTenant = function (string $id): Tenant {
+            $tenant = Tenant::query()->create([
+                'id' => $id,
+                'store_name' => 'Inventory migration '.$id,
+                'owner_name' => 'Migration Owner',
+                'owner_email' => $id.'@example.test',
+                'business_type' => 'retail',
+                'verification_status' => TenantVerificationStatus::Pending->value,
+                'provisioning_status' => ProvisioningState::NotStarted->value,
+                'publication_status' => PublicationStatus::Unpublished->value,
+                'theme_style' => 'elegant',
+            ]);
+            $this->tenantIds[] = $tenant->id;
+            $tenant->database()->manager()->createDatabase($tenant);
+            $this->schemas[] = (string) $tenant->database()->getName();
+
+            return $tenant;
+        };
+        $migrateThroughCatalog = function (): void {
+            foreach ([
+                '2026_01_01_000001_create_store_configs_table.php',
+                '2026_01_01_000002_create_products_table.php',
+                '2026_01_01_000003_create_orders_table.php',
+                '2026_08_15_000004_harden_store_workspace.php',
+                '2026_08_16_000005_create_product_catalog_model.php',
+            ] as $file) {
+                (require database_path('migrations/tenant/'.$file))->up();
+            }
+        };
+
+        $populated = $createLegacyTenant('wp42-ledger-adoption');
+        $productId = (string) Str::uuid();
+        $populated->run(function () use ($migrateThroughCatalog, $productId): void {
+            $migrateThroughCatalog();
+            DB::table('products')->insert([
+                'id' => $productId, 'name' => 'Legacy inventory product', 'price' => '7.00',
+                'base_price_minor' => 700, 'description' => '', 'category' => 'General',
+                'image_keyword' => 'default', 'image_urls' => '[]', 'stock_quantity' => 7,
+                'manage_stock' => true, 'sku' => 'LEGACY-INVENTORY', 'low_stock_threshold' => 2,
+                'position' => 0, 'status' => 'published', 'revision' => 1,
+                'published_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $migration = require database_path('migrations/tenant/2026_08_16_000006_create_inventory_ledger.php');
+            $migration->up();
+
+            $movement = DB::table('inventory_movements')->where('product_id', $productId)->where('kind', 'opening')->firstOrFail();
+            $this->assertSame(7, (int) $movement->after_on_hand);
+            $this->assertSame(0, (int) $movement->after_reserved);
+            $this->assertSame(1, DB::table('inventory_application_receipts')->where('movement_id', $movement->id)->count());
+            try {
+                $migration->down();
+                $this->fail('Inventory rollback must refuse to erase adopted opening provenance.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('Refusing to erase authoritative inventory', $exception->getMessage());
+            }
+            $this->assertTrue(DB::getSchemaBuilder()->hasTable('inventory_movements'));
+        });
+
+        $empty = $createLegacyTenant('wp42-ledger-empty-reapply');
+        $empty->run(function () use ($migrateThroughCatalog): void {
+            $migrateThroughCatalog();
+            $migration = require database_path('migrations/tenant/2026_08_16_000006_create_inventory_ledger.php');
+            $migration->up();
+            $this->assertSame(0, DB::table('inventory_operations')->count());
+            $migration->down();
+            $this->assertFalse(DB::getSchemaBuilder()->hasColumn('products', 'reserved_quantity'));
+            $migration->up();
+            $this->assertTrue(DB::getSchemaBuilder()->hasColumns('products', ['reserved_quantity', 'inventory_revision']));
+            $this->assertSame(0, DB::table('inventory_operations')->count());
+        });
+    }
+
     /** @return array{Tenant, User, string} */
     private function readyTenant(string $label): array
     {
@@ -811,52 +1468,57 @@ class StoreWorkspaceTest extends TestCase
             'publication_requested_at' => now(),
             'published_at' => now(),
         ])->save();
-        $tenant->run(function () use ($label): void {
-            $productId = (string) Str::uuid();
-            DB::table('store_configs')->insert([
-                'id' => (string) Str::uuid(),
-                'config_json' => json_encode(array_diff_key(
-                    $this->config('Legacy '.$label, []),
-                    ['products' => true, 'currency' => true],
-                ), JSON_THROW_ON_ERROR),
-                'revision' => 1,
-                'products_materialized' => true,
-                'is_current' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            DB::table('products')->insert([
-                'id' => $productId,
-                'name' => 'Server product',
-                'price' => '12.50',
-                'base_price_minor' => 1250,
-                'sale_price_minor' => null,
-                'description' => 'Product description',
-                'category' => 'General',
-                'image_keyword' => 'product',
-                'image_url' => 'https://images.example.test/product.jpg',
-                'image_urls' => json_encode(['https://images.example.test/product.jpg'], JSON_THROW_ON_ERROR),
-                'stock_quantity' => 10,
-                'manage_stock' => true,
-                'sku' => 'LEGACY-SKU',
-                'low_stock_threshold' => 3,
-                'position' => 0,
-                'status' => 'published',
-                'revision' => 1,
-                'published_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            DB::table('product_media')->insert([
-                'id' => (string) Str::uuid(),
-                'product_id' => $productId,
-                'source_type' => 'external',
-                'external_url' => 'https://images.example.test/product.jpg',
-                'position' => 0,
-                'attached_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+        $tenant->run(function () use ($label, $tenant): void {
+            DB::transaction(function () use ($label, $tenant): void {
+                $productId = (string) Str::uuid();
+                DB::table('store_configs')->insert([
+                    'id' => (string) Str::uuid(),
+                    'config_json' => json_encode(array_diff_key(
+                        $this->config('Legacy '.$label, []),
+                        ['products' => true, 'currency' => true],
+                    ), JSON_THROW_ON_ERROR),
+                    'revision' => 1,
+                    'products_materialized' => true,
+                    'is_current' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                DB::table('products')->insert([
+                    'id' => $productId,
+                    'name' => 'Server product',
+                    'price' => '12.50',
+                    'base_price_minor' => 1250,
+                    'sale_price_minor' => null,
+                    'description' => 'Product description',
+                    'category' => 'General',
+                    'image_keyword' => 'product',
+                    'image_url' => 'https://images.example.test/product.jpg',
+                    'image_urls' => json_encode(['https://images.example.test/product.jpg'], JSON_THROW_ON_ERROR),
+                    'stock_quantity' => 0,
+                    'reserved_quantity' => 0,
+                    'manage_stock' => true,
+                    'sku' => 'LEGACY-SKU',
+                    'low_stock_threshold' => 3,
+                    'position' => 0,
+                    'status' => 'published',
+                    'revision' => 1,
+                    'inventory_revision' => 1,
+                    'published_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                app(InventoryLedgerService::class)->recordOpening($tenant, $productId, 10);
+                DB::table('product_media')->insert([
+                    'id' => (string) Str::uuid(),
+                    'product_id' => $productId,
+                    'source_type' => 'external',
+                    'external_url' => 'https://images.example.test/product.jpg',
+                    'position' => 0,
+                    'attached_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
         });
         $owner = $this->user("workspace-owner-{$label}@example.test");
         app(RoleAssignmentService::class)->assignTenantRole(
@@ -880,6 +1542,97 @@ class StoreWorkspaceTest extends TestCase
         $this->userIds[] = $user->id;
 
         return $user;
+    }
+
+    private function addInventoryProduct(Tenant $tenant, string $sku, int $openingOnHand): string
+    {
+        return $tenant->run(function () use ($tenant, $sku, $openingOnHand): string {
+            return DB::transaction(function () use ($tenant, $sku, $openingOnHand): string {
+                $product = (array) DB::table('products')->orderBy('id')->firstOrFail();
+                $productId = (string) Str::uuid();
+                $product['id'] = $productId;
+                $product['name'] = 'Inventory '.$sku;
+                $product['sku'] = $sku;
+                $product['position'] = (int) DB::table('products')->max('position') + 1;
+                $product['stock_quantity'] = 0;
+                $product['reserved_quantity'] = 0;
+                $product['inventory_revision'] = 1;
+                $product['created_at'] = now();
+                $product['updated_at'] = now();
+                DB::table('products')->insert($product);
+                app(InventoryLedgerService::class)->recordOpening($tenant, $productId, $openingOnHand);
+
+                return $productId;
+            });
+        });
+    }
+
+    /**
+     * Start isolated PHP workers from the same committed fixture and release them together.
+     * Each worker reconnects to PostgreSQL before calling the real inventory service.
+     *
+     * @param  list<callable(): array<string, mixed>>  $operations
+     * @return list<array{status: string, code?: string}>
+     */
+    private function runConcurrentInventoryOperations(array $operations): array
+    {
+        if (! function_exists('pcntl_fork') || ! function_exists('stream_socket_pair')) {
+            $this->fail('The database gate requires pcntl and socket pairs for real concurrent service calls.');
+        }
+
+        $workers = [];
+        foreach ($operations as $operation) {
+            $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+            if ($sockets === false) {
+                $this->fail('Unable to create the concurrency barrier socket.');
+            }
+            [$parentSocket, $childSocket] = $sockets;
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                $this->fail('Unable to fork an inventory concurrency worker.');
+            }
+            if ($pid === 0) {
+                fclose($parentSocket);
+                fread($childSocket, 1);
+                try {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                    $central = (string) config('tenancy.database.central_connection');
+                    DB::purge('tenant');
+                    DB::purge($central);
+                    DB::setDefaultConnection($central);
+                    $operation();
+                    $result = ['status' => 'ok'];
+                } catch (InventoryConflict $exception) {
+                    $result = ['status' => 'conflict', 'code' => $exception->errorCode];
+                } catch (\Throwable $exception) {
+                    $result = ['status' => 'error', 'code' => $exception::class.':'.$exception->getMessage()];
+                }
+                fwrite($childSocket, json_encode($result, JSON_THROW_ON_ERROR));
+                fclose($childSocket);
+                exit(0);
+            }
+            fclose($childSocket);
+            $workers[] = ['pid' => $pid, 'socket' => $parentSocket];
+        }
+
+        foreach ($workers as $worker) {
+            fwrite($worker['socket'], '1');
+        }
+
+        $results = [];
+        foreach ($workers as $worker) {
+            $payload = stream_get_contents($worker['socket']);
+            fclose($worker['socket']);
+            pcntl_waitpid($worker['pid'], $status);
+            $this->assertTrue(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);
+            $decoded = json_decode((string) $payload, true, 512, JSON_THROW_ON_ERROR);
+            $this->assertNotSame('error', $decoded['status'] ?? null, (string) ($decoded['code'] ?? 'unknown child error'));
+            $results[] = $decoded;
+        }
+
+        return $results;
     }
 
     /** @param list<array<string, mixed>> $products */

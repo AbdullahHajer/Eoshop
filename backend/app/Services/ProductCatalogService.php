@@ -7,6 +7,7 @@ use App\Enums\ProductMediaSource;
 use App\Enums\ProductStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TenantMembershipStatus;
+use App\Exceptions\InventoryConflict;
 use App\Exceptions\ProductCatalogConflict;
 use App\Models\Plan;
 use App\Models\PublicationRequest;
@@ -23,19 +24,25 @@ use Illuminate\Validation\ValidationException;
 
 class ProductCatalogService
 {
+    public function __construct(private readonly InventoryLedgerService $inventory) {}
+
     /** @return array{tenantId: string, revision: int, currencyCode: string, products: list<array<string, mixed>>} */
     public function read(Tenant $tenant, User $actor): array
     {
-        return $this->withLockedMembership($tenant, $actor, false, function (Tenant $lockedTenant): array {
+        return $this->withLockedMembership($tenant, $actor, false, function (Tenant $lockedTenant) use ($actor): array {
             $this->assertReady($lockedTenant);
 
-            return $lockedTenant->run(function () use ($lockedTenant): array {
+            $catalog = $lockedTenant->run(function () use ($lockedTenant): array {
                 return DB::connection('tenant')->transaction(function () use ($lockedTenant): array {
                     DB::connection('tenant')->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
 
                     return $this->compose($lockedTenant, false, true);
                 });
             });
+
+            $catalog['products'] = $this->projectProductsForActor($catalog['products'], $lockedTenant, $actor);
+
+            return $catalog;
         });
     }
 
@@ -45,14 +52,39 @@ class ProductCatalogService
      */
     public function update(Tenant $tenant, User $actor, array $payload): array
     {
-        return $this->withLockedMembership($tenant, $actor, true, function (Tenant $lockedTenant) use ($payload): array {
+        return $this->withLockedMembership($tenant, $actor, true, function (Tenant $lockedTenant) use ($actor, $payload): array {
             $this->assertReady($lockedTenant);
             $limit = $this->lockedProductLimit($lockedTenant);
 
-            return $lockedTenant->run(fn (): array => DB::transaction(
+            $catalog = $lockedTenant->run(fn (): array => DB::transaction(
                 fn (): array => $this->mutate($lockedTenant, $payload, $limit, true),
             ));
+            $catalog['products'] = $this->projectProductsForActor($catalog['products'], $lockedTenant, $actor);
+
+            return $catalog;
         });
+    }
+
+    /**
+     * Inventory policy and balances are a separate permission boundary from catalog metadata.
+     *
+     * @param  list<array<string, mixed>>  $products
+     * @return list<array<string, mixed>>
+     */
+    public function projectProductsForActor(array $products, Tenant $tenant, User $actor): array
+    {
+        if ($actor->hasTenantPermission($tenant, PermissionKey::TenantInventoryView)) {
+            return $products;
+        }
+
+        return array_map(static fn (array $product): array => array_diff_key($product, array_flip([
+            'stockQuantity',
+            'reservedQuantity',
+            'availableQuantity',
+            'inventoryRevision',
+            'manageStock',
+            'lowStockThreshold',
+        ])), $products);
     }
 
     /**
@@ -163,6 +195,12 @@ class ProductCatalogService
             $currentStatus = $row === null ? null : ProductStatus::from((string) $row->status);
             $nextStatus = ProductStatus::from((string) $product['status']);
             $this->assertTransition($currentStatus, $nextStatus);
+            if ($row !== null) {
+                $this->assertInventoryProjectionUnchanged($row, $product);
+                if ($nextStatus === ProductStatus::Archived && (int) $row->reserved_quantity > 0) {
+                    throw new InventoryConflict('A product with active reservations cannot be archived.', 'inventory_reservation_conflict');
+                }
+            }
             $baseMinor = CatalogMoney::parse((string) $product['basePrice']);
             $saleMinor = $product['salePrice'] === null ? null : CatalogMoney::parse((string) $product['salePrice']);
             $effectiveMinor = $saleMinor ?? $baseMinor;
@@ -175,10 +213,7 @@ class ProductCatalogService
                 'description' => $product['description'] ?? null,
                 'category' => $product['category'] ?? null,
                 'image_keyword' => $product['imageKeyword'] ?? null,
-                'stock_quantity' => $product['stockQuantity'] ?? 10,
-                'manage_stock' => $product['manageStock'] ?? true,
                 'sku' => $sku,
-                'low_stock_threshold' => $product['lowStockThreshold'] ?? 5,
                 'position' => $position,
                 'status' => $nextStatus->value,
                 'published_at' => $nextStatus === ProductStatus::Published
@@ -192,14 +227,21 @@ class ProductCatalogService
 
             $rowChanged = $row === null || $this->rowChanged($row, $values);
             if ($row === null) {
+                $openingOnHand = (int) ($product['stockQuantity'] ?? 10);
                 DB::table('products')->insert([
                     'id' => $id,
                     ...$values,
+                    'stock_quantity' => 0,
+                    'reserved_quantity' => 0,
+                    'manage_stock' => (bool) ($product['manageStock'] ?? true),
+                    'low_stock_threshold' => (int) ($product['lowStockThreshold'] ?? 5),
+                    'inventory_revision' => 1,
                     'image_url' => null,
                     'image_urls' => null,
                     'revision' => 1,
                     'created_at' => $now,
                 ]);
+                $this->inventory->recordOpening($tenant, $id, $openingOnHand);
             } elseif ($rowChanged) {
                 DB::table('products')->where('id', $id)->update([
                     ...$values,
@@ -221,6 +263,9 @@ class ProductCatalogService
         foreach ($archiveRows as $row) {
             if ($row->status === ProductStatus::Archived->value) {
                 continue;
+            }
+            if ((int) $row->reserved_quantity > 0) {
+                throw new InventoryConflict('A product with active reservations cannot be archived.', 'inventory_reservation_conflict');
             }
             DB::table('products')->where('id', $row->id)->update([
                 'status' => ProductStatus::Archived->value,
@@ -268,14 +313,17 @@ class ProductCatalogService
             'tenantId' => (string) $tenant->getKey(),
             'revision' => (int) $settings->revision,
             'currencyCode' => (string) $settings->currency_code,
-            'products' => $rows->map(function (object $product) use ($tenant, $media): array {
+            'products' => $rows->map(function (object $product) use ($tenant, $media, $public): array {
                 $urls = $media->get($product->id, collect())->map(
                     fn (object $item): string => $item->source_type === ProductMediaSource::Managed->value
                         ? '/api/catalog-media/'.$tenant->getKey().'/'.$item->id
                         : (string) $item->external_url,
                 )->values()->all();
 
-                return [
+                $onHand = (int) $product->stock_quantity;
+                $reserved = (int) $product->reserved_quantity;
+                $available = (bool) $product->manage_stock ? $onHand - $reserved : null;
+                $resource = [
                     'id' => (string) $product->id,
                     'revision' => (int) $product->revision,
                     'status' => (string) $product->status,
@@ -288,11 +336,18 @@ class ProductCatalogService
                     'imageKeyword' => $product->image_keyword,
                     'imageUrl' => $urls[0] ?? null,
                     'imageUrls' => $urls,
-                    'stockQuantity' => (int) $product->stock_quantity,
+                    'stockQuantity' => $public ? $available : $onHand,
+                    'availableQuantity' => $available,
                     'manageStock' => (bool) $product->manage_stock,
                     'sku' => $product->sku,
                     'lowStockThreshold' => (int) $product->low_stock_threshold,
                 ];
+                if (! $public) {
+                    $resource['reservedQuantity'] = $reserved;
+                    $resource['inventoryRevision'] = (int) $product->inventory_revision;
+                }
+
+                return $resource;
             })->all(),
         ];
     }
@@ -393,6 +448,29 @@ class ProductCatalogService
         }
 
         return false;
+    }
+
+    /** @param array<string, mixed> $product */
+    private function assertInventoryProjectionUnchanged(object $row, array $product): void
+    {
+        $projections = [
+            'stockQuantity' => (int) $row->stock_quantity,
+            'reservedQuantity' => (int) $row->reserved_quantity,
+            'availableQuantity' => (bool) $row->manage_stock
+                ? (int) $row->stock_quantity - (int) $row->reserved_quantity
+                : null,
+            'inventoryRevision' => (int) $row->inventory_revision,
+            'manageStock' => (bool) $row->manage_stock,
+            'lowStockThreshold' => (int) $row->low_stock_threshold,
+        ];
+        foreach ($projections as $field => $stored) {
+            if (array_key_exists($field, $product) && $product[$field] !== null && $product[$field] !== $stored) {
+                throw new InventoryConflict(
+                    'Inventory fields must be changed through the inventory API.',
+                    'inventory_adjustment_required',
+                );
+            }
+        }
     }
 
     private function assertReady(Tenant $tenant): void

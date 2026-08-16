@@ -52,9 +52,17 @@ final class TenantWorkspaceReadiness
 
         $catalogReady = static fn (): bool => Schema::hasColumns('products', [
             'image_urls', 'position', 'status', 'base_price_minor', 'sale_price_minor', 'revision',
+            'reserved_quantity', 'inventory_revision',
         ])
             && Schema::hasTable('catalog_settings')
             && Schema::hasTable('product_media')
+            && Schema::hasTable('inventory_operations')
+            && Schema::hasTable('inventory_movements')
+            && Schema::hasTable('inventory_reservations')
+            && Schema::hasTable('inventory_reservation_items')
+            && Schema::hasTable('inventory_policy_changes')
+            && Schema::hasTable('inventory_application_receipts')
+            && Schema::hasTable('inventory_operation_results')
             && Schema::hasColumn('product_media', 'cleanup_started_at')
             && DB::table('catalog_settings')->where('id', 1)->count() === 1;
 
