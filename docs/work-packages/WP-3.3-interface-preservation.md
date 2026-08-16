@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 3 — Connect the interface to the backend |
 | Work Package | WP 3.3 |
-| Status | In progress |
+| Status | Implementation verified — pending delivery |
 | Started | 2026-08-16 |
 | Branch | `codex/wp-3.3-interface-preservation` |
 | Base | Protected `main` at `c76da962` |
@@ -39,36 +39,36 @@ Preserve the existing Arabic storefront builder and platform screens while makin
 
 - [x] Inventory every direct API service dependency in `App` and current components.
 - [x] Define adapter ownership, injection, error and feature-flag rules.
-- [ ] Complete early independent design review.
+- [x] Complete early independent design review.
 
 ### T1 — Adapter boundary
 
-- [ ] Add typed UI adapter contracts and a production composition root.
-- [ ] Add a required React provider with a controlled test override.
-- [ ] Keep mapped server DTOs and idempotency inside their existing domain services.
+- [x] Add typed UI adapter contracts and a production composition root.
+- [x] Add a required React provider with a controlled test override.
+- [x] Keep mapped server DTOs and idempotency inside their existing domain services.
 
 ### T2 — Interface migration
 
-- [ ] Route all API-backed component operations through the injected adapters.
-- [ ] Remove direct service imports from `App` and `src/components`.
-- [ ] Preserve current markup, labels, classes, loading and error behavior.
+- [x] Route all API-backed component operations through the injected adapters.
+- [x] Remove direct service imports from `App` and `src/components`.
+- [x] Preserve current markup, labels, classes, loading and error behavior.
 
 ### T3 — Compatibility and rollout controls
 
-- [ ] Add representative interface-parity tests using fake adapters.
-- [ ] Add a source-boundary test for future component changes.
-- [ ] Confirm no rollout flag can switch identity or business data back to browser authority.
+- [x] Add representative interface-parity tests using fail-on-unexpected fake adapters.
+- [x] Add a source-boundary test for future component changes.
+- [x] Confirm no rollout flag can switch identity or business data back to browser authority.
 
 ### T4 — Gates
 
-- [ ] Pass frontend unit tests, typecheck, production build and dependency audit.
-- [ ] Pass backend quality, PostgreSQL/container integration and repository-safety gates unchanged.
-- [ ] Verify same-account cross-device workspace and permission-filtered administration behavior remain green.
+- [x] Pass frontend unit tests, typecheck, production build and dependency audit.
+- [x] Pass backend quality, PostgreSQL/container integration and repository-safety gates unchanged.
+- [x] Verify same-account cross-device workspace and permission-filtered administration behavior remain green.
 
 ### T5 — Evidence and delivery
 
 - [ ] Record verification evidence and rollback observations.
-- [ ] Complete independent read-only review with no blocking findings.
+- [x] Complete independent read-only review with no blocking findings.
 - [ ] Commit, push, open PR, pass the four required checks and merge.
 
 ## Acceptance criteria

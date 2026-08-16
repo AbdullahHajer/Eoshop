@@ -8,17 +8,16 @@ import AdminAuthModal from "./AdminAuthModal";
 import AuthGateway from "./AuthGateway";
 import DomainSetupModal from "./DomainSetupModal";
 import ServerPricingPlans from "./ServerPricingPlans";
-import { authApi, type AuthenticatedUser } from "../services/authApi";
-import { plansApi, type StorePlan } from "../services/plansApi";
-import { provisioningApi } from "../services/provisioningApi";
+import { UiAdaptersProvider } from "../adapters/UiAdaptersContext";
+import type { StorePlan, UiAdapters, UserProfile } from "../adapters/uiAdapters";
+import { createFakeUiAdapters } from "../adapters/testing/fakeUiAdapters";
 
-const merchant: AuthenticatedUser = {
+const merchant: UserProfile = {
   id: "01MERCHANT",
-  name: "تاجر تجريبي",
+  fullName: "تاجر تجريبي",
   email: "merchant@example.com",
   phone: "+967700000000",
-  status: "active",
-  emailVerifiedAt: null,
+  role: "merchant",
   platformRoles: [],
   platformPermissions: [],
 };
@@ -40,14 +39,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function renderInterface(node: React.ReactElement, adapters: UiAdapters) {
+  return render(<UiAdaptersProvider adapters={adapters}>{node}</UiAdaptersProvider>);
+}
+
 describe("current interface behavior", () => {
   it("logs a merchant in once and returns the existing UI profile", async () => {
-    const login = vi.spyOn(authApi, "login").mockResolvedValue(merchant);
+    const login = vi.fn().mockResolvedValue(merchant);
     const onLoginSuccess = vi.fn();
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(
+    renderInterface(
       <AuthGateway
         isOpen
         initialMode="login"
@@ -57,6 +60,7 @@ describe("current interface behavior", () => {
         onLogout={vi.fn()}
         onStartStoreCreation={vi.fn()}
       />,
+      createFakeUiAdapters({ auth: { login } }),
     );
 
     await user.type(screen.getByPlaceholderText("name@company.com"), merchant.email);
@@ -74,16 +78,19 @@ describe("current interface behavior", () => {
   });
 
   it("ends an unauthorized platform session instead of opening administration", async () => {
-    vi.spyOn(authApi, "login").mockResolvedValue({
+    const login = vi.fn().mockResolvedValue({
       ...merchant,
       platformRoles: ["platform_reviewer"],
       platformPermissions: [],
     });
-    const logout = vi.spyOn(authApi, "logout").mockResolvedValue();
+    const logout = vi.fn().mockResolvedValue(undefined);
     const onSuccess = vi.fn();
     const user = userEvent.setup();
 
-    render(<AdminAuthModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />);
+    renderInterface(
+      <AdminAuthModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />,
+      createFakeUiAdapters({ auth: { login, logout } }),
+    );
 
     await user.type(screen.getByPlaceholderText("name@example.com"), merchant.email);
     await user.type(screen.getByPlaceholderText("••••••••"), "very-secure-password");
@@ -95,13 +102,13 @@ describe("current interface behavior", () => {
   });
 
   it("loads server plans, checks the handle and submits the current store once", async () => {
-    vi.spyOn(plansApi, "list").mockResolvedValue([starterPlan]);
-    const availability = vi.spyOn(plansApi, "domainAvailability").mockResolvedValue({
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
+    const availability = vi.fn().mockResolvedValue({
       handle: "my-shop",
       domain: "my-shop.eoshop.local",
       available: true,
     });
-    const submit = vi.spyOn(provisioningApi, "submit").mockResolvedValue({
+    const submit = vi.fn().mockResolvedValue({
       data: {
         id: "01STORE",
         storeName: "متجري",
@@ -121,7 +128,7 @@ describe("current interface behavior", () => {
     const onSubmitted = vi.fn();
     const user = userEvent.setup();
 
-    render(
+    renderInterface(
       <DomainSetupModal
         isOpen
         onClose={vi.fn()}
@@ -131,11 +138,15 @@ describe("current interface behavior", () => {
         config={{ storeName: "متجري" }}
         onSubmitted={onSubmitted}
       />,
+      createFakeUiAdapters({
+        plans: { list: listPlans, domainAvailability: availability },
+        provisioning: { submit },
+      }),
     );
 
     expect(await screen.findByText("البداية")).toBeTruthy();
     await user.type(screen.getByLabelText("عنوان المتجر داخل المنصة"), "my-shop");
-    await waitFor(() => expect(availability).toHaveBeenCalledWith("my-shop"), { timeout: 1500 });
+    await waitFor(() => expect(availability).toHaveBeenCalledWith("my-shop", expect.any(AbortSignal)), { timeout: 1500 });
     expect(await screen.findByText(/my-shop\.eoshop\.local متاح/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
 
@@ -149,12 +160,53 @@ describe("current interface behavior", () => {
   });
 
   it("retains the current server-pricing headings without a screen redesign", async () => {
-    vi.spyOn(plansApi, "list").mockResolvedValue([starterPlan]);
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
 
-    render(<ServerPricingPlans onStart={vi.fn()} />);
+    renderInterface(
+      <ServerPricingPlans onStart={vi.fn()} />,
+      createFakeUiAdapters({ plans: { list: listPlans } }),
+    );
 
     expect(screen.getByRole("heading", { name: "الباقات والأسعار" })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "البداية" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /ابدأ تصميم المتجر/ })).toBeTruthy();
+  });
+
+  it("ignores a stale domain response after the merchant changes the handle", async () => {
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
+    let resolveFirst!: (value: { handle: string; domain: string; available: boolean }) => void;
+    let resolveSecond!: (value: { handle: string; domain: string; available: boolean }) => void;
+    const availability = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+    const user = userEvent.setup();
+
+    renderInterface(
+      <DomainSetupModal
+        isOpen
+        onClose={vi.fn()}
+        storeName="متجري"
+        businessType="تجزئة"
+        themeStyle="elegant"
+        config={{ storeName: "متجري" }}
+      />,
+      createFakeUiAdapters({
+        plans: { list: listPlans, domainAvailability: availability },
+      }),
+    );
+
+    const handleInput = screen.getByLabelText("عنوان المتجر داخل المنصة");
+    await user.type(handleInput, "first-shop");
+    await waitFor(() => expect(availability).toHaveBeenCalledTimes(1), { timeout: 1500 });
+    await user.clear(handleInput);
+    await user.type(handleInput, "second-shop");
+    await waitFor(() => expect(availability).toHaveBeenCalledTimes(2), { timeout: 1500 });
+
+    resolveSecond({ handle: "second-shop", domain: "second-shop.eoshop.local", available: true });
+    expect(await screen.findByText(/second-shop\.eoshop\.local متاح/)).toBeTruthy();
+    resolveFirst({ handle: "first-shop", domain: "first-shop.eoshop.local", available: true });
+
+    await waitFor(() => expect(screen.queryByText(/first-shop\.eoshop\.local متاح/)).toBeNull());
+    expect(screen.getByText(/second-shop\.eoshop\.local متاح/)).toBeTruthy();
   });
 });

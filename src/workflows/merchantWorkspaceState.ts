@@ -1,6 +1,6 @@
 import type { StoreConfig } from "../types";
 import { ELEGANT_PRESET } from "../types";
-import { ApiError } from "./apiClient";
+import { isUiErrorCode, type UiErrorShape } from "../contracts/uiError";
 
 export type MerchantRestoreResult = "loaded" | "none" | "error";
 
@@ -59,10 +59,8 @@ export function classifyMerchantRestore(storeCount: number, failed = false): Mer
   return storeCount === 0 ? "none" : "loaded";
 }
 
-export function isRevisionConflict(cause: unknown): cause is ApiError {
-  return cause instanceof ApiError
-    && cause.category === "conflict"
-    && cause.code === "workspace_revision_conflict";
+export function isRevisionConflict(cause: unknown): cause is UiErrorShape {
+  return isUiErrorCode(cause, "conflict", "workspace_revision_conflict");
 }
 
 export function shouldApplyWorkspaceResponse(

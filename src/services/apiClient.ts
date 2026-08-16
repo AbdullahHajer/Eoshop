@@ -1,14 +1,6 @@
-export type ApiErrorCategory =
-  | "unauthenticated"
-  | "forbidden"
-  | "conflict"
-  | "csrf"
-  | "validation"
-  | "throttled"
-  | "server"
-  | "network"
-  | "aborted"
-  | "unexpected";
+import type { UiErrorCategory } from "../contracts/uiError";
+
+export type ApiErrorCategory = UiErrorCategory;
 
 interface ErrorPayload {
   message?: unknown;

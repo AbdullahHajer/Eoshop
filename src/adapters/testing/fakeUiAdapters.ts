@@ -1,0 +1,54 @@
+import type { UiAdapters } from "../uiAdapters";
+
+type AdapterOverrides = {
+  [Key in keyof UiAdapters]?: Partial<UiAdapters[Key]>;
+};
+
+function unexpected(operation: string): never {
+  throw new Error(`Unexpected fake UI adapter call: ${operation}`);
+}
+
+export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapters {
+  const adapters: UiAdapters = {
+    auth: {
+      session: async () => unexpected("auth.session"),
+      register: async () => unexpected("auth.register"),
+      login: async () => unexpected("auth.login"),
+      logout: async () => unexpected("auth.logout"),
+      forgotPassword: async () => unexpected("auth.forgotPassword"),
+      resetPassword: async () => unexpected("auth.resetPassword"),
+    },
+    administration: {
+      listStores: async () => unexpected("administration.listStores"),
+      updateStoreStatus: async () => unexpected("administration.updateStoreStatus"),
+      retryProvisioning: async () => unexpected("administration.retryProvisioning"),
+      activateSubscription: async () => unexpected("administration.activateSubscription"),
+      publish: async () => unexpected("administration.publish"),
+      unpublish: async () => unexpected("administration.unpublish"),
+    },
+    assistant: {
+      generateStoreIdeas: async () => unexpected("assistant.generateStoreIdeas"),
+    },
+    plans: {
+      list: async () => unexpected("plans.list"),
+      domainAvailability: async () => unexpected("plans.domainAvailability"),
+    },
+    provisioning: {
+      listStores: async () => unexpected("provisioning.listStores"),
+      submit: async () => unexpected("provisioning.submit"),
+    },
+    workspace: {
+      load: async () => unexpected("workspace.load"),
+      save: async () => unexpected("workspace.save"),
+    },
+  };
+
+  return {
+    auth: { ...adapters.auth, ...overrides.auth },
+    administration: { ...adapters.administration, ...overrides.administration },
+    assistant: { ...adapters.assistant, ...overrides.assistant },
+    plans: { ...adapters.plans, ...overrides.plans },
+    provisioning: { ...adapters.provisioning, ...overrides.provisioning },
+    workspace: { ...adapters.workspace, ...overrides.workspace },
+  };
+}

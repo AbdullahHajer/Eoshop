@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { ShieldCheck, Lock, Mail, X, ArrowLeft, AlertCircle } from "lucide-react";
-import { authApi, toUserProfile } from "../services/authApi";
-import { ApiError } from "../services/apiClient";
-import type { UserProfile } from "./AuthGateway";
+import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import { uiErrorMessage, type UserProfile } from "../adapters/uiAdapters";
 
 interface AdminAuthModalProps {
   isOpen: boolean;
@@ -16,6 +15,7 @@ export default function AdminAuthModal({
   onClose,
   onSuccess
 }: AdminAuthModalProps) {
+  const { auth } = useUiAdapters();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -35,18 +35,18 @@ export default function AdminAuthModal({
     setLoading(true);
 
     try {
-      const authenticated = await authApi.login(email, password);
+      const authenticated = await auth.login(email, password);
 
       if (!authenticated.platformPermissions.includes("platform.stores.view")) {
-        await authApi.logout();
+        await auth.logout();
         setError("هذا الحساب لا يملك صلاحية الدخول إلى إدارة متاجر المنصة.");
         return;
       }
 
-      onSuccess(toUserProfile(authenticated));
+      onSuccess(authenticated);
       onClose();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "تعذر الاتصال بالخادم.");
+      setError(uiErrorMessage(requestError, "تعذر الاتصال بالخادم."));
     } finally {
       setLoading(false);
     }

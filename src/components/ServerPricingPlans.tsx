@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { ArrowLeft, Check, RefreshCw, ShieldCheck } from "lucide-react";
-import { plansApi, type StorePlan } from "../services/plansApi";
+import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import type { StorePlan } from "../adapters/uiAdapters";
 import { useApiTask } from "../hooks/useApiTask";
 
 interface ServerPricingPlansProps {
@@ -16,7 +17,8 @@ const featureLabels: Record<string, string> = {
 };
 
 export default function ServerPricingPlans({ onStart }: ServerPricingPlansProps) {
-  const plansTask = useApiTask<StorePlan[], []>(plansApi.list, { retry: "safe" });
+  const { plans: planActions } = useUiAdapters();
+  const plansTask = useApiTask<StorePlan[], []>(planActions.list, { retry: "safe" });
   const plans = plansTask.data ?? [];
 
   useEffect(() => {

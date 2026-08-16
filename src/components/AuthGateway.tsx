@@ -4,21 +4,10 @@ import {
   User, Mail, Phone, Lock, Eye, EyeOff, ShieldCheck, 
   Sparkles, LogOut, X, ChevronLeft, LogIn, AlertCircle
 } from "lucide-react";
-import { authApi, toUserProfile } from "../services/authApi";
-import { ApiError } from "../services/apiClient";
+import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import { uiErrorMessage, type UserProfile } from "../adapters/uiAdapters";
 
-export interface UserProfile {
-  id: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  role: "merchant" | "admin";
-  platformRoles: string[];
-  platformPermissions: string[];
-  createdStoreId?: string;
-  createdStoreName?: string;
-  storeStatus?: "pending" | "approved" | "rejected" | "none";
-}
+export type { UserProfile } from "../adapters/uiAdapters";
 
 interface AuthGatewayProps {
   isOpen: boolean;
@@ -39,6 +28,7 @@ export default function AuthGateway({
   onStartStoreCreation,
   initialMode = "signup"
 }: AuthGatewayProps) {
+  const { auth } = useUiAdapters();
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   
   // Form fields
@@ -104,20 +94,19 @@ export default function AuthGateway({
 
     try {
       const authenticated = mode === "signup"
-        ? await authApi.register({
+        ? await auth.register({
             name: fullName,
             email,
             phone,
             password,
             passwordConfirmation: confirmPassword,
           })
-        : await authApi.login(email, password);
+        : await auth.login(email, password);
 
-      const newUser = toUserProfile(authenticated);
-      onLoginSuccess(newUser);
+      onLoginSuccess(authenticated);
       onClose();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "تعذر الاتصال بالخادم. حاول مرة أخرى.");
+      setError(uiErrorMessage(requestError, "تعذر الاتصال بالخادم. حاول مرة أخرى."));
     } finally {
       setLoading(false);
     }
@@ -135,9 +124,9 @@ export default function AuthGateway({
     setLoading(true);
 
     try {
-      setNotice(await authApi.forgotPassword(email));
+      setNotice(await auth.forgotPassword(email));
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "تعذر إرسال طلب الاستعادة.");
+      setError(uiErrorMessage(requestError, "تعذر إرسال طلب الاستعادة."));
     } finally {
       setLoading(false);
     }
