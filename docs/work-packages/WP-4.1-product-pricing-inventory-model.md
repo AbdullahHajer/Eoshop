@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 4 — Commerce and orders core |
 | Work Package | WP 4.1 |
-| Status | Implementation, local gates and independent review complete; delivery pending |
+| Status | Complete and merged |
 | Started | 2026-08-16 |
 | Branch | `codex/wp-4.1-product-pricing-inventory` |
 | Base | Protected `main` at `a50819c8` |
@@ -76,7 +76,7 @@ Turn the materialized WP 3.2 product rows into a durable commerce catalog whose 
 
 - [x] Record migration, backend, frontend, integration and rollback evidence.
 - [x] Obtain independent read-only approval with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Acceptance criteria
 
