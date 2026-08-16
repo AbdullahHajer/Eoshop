@@ -85,4 +85,14 @@ Result: **PASS**.
 
 ## Delivery
 
-Commit, PR, required GitHub checks, merge and protected-main verification are recorded during closeout after the implementation branch is published.
+- Characterization baseline commit: `70691b4`.
+- Implementation commit: `1bb8802`.
+- Evidence commit on the implementation branch: `1869c0b`.
+- Pull request: [#18 — WP 3.3: preserve the current interface through API adapters](https://github.com/sas-prog1/Eoshop/pull/18).
+- Final implementation head: `1869c0b039ce56498530831661912407b2208b30`.
+- Pull-request CI: [run 31947313283](https://github.com/sas-prog1/Eoshop/actions/runs/31947313283), with Repository safety, Backend quality, Frontend quality and Container integration all successful.
+- Independent read-only review verdict: **APPROVE**, with no blocking findings.
+- PR #18 was merged through the documented single-owner administrative path only after the independent review and all four required checks passed.
+- Merge commit on protected `main`: `f19dfc54edeaf590438e8b11fc99480fa163896a`.
+- Protected-main CI: [run 31947501908](https://github.com/sas-prog1/Eoshop/actions/runs/31947501908), with all four required jobs successful.
+- Final package status: **Complete and merged**; no deferred implementation or failing gate remains in WP 3.3.

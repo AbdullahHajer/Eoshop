@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 3 — Connect the interface to the backend |
 | Work Package | WP 3.3 |
-| Status | Implementation verified — pending delivery |
+| Status | Complete and merged |
 | Started | 2026-08-16 |
 | Branch | `codex/wp-3.3-interface-preservation` |
 | Base | Protected `main` at `c76da962` |
@@ -69,7 +69,7 @@ Preserve the existing Arabic storefront builder and platform screens while makin
 
 - [x] Record verification evidence and rollback observations.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit, push, open PR, pass the four required checks and merge.
+- [x] Commit, push, open PR, pass the four required checks and merge.
 
 ## Acceptance criteria
 
