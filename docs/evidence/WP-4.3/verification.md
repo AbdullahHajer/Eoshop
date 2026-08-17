@@ -4,7 +4,7 @@
 - Branch: `codex/wp-4.3-orders`
 - Base: protected `main` at `e18500712e7580dc3644e03c8cec3773eec54352`
 - Scope: server-authoritative pricing, orders, immutable snapshots, inventory coupling and merchant lifecycle
-- Delivery: implementation and local gates complete; protected Git delivery in progress
+- Delivery: complete and merged through the protected branch workflow
 
 ## Order authority and data model
 
@@ -83,6 +83,7 @@ Expected error logs from negative audit, provisioning and explicit failure-injec
 - Independent read-only final review: **APPROVE**, with no blocking findings after the final fixes.
 - Implementation commit: `4d34f4c` (`feat(wp4.3): establish authoritative order lifecycle`).
 - Deterministic-history correction: `55222fa` (`fix(wp4.3): make order history sequencing deterministic`).
-- Pull request and required checks: pending.
-- Protected-main merge and push CI verification: pending.
-- Documentation-only closeout PR: pending.
+- Pull request: [#24](https://github.com/sas-prog1/Eoshop/pull/24), merged from final head `a1db5c7234931156c876fccfae70184d31792e2e`.
+- Pull-request CI: run `32028056674`; Repository safety, Backend quality, Frontend quality and Container integration all passed.
+- Merge commit: `f45f53ee3edd25ce096f6fb98163f80915ffa934` on protected `main`.
+- Protected-main CI: push run `32028667969`; all four required jobs passed.

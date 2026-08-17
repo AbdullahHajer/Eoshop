@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 4 — Commerce and orders core |
 | Work Package | WP 4.3 |
-| Status | T0–T4 complete; T5 delivery in progress |
+| Status | Complete and merged |
 | Started | 2026-08-16 |
 | Branch | `codex/wp-4.3-orders` |
 | Base | Protected `main` at `e185007` |
@@ -79,8 +79,8 @@ WP 4.3 is implemented internally as four bounded slices: schema/adoption, pricin
 
 - [x] Record exact commands, counts, concurrency, migration, HTTP and cleanup evidence.
 - [x] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass all four required checks, merge and verify protected-main CI.
-- [ ] Close delivery through a documentation-only protected PR.
+- [x] Push, open PR, pass all four required checks, merge and verify protected-main CI.
+- [x] Close delivery through a documentation-only protected PR.
 
 ## Acceptance criteria
 
