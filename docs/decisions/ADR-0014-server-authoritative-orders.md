@@ -55,7 +55,7 @@ Authoritative states are:
 
 Allowed transitions are `submitted -> accepted|cancelled|expired`, `accepted -> processing|completed`, and `processing -> completed`. Terminal states never transition. Cancellation after inventory commit is intentionally excluded; a future returns/refunds package must model that as a separate compensating business event.
 
-Every transition appends an immutable history row containing previous/next state, actor type/user, reason, request ID and database time. Exact no-ops do not append history.
+Every transition appends an immutable history row containing a unique positive per-order sequence, previous/next state, actor type/user, reason, request ID and database time. The sequence, rather than wall-clock precision or a random UUID, is the authoritative event order. Exact no-ops do not append history.
 
 ### Atomic inventory and idempotency
 

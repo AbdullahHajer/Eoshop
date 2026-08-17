@@ -105,6 +105,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->uuid('order_id');
             $table->uuid('operation_id')->unique();
+            $table->unsignedBigInteger('sequence');
             $table->string('from_status', 20)->nullable();
             $table->string('to_status', 20);
             $table->string('actor_type', 10);
@@ -114,6 +115,7 @@ return new class extends Migration
             $table->timestampTz('created_at')->useCurrent();
             $table->foreign('order_id')->references('id')->on('orders')->restrictOnDelete();
             $table->foreign('operation_id')->references('id')->on('order_operations')->restrictOnDelete();
+            $table->unique(['order_id', 'sequence']);
             $table->index(['order_id', 'created_at']);
         });
 
@@ -196,6 +198,7 @@ return new class extends Migration
         DB::statement("ALTER TABLE payment_attempts ADD CONSTRAINT payment_attempts_state_valid CHECK (state IN ('due_on_delivery','transfer_submitted_unverified'))");
         DB::statement("ALTER TABLE payment_attempts ADD CONSTRAINT payment_attempts_channel_valid CHECK ((method = 'cod' AND state = 'due_on_delivery' AND channel_id IS NULL AND encrypted_reference IS NULL) OR (method IN ('bank_transfer','wallet') AND state = 'transfer_submitted_unverified' AND channel_id IS NOT NULL))");
         DB::statement("ALTER TABLE order_status_history ADD CONSTRAINT order_history_status_valid CHECK ((from_status IS NULL AND to_status = 'submitted') OR (from_status = 'submitted' AND to_status IN ('accepted','cancelled','expired')) OR (from_status = 'accepted' AND to_status IN ('processing','completed')) OR (from_status = 'processing' AND to_status = 'completed'))");
+        DB::statement('ALTER TABLE order_status_history ADD CONSTRAINT order_history_sequence_positive CHECK (sequence > 0)');
         DB::statement("ALTER TABLE order_status_history ADD CONSTRAINT order_history_actor_valid CHECK ((actor_type = 'guest' AND actor_user_id IS NULL) OR (actor_type = 'user' AND actor_user_id IS NOT NULL) OR (actor_type = 'system' AND actor_user_id IS NULL))");
         DB::statement("ALTER TABLE order_status_history ADD CONSTRAINT order_history_actor_transition_valid CHECK ((from_status IS NULL AND to_status = 'submitted' AND actor_type = 'guest') OR (to_status = 'expired' AND actor_type = 'system') OR (from_status IS NOT NULL AND to_status <> 'expired' AND actor_type = 'user'))");
     }
@@ -285,25 +288,25 @@ return new class extends Migration
                 IF history_count <> 1 THEN RAISE EXCEPTION 'order creation history is incomplete'; END IF;
 
                 SELECT count(*) INTO history_mismatches FROM (
-                    SELECT history.*, row_number() OVER (ORDER BY history.created_at, history.id) AS sequence,
-                        lag(history.to_status) OVER (ORDER BY history.created_at, history.id) AS prior_status,
+                    SELECT history.*, row_number() OVER (ORDER BY history.sequence) AS row_position,
+                        lag(history.to_status) OVER (ORDER BY history.sequence) AS prior_status,
                         operation.kind AS operation_kind, operation.actor_type AS operation_actor_type,
                         operation.actor_user_id AS operation_actor_user_id
                     FROM order_status_history history
                     JOIN order_operations operation ON operation.id = history.operation_id
                     WHERE history.order_id = target_order.id
                 ) sequenced
-                WHERE (sequence = 1 AND (from_status IS NOT NULL OR to_status <> 'submitted'))
-                    OR (sequence > 1 AND from_status IS DISTINCT FROM prior_status)
+                WHERE sequence <> row_position
+                    OR (row_position = 1 AND (from_status IS NOT NULL OR to_status <> 'submitted'))
+                    OR (row_position > 1 AND from_status IS DISTINCT FROM prior_status)
                     OR operation_actor_type IS DISTINCT FROM actor_type
                     OR operation_actor_user_id IS DISTINCT FROM actor_user_id
                     OR (from_status IS NULL AND operation_kind <> 'create')
                     OR (to_status = 'expired' AND operation_kind <> 'expire')
                     OR (from_status IS NOT NULL AND to_status <> 'expired' AND operation_kind <> 'transition');
-                SELECT to_status INTO latest_status FROM order_status_history WHERE order_id = target_order.id ORDER BY created_at DESC, id DESC LIMIT 1;
-                IF history_mismatches <> 0 OR latest_status IS DISTINCT FROM target_order.status THEN
-                    RAISE EXCEPTION 'order status history is inconsistent';
-                END IF;
+                SELECT to_status INTO latest_status FROM order_status_history WHERE order_id = target_order.id ORDER BY sequence DESC LIMIT 1;
+                IF history_mismatches <> 0 THEN RAISE EXCEPTION 'order status history is inconsistent: chain mismatch'; END IF;
+                IF latest_status IS DISTINCT FROM target_order.status THEN RAISE EXCEPTION 'order status history is inconsistent: latest status mismatch'; END IF;
 
                 IF tracked_count = 0 THEN
                     IF target_order.reservation_id IS NOT NULL THEN RAISE EXCEPTION 'untracked order must not own a reservation'; END IF;

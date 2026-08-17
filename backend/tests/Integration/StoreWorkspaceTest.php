@@ -325,6 +325,7 @@ class StoreWorkspaceTest extends TestCase
             $this->assertSame(8, (int) DB::table('products')->where('id', $productId)->value('stock_quantity'));
             $this->assertSame(0, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
             $this->assertSame('committed', DB::table('inventory_reservations')->value('status'));
+            $this->assertSame([1, 2], DB::table('order_status_history')->where('order_id', $orderId)->orderBy('sequence')->pluck('sequence')->map('intval')->all());
             try {
                 DB::table('order_items')->update(['product_name' => 'tampered']);
                 $this->fail('Immutable order snapshots must reject direct database mutation.');
@@ -366,6 +367,7 @@ class StoreWorkspaceTest extends TestCase
                         'id' => (string) Str::uuid(),
                         'order_id' => $orderId,
                         'operation_id' => $operationId,
+                        'sequence' => 3,
                         'from_status' => OrderStatus::Accepted->value,
                         'to_status' => OrderStatus::Processing->value,
                         'actor_type' => 'user',

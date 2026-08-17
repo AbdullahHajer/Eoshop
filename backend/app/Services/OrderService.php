@@ -186,6 +186,7 @@ class OrderService
                     'id' => (string) Str::uuid(),
                     'order_id' => $orderId,
                     'operation_id' => $claim['operation']->id,
+                    'sequence' => 1,
                     'from_status' => null,
                     'to_status' => OrderStatus::Submitted->value,
                     'actor_type' => OrderActorType::Guest->value,
@@ -275,6 +276,7 @@ class OrderService
                 $clock = CarbonImmutable::parse((string) DB::selectOne('SELECT clock_timestamp() AS current_time')->current_time);
                 DB::table('order_status_history')->insert([
                     'id' => (string) Str::uuid(), 'order_id' => $orderId, 'operation_id' => $claim['operation']->id,
+                    'sequence' => ((int) DB::table('order_status_history')->where('order_id', $orderId)->max('sequence')) + 1,
                     'from_status' => $from->value, 'to_status' => $target->value, 'actor_type' => OrderActorType::User->value,
                     'actor_user_id' => (string) $actor->getKey(), 'reason_code' => $reasonCode, 'request_id' => $requestId, 'created_at' => $clock,
                 ]);
@@ -343,6 +345,7 @@ class OrderService
                 }
                 DB::table('order_status_history')->insert([
                     'id' => (string) Str::uuid(), 'order_id' => $orderId, 'operation_id' => $claim['operation']->id,
+                    'sequence' => ((int) DB::table('order_status_history')->where('order_id', $orderId)->max('sequence')) + 1,
                     'from_status' => OrderStatus::Submitted->value, 'to_status' => OrderStatus::Expired->value,
                     'actor_type' => OrderActorType::System->value, 'actor_user_id' => null,
                     'reason_code' => 'checkout_reservation_expired', 'request_id' => null, 'created_at' => $clock,
@@ -432,7 +435,7 @@ class OrderService
         $address = DB::table('order_addresses')->where('order_id', $order->id)->first();
         $resource['customer'] = json_decode(Crypt::decryptString((string) $order->customer_encrypted), true, 512, JSON_THROW_ON_ERROR);
         $resource['address'] = $address === null ? null : json_decode(Crypt::decryptString((string) $address->encrypted_payload), true, 512, JSON_THROW_ON_ERROR);
-        $resource['history'] = DB::table('order_status_history')->where('order_id', $order->id)->orderBy('created_at')->get()->map(fn (object $row): array => [
+        $resource['history'] = DB::table('order_status_history')->where('order_id', $order->id)->orderBy('sequence')->get()->map(fn (object $row): array => [
             'from' => $row->from_status, 'to' => (string) $row->to_status, 'reasonCode' => (string) $row->reason_code, 'createdAt' => (string) $row->created_at,
         ])->all();
 
