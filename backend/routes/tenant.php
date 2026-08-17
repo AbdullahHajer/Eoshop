@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\StoreFrontController;
+use App\Http\Controllers\StoreOrderController;
 use App\Http\Middleware\InitializeTenancyByDomain;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -19,4 +20,6 @@ Route::middleware([
     PreventAccessFromCentralDomains::class,
 ])->group(function () {
     Route::get('/api/store/config', [StoreFrontController::class, 'getStoreConfig']);
+    Route::post('/api/store/orders', [StoreOrderController::class, 'store'])
+        ->middleware('throttle:store.orders');
 });

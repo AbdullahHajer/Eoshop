@@ -7,6 +7,9 @@ import {
 } from "lucide-react";
 import { StoreConfig, Product, Coupon, EWallet } from "../types";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
+import type { OrderReceipt } from "../adapters/uiAdapters";
+
+type ControlTab = "branding" | "design" | "products" | "inventory" | "orders" | "checkout" | "pages" | "ai" | "export";
 
 interface ControlPanelProps {
   config: StoreConfig;
@@ -20,8 +23,8 @@ interface ControlPanelProps {
   updateInventoryPolicy?: (productId: string, manageStock: boolean, lowStockThreshold: number) => Promise<boolean>;
   addEmptyProduct: () => void;
   deleteProduct: (id: string) => void;
-  activeTab: "branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export";
-  setActiveTab: (tab: "branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export") => void;
+  activeTab: ControlTab;
+  setActiveTab: (tab: ControlTab) => void;
   previewDevice: "desktop" | "mobile";
   setPreviewDevice: (device: "desktop" | "mobile") => void;
   onOpenCheckoutPreview?: () => void;
@@ -47,7 +50,7 @@ export default function ControlPanel({
   onOpenCheckoutPreview,
   onOpenDomainModal
 }: ControlPanelProps) {
-  const { assistant, catalog } = useUiAdapters();
+  const { assistant, catalog, orders } = useUiAdapters();
 
   // AI assistant states inside control panel
   const [assistantPrompt, setAssistantPrompt] = useState("");
@@ -72,6 +75,44 @@ export default function ControlPanel({
   const [inventorySearch, setInventorySearch] = useState<string>("");
   const [inventoryFilter, setInventoryFilter] = useState<"all" | "inStock" | "lowStock" | "outOfStock" | "unlimited">("all");
   const [bulkStockQuantity, setBulkStockQuantity] = useState<number>(50);
+  const [merchantOrders, setMerchantOrders] = useState<OrderReceipt[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(() => new Set());
+  const pendingOrderIdsRef = useRef(new Set<string>());
+  const orderTransitionKeysRef = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    if (activeTab !== "orders" || !activeTenantId) return;
+    let current = true;
+    setOrdersLoading(true);
+    setOrdersError(null);
+    orders.list(activeTenantId)
+      .then((result) => { if (current) setMerchantOrders(result.items); })
+      .catch((error) => { if (current) setOrdersError(error instanceof Error ? error.message : "تعذر تحميل الطلبات."); })
+      .finally(() => { if (current) setOrdersLoading(false); });
+    return () => { current = false; };
+  }, [activeTab, activeTenantId, orders]);
+
+  const advanceOrder = async (order: OrderReceipt, status: OrderReceipt["status"]) => {
+    if (!activeTenantId || pendingOrderIdsRef.current.has(order.id)) return;
+    const operation = `${order.id}:${status}`;
+    const idempotencyKey = orderTransitionKeysRef.current.get(operation) ?? crypto.randomUUID();
+    orderTransitionKeysRef.current.set(operation, idempotencyKey);
+    pendingOrderIdsRef.current.add(order.id);
+    setPendingOrderIds(new Set(pendingOrderIdsRef.current));
+    setOrdersError(null);
+    try {
+      const updated = await orders.updateStatus(activeTenantId, order.id, status, `merchant_${status}`, idempotencyKey);
+      orderTransitionKeysRef.current.delete(operation);
+      setMerchantOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (error) {
+      setOrdersError(error instanceof Error ? error.message : "تعذر تحديث الطلب.");
+    } finally {
+      pendingOrderIdsRef.current.delete(order.id);
+      setPendingOrderIds(new Set(pendingOrderIdsRef.current));
+    }
+  };
 
   // Checkout coupon state
   const [newCouponCode, setNewCouponCode] = useState("");
@@ -2443,6 +2484,44 @@ export default function ControlPanel({
         })()}
 
         {/* --- CHECKOUT & PAYMENT CUSTOMIZATION TAB (تعديل إتمام الطلب والدفع) --- */}
+        {activeTab === "orders" && (
+          <div className="space-y-4 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="font-black text-slate-900">الطلبات المسجلة على الخادم</h3>
+              <p className="mt-1 text-xs text-slate-500">الأسعار والحالات وحركات المخزون المعروضة هنا مصدرها الخادم.</p>
+            </div>
+            {ordersError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{ordersError}</div>}
+            {ordersLoading && <div className="p-4 text-center text-xs font-bold text-slate-500">جارٍ تحميل الطلبات...</div>}
+            {!ordersLoading && merchantOrders.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">لا توجد طلبات مسجلة بعد.</div>}
+            {merchantOrders.map((order) => {
+              const next = order.status === "submitted" ? "accepted" : order.status === "accepted" ? "processing" : order.status === "processing" ? "completed" : null;
+              const transitionPending = pendingOrderIds.has(order.id);
+              return (
+                <div key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-mono text-sm font-black text-slate-900">{order.number}</p>
+                      <p className="text-[11px] text-slate-500">{new Date(order.createdAt).toLocaleString("ar-SA")}</p>
+                    </div>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-700">{order.status}</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                    <span className="font-mono text-sm font-black">{(order.totals.grandTotalMinor / 100).toFixed(2)} {order.currencyCode}</span>
+                    <div className="flex gap-2">
+                      {order.status === "submitted" && (
+                        <button disabled={transitionPending} onClick={() => void advanceOrder(order, "cancelled")} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50">إلغاء</button>
+                      )}
+                      {next && (
+                        <button disabled={transitionPending} onClick={() => void advanceOrder(order, next)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">نقل إلى {next}</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {activeTab === "checkout" && (() => {
           const coupons: Coupon[] = config.customCoupons || [
             { code: "WELCOME10", discountPercent: 10, active: true },
@@ -2614,13 +2693,13 @@ export default function ControlPanel({
                       </div>
                       <input
                         type="checkbox"
-                        checked={config.enableCashOnDelivery !== false}
+                        checked={config.enableCashOnDelivery === true}
                         onChange={(e) => handleConfigChange("enableCashOnDelivery", e.target.checked)}
                         className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
                       />
                     </div>
 
-                    {config.enableCashOnDelivery !== false && (
+                    {config.enableCashOnDelivery === true && (
                       <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                         <label className="text-[10px] font-bold text-slate-600">رسوم إضافية للدفع عند الاستلام:</label>
                         <input
@@ -2647,13 +2726,13 @@ export default function ControlPanel({
                       </div>
                       <input
                         type="checkbox"
-                        checked={config.enableBankTransfer !== false}
+                        checked={config.enableBankTransfer === true}
                         onChange={(e) => handleConfigChange("enableBankTransfer", e.target.checked)}
                         className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
                       />
                     </div>
 
-                    {config.enableBankTransfer !== false && (
+                    {config.enableBankTransfer === true && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-[11px]">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-600 mb-0.5">اسم البنك / المحفظة</label>
@@ -2677,7 +2756,7 @@ export default function ControlPanel({
                           <label className="block text-[10px] font-bold text-slate-600 mb-0.5">رقم الحساب البنكي / رقم المحفظة</label>
                           <input
                             type="text"
-                            value={config.bankAccountNumber || "123456789012"}
+                            value={config.bankAccountNumber || ""}
                             onChange={(e) => handleConfigChange("bankAccountNumber", e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono"
                           />
@@ -2686,7 +2765,7 @@ export default function ControlPanel({
                           <label className="block text-[10px] font-bold text-slate-600 mb-0.5">رقم الآيبان (IBAN)</label>
                           <input
                             type="text"
-                            value={config.bankIban || "SA9480000000123456789012"}
+                            value={config.bankIban || ""}
                             onChange={(e) => handleConfigChange("bankIban", e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono"
                           />
@@ -2851,14 +2930,14 @@ export default function ControlPanel({
                         <span className="text-[10px] font-bold text-slate-600">تفعيل خيار المحافظ</span>
                         <input
                           type="checkbox"
-                          checked={config.enableEWallets !== false}
+                          checked={config.enableEWallets === true}
                           onChange={(e) => handleConfigChange("enableEWallets", e.target.checked)}
                           className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
                         />
                       </label>
                     </div>
 
-                    {config.enableEWallets !== false && (
+                    {config.enableEWallets === true && (
                       <div className="space-y-4 text-xs">
                         {/* Form to add a new custom wallet */}
                         <form onSubmit={handleAddWallet} className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">

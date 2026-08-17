@@ -74,7 +74,7 @@ function Invoke-IdentityDatabaseTests {
         '--env', 'SESSION_DRIVER=database',
         '--env', 'SESSION_CONNECTION=pgsql',
         $qualityImage,
-        'composer', 'test:database'
+        'vendor/bin/phpunit', '--colors=always', '--group=database'
     )
 
     & docker @dockerArguments
@@ -244,7 +244,19 @@ SET search_path TO "$schema";
 INSERT INTO store_configs (id, config_json, products_materialized, is_current, created_at, updated_at)
 VALUES (
     '00000000-0000-0000-0000-000000000021',
-    json_build_object('marker', 'wp21-live'),
+    json_build_object(
+        'marker', 'wp21-live',
+        'enableCashOnDelivery', true,
+        'cashOnDeliveryFee', 0,
+        'shippingFee', 0,
+        'freeShippingThreshold', 0,
+        'taxRate', 0,
+        'minOrderAmount', 0,
+        'enableCoupons', false,
+        'requireEmail', false,
+        'requireAddressDetails', true,
+        'enableCustomerNotes', true
+    ),
     true,
     true,
     now(),
@@ -489,6 +501,112 @@ function Assert-InventoryScheduler {
     }
 }
 
+function Assert-OrderHttpBoundary {
+    param([int]$Port)
+
+    $tenantDomain = 'wp23-live.example.test'
+    $untrustedHandler = [System.Net.Http.HttpClientHandler]::new()
+    $untrustedClient = [System.Net.Http.HttpClient]::new($untrustedHandler)
+    $untrustedClient.BaseAddress = [Uri]"http://127.0.0.1:$Port"
+    $untrustedClient.DefaultRequestHeaders.Host = $tenantDomain
+    $untrustedContent = [System.Net.Http.StringContent]::new('{}')
+    $untrustedContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/json')
+    try {
+        $untrustedResponse = $untrustedClient.PostAsync('/api/store/orders', $untrustedContent).GetAwaiter().GetResult()
+        if ([int]$untrustedResponse.StatusCode -ne 419) {
+            throw "Expected public order HTTP 419 without CSRF, received $([int]$untrustedResponse.StatusCode)."
+        }
+    }
+    finally {
+        $untrustedClient.Dispose()
+        $untrustedHandler.Dispose()
+    }
+
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.CookieContainer = [System.Net.CookieContainer]::new()
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.BaseAddress = [Uri]"http://127.0.0.1:$Port"
+    $client.DefaultRequestHeaders.Host = $tenantDomain
+    $jsonContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/json')
+
+    try {
+        $csrfResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
+        $csrfPayload = $csrfResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$csrfResponse.StatusCode -ne 200 -or -not $csrfPayload.csrf_token) {
+            throw 'Failed to establish the public order CSRF session on the published tenant Host.'
+        }
+
+        $configResponse = $client.GetAsync('/api/store/config').GetAwaiter().GetResult()
+        $configPayload = $configResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$configResponse.StatusCode -ne 200) {
+            throw "Expected published storefront HTTP 200 before checkout, received $([int]$configResponse.StatusCode)."
+        }
+
+        $idempotencyKey = '00000000-0000-4000-8000-000000000043'
+        $requestId = '00000000-0000-4000-8000-000000000044'
+        $orderBody = @{
+            workspaceRevision = [int]$configPayload.data.workspaceRevision
+            catalogRevision = [int]$configPayload.data.catalogRevision
+            lines = @(@{ productId = '00000000-0000-0000-0000-000000000038'; quantity = 1 })
+            payment = @{ method = 'cod'; channelId = $null; reference = $null }
+            customer = @{ name = 'WP 4.3 Live Shopper'; phone = '+967700000043'; email = $null; notes = $null }
+            address = @{ city = 'Sanaa'; area = 'Old City'; street = $null; details = 'Integration gate address' }
+        } | ConvertTo-Json -Depth 6 -Compress
+
+        $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$csrfPayload.csrf_token)
+        $client.DefaultRequestHeaders.Add('Idempotency-Key', $idempotencyKey)
+        $client.DefaultRequestHeaders.Add('X-Request-ID', $requestId)
+
+        $createContent = [System.Net.Http.StringContent]::new($orderBody)
+        $createContent.Headers.ContentType = $jsonContentType
+        $createResponse = $client.PostAsync('/api/store/orders', $createContent).GetAwaiter().GetResult()
+        $createPayload = $createResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$createResponse.StatusCode -ne 201 -or $createPayload.data.replayed -ne $false -or [int]$createPayload.data.order.totals.grandTotalMinor -ne 100) {
+            throw "The live authoritative order was not created with server totals. Status: $([int]$createResponse.StatusCode)."
+        }
+
+        $replayContent = [System.Net.Http.StringContent]::new($orderBody)
+        $replayContent.Headers.ContentType = $jsonContentType
+        $replayResponse = $client.PostAsync('/api/store/orders', $replayContent).GetAwaiter().GetResult()
+        $replayPayload = $replayResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ([int]$replayResponse.StatusCode -ne 201 -or $replayPayload.data.replayed -ne $true -or $replayPayload.data.order.id -ne $createPayload.data.order.id) {
+            throw "The live order idempotency replay did not return the original receipt. Status: $([int]$replayResponse.StatusCode)."
+        }
+
+        for ($attempt = 1; $attempt -le 9; $attempt++) {
+            $invalidContent = [System.Net.Http.StringContent]::new('{}')
+            $invalidContent.Headers.ContentType = $jsonContentType
+            $invalidResponse = $client.PostAsync('/api/store/orders', $invalidContent).GetAwaiter().GetResult()
+            $expected = if ($attempt -le 8) { 422 } else { 429 }
+            if ([int]$invalidResponse.StatusCode -ne $expected) {
+                throw "Expected public order throttle attempt $attempt to return HTTP $expected, received $([int]$invalidResponse.StatusCode)."
+            }
+        }
+
+        $tenantId = 'wp21-live'
+        $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $hashBytes = $hashAlgorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($tenantId))
+        }
+        finally {
+            $hashAlgorithm.Dispose()
+        }
+        $hash = -join ($hashBytes | ForEach-Object { $_.ToString('x2') })
+        $schema = "tenant_wp21_live_$($hash.Substring(0, 16))"
+        $persisted = (Get-ComposeOutput -Arguments @(
+            'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+            '-tAc', "SELECT (SELECT count(*) FROM `"$schema`".orders)::text || ':' || (SELECT reserved_quantity FROM `"$schema`".products WHERE id = '00000000-0000-0000-0000-000000000038')::text;"
+        )).Trim()
+        if ($persisted -ne '1:1') {
+            throw "Expected one durable order with one reserved unit after replay, received $persisted."
+        }
+    }
+    finally {
+        $client.Dispose()
+        $handler.Dispose()
+    }
+}
+
 Push-Location $repositoryRoot
 
 try {
@@ -655,6 +773,7 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
         Assert-TenancyBoundary -Port $Port
         Assert-InventoryHttpBoundary -Port $Port
         Assert-InventoryScheduler
+        Assert-OrderHttpBoundary -Port $Port
         Assert-ProvisioningWorker
     }
     finally {

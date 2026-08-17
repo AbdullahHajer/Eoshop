@@ -143,7 +143,7 @@ class DomainSubscriptionPublicationTest extends TestCase
             ->assertJsonPath('data.publicDomain', $publicHost);
         $this->getJson('http://'.$publicHost.'/api/store/config')
             ->assertOk()
-            ->assertJsonPath('storeName', 'Store publish-store');
+            ->assertJsonPath('data.config.storeName', 'Store publish-store');
         $this->getJson('http://'.$internalHost.'/api/store/config')->assertNotFound();
 
         $this->startBrowserSessionAs($manager);
@@ -238,7 +238,7 @@ class DomainSubscriptionPublicationTest extends TestCase
         $this->postJson("/api/admin/stores/{$tenant->id}/publication/publish")->assertOk();
         $this->getJson('http://renew-shop.'.config('tenancy.tenant_base_domain').'/api/store/config')
             ->assertOk()
-            ->assertJsonPath('storeName', 'Store renew-store');
+            ->assertJsonPath('data.config.storeName', 'Store renew-store');
     }
 
     public function test_rejection_releases_handle_and_failed_reopen_rolls_back_review_state(): void

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\CheckoutPolicyContract;
 use App\Support\ProductCatalogContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -118,8 +119,8 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             'config.enableCoupons' => $boolean,
             'config.customCoupons' => ['nullable', 'array', 'max:100'],
             'config.customCoupons.*' => ['array:code,discountPercent,active'],
-            'config.customCoupons.*.code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/'],
-            'config.customCoupons.*.discountPercent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'config.customCoupons.*.code' => ['required', 'string', 'max:50', 'regex:/^[A-Z0-9_-]+$/'],
+            'config.customCoupons.*.discountPercent' => ['required', 'numeric', 'min:0.01', 'max:100'],
             'config.customCoupons.*.active' => ['required', 'boolean'],
             'config.thankYouTitle' => ['nullable', 'string', 'max:500'],
             'config.thankYouMessage' => $longText,
@@ -182,6 +183,20 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             if (strlen($encoded) > 262_144) {
                 $validator->errors()->add('config', 'The store workspace may not exceed 256 KiB.');
             }
+
+            foreach (['minOrderAmount', 'freeShippingThreshold', 'shippingFee', 'cashOnDeliveryFee', 'taxRate'] as $field) {
+                $value = $this->input('config.'.$field);
+                if ($value !== null && preg_match('/^(0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?$/', (string) $value) !== 1) {
+                    $validator->errors()->add('config.'.$field, 'Checkout money and percentage values may have at most two decimal places.');
+                }
+            }
+            $codes = collect($this->input('config.customCoupons', []))
+                ->filter(static fn (mixed $coupon): bool => is_array($coupon))
+                ->map(fn (array $coupon): string => mb_strtoupper(trim((string) ($coupon['code'] ?? ''))));
+            if ($codes->filter()->uniqueStrict()->count() !== $codes->filter()->count()) {
+                $validator->errors()->add('config.customCoupons', 'Coupon codes must be unique after canonicalization.');
+            }
+            CheckoutPolicyContract::appendErrors($validator, (array) $this->input('config', []));
 
         }];
     }

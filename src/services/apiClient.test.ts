@@ -15,6 +15,7 @@ describe("apiClient", () => {
   it.each([
     [401, "unauthenticated"],
     [403, "forbidden"],
+    [404, "not_found"],
     [409, "conflict"],
     [419, "csrf"],
     [429, "throttled"],

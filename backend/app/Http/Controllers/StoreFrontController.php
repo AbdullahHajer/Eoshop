@@ -20,7 +20,13 @@ class StoreFrontController extends Controller
         }
 
         try {
-            return response()->json($workspaces->readPublic($tenant)['config']);
+            $workspace = $workspaces->readPublic($tenant);
+
+            return response()->json(['data' => [
+                'workspaceRevision' => $workspace['revision'],
+                'catalogRevision' => $workspace['catalogRevision'],
+                'config' => $workspace['config'],
+            ]]);
         } catch (StoreWorkspaceConflict) {
             abort(404);
         }

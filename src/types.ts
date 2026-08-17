@@ -122,7 +122,7 @@ export interface StoreConfig {
   enableWhatsAppNotification?: boolean;
 }
 
-export const ELEGANT_PRESET: StoreConfig = {
+const ELEGANT_SHOWCASE_PRESET: StoreConfig = {
   storeName: "لورين للعطور",
   slogan: "سحر النفحات الشرقية والفرنسية الفاخرة",
   logoIcon: "🌸",
@@ -308,7 +308,30 @@ export const ELEGANT_PRESET: StoreConfig = {
   ]
 };
 
+export const ELEGANT_PRESET: StoreConfig = {
+  ...ELEGANT_SHOWCASE_PRESET,
+  enableBankTransfer: false,
+  bankName: "",
+  bankAccountName: "",
+  bankIban: "",
+  bankAccountNumber: "",
+  enableOnlineCard: false,
+  enableApplePay: false,
+  enableStcPay: false,
+  enableEWallets: false,
+  customWallets: [],
+  enableCoupons: false,
+  customCoupons: [],
+};
+
 export const TECH_PRESET: StoreConfig = {
+  enableCashOnDelivery: true,
+  cashOnDeliveryFee: 0,
+  enableBankTransfer: false,
+  enableEWallets: false,
+  customWallets: [],
+  enableCoupons: false,
+  customCoupons: [],
   storeName: "تِك فيو - للأجهزة الذكية",
   slogan: "أحدث ابتكارات التكنولوجيا والملحقات الذكية مع ضمان 24 شهراً",
   logoIcon: "⚡",

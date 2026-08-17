@@ -21,5 +21,6 @@
         <env name="CACHE_STORE" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="ORDER_CHECKOUT_ENABLED" value="true" force="true"/>
     </php>
 </phpunit>

@@ -105,4 +105,14 @@ class TenantPolicy
     {
         return $user->hasTenantPermission($tenant, PermissionKey::TenantInventoryManage);
     }
+
+    public function viewOrders(User $user, Tenant $tenant): bool
+    {
+        return $user->hasTenantPermission($tenant, PermissionKey::TenantOrdersView);
+    }
+
+    public function updateOrders(User $user, Tenant $tenant): bool
+    {
+        return $user->hasTenantPermission($tenant, PermissionKey::TenantOrdersManage);
+    }
 }
