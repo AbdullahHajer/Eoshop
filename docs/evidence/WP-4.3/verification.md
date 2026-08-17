@@ -12,6 +12,7 @@
 - Authoritative money is stored and transferred as bounded integer minor units. Immutable item, checkout-policy, address and payment snapshots preserve the accepted quote.
 - Customer contact, address, notes and offline transfer references use encrypted application casts and are excluded from structured logs.
 - A database-bound create operation guards initial child inserts; immutable triggers reject later insertion, update or deletion of order snapshots and history.
+- A positive unique per-order history sequence defines deterministic event order independently of second-level timestamp binding or random UUID ordering; the deferred invariant also requires a gapless chain.
 - Deferred PostgreSQL invariants bind each tracked order line to its exact order-owned reservation and couple order status to reservation status.
 - The legacy client-priced orders table is retained as an isolated `legacy_unverified` archive and never enters authoritative reads or inventory flows.
 - Rollback succeeds before authoritative use and refuses once authoritative order operations exist.
@@ -41,17 +42,18 @@ Result: **PASS — 19 test files, 85 tests**.
 
 ## PostgreSQL and container integration
 
-Command: `scripts/ci/integration-gate.ps1 -ProjectName eoshop-wp43-final -Port 18094`, after rebuilding the backend and web images from the current tree.
+Final command: `scripts/ci/integration-gate.ps1 -ProjectName eoshop-wp43-sequence-final -Port 18097`, after rebuilding both backend application and backend quality images from the current tree.
 
 Result: **PASS**.
 
-- Database PHPUnit: **89 tests, 830 assertions**.
+- Database PHPUnit: **91 tests, 858 assertions**.
 - Central migrations, seeding, ordered rollback/reapply and route cache/clear passed.
 - Tenant migrations passed through `2026_08_16_000007_create_authoritative_orders` for new and adopted schemas.
 - Legacy rows remained byte-preserved and isolated; empty rollback/reapply passed and populated authoritative rollback refused.
 - Direct SQL attempts to append zero-value snapshot children after commit were rejected by PostgreSQL.
 - Failure injection at operation-result storage rolled back the order, snapshots, reservation, movements and idempotency result together.
 - A forked separate-connection final-unit race produced one durable order and one insufficient-stock result.
+- Creation, merchant transition and system expiry history proved deterministic sequences under database row locks; the system-expiry targeted rerun passed **1 test, 9 assertions** before the final full gate.
 - Idempotent replay, different-fingerprint conflict, stale quote, amount limits, payment policy, tenant isolation and customer-PII projection passed.
 - Live HTTP probes passed for tenant-host checkout, CSRF, validation/conflict/error contracts and merchant authentication/authorization.
 - The real Compose worker and scheduler processed their database-backed work, and the order-expiry path converged without racing generic inventory expiry.
@@ -80,6 +82,7 @@ Expected error logs from negative audit, provisioning and explicit failure-injec
 
 - Independent read-only final review: **APPROVE**, with no blocking findings after the final fixes.
 - Implementation commit: `4d34f4c` (`feat(wp4.3): establish authoritative order lifecycle`).
+- Deterministic-history correction: `55222fa` (`fix(wp4.3): make order history sequencing deterministic`).
 - Pull request and required checks: pending.
 - Protected-main merge and push CI verification: pending.
 - Documentation-only closeout PR: pending.

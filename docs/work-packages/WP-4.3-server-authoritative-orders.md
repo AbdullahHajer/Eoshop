@@ -77,8 +77,8 @@ WP 4.3 is implemented internally as four bounded slices: schema/adoption, pricin
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact commands, counts, concurrency, migration, HTTP and cleanup evidence.
-- [ ] Commit implementation and evidence separately.
+- [x] Record exact commands, counts, concurrency, migration, HTTP and cleanup evidence.
+- [x] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass all four required checks, merge and verify protected-main CI.
 - [ ] Close delivery through a documentation-only protected PR.
 
