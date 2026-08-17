@@ -11,6 +11,7 @@ use App\Models\PublicationRequest;
 use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
+use App\Support\CheckoutPolicyContract;
 use App\Support\TenantWorkspaceReadiness;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -240,6 +241,23 @@ class StoreWorkspaceService
         $catalog ??= $this->catalogs->compose($tenant, $public);
         $config['products'] = $catalog['products'];
         $config['currency'] = $catalog['currencyCode'];
+        if ($public) {
+            unset($config['customCoupons']);
+            if (! CheckoutPolicyContract::bankIsUsable($config)) {
+                $config['enableBankTransfer'] = false;
+                unset($config['bankName'], $config['bankAccountName'], $config['bankIban'], $config['bankAccountNumber']);
+            }
+            $wallets = array_values(array_filter(
+                is_array($config['customWallets'] ?? null) ? $config['customWallets'] : [],
+                static fn (mixed $wallet): bool => is_array($wallet) && CheckoutPolicyContract::walletIsUsable($wallet),
+            ));
+            if (($config['enableEWallets'] ?? false) !== true || $wallets === []) {
+                $config['enableEWallets'] = false;
+                unset($config['customWallets']);
+            } else {
+                $config['customWallets'] = $wallets;
+            }
+        }
 
         return [
             'tenantId' => (string) $tenant->getKey(),

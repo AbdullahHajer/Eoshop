@@ -6,6 +6,7 @@ use App\Enums\DomainKind;
 use App\Enums\DomainReservationOrigin;
 use App\Enums\DomainReservationStatus;
 use App\Enums\InventoryActorType;
+use App\Enums\OrderStatus;
 use App\Enums\ProvisioningSchemaOrigin;
 use App\Enums\ProvisioningState;
 use App\Enums\PublicationRequestOrigin;
@@ -19,6 +20,7 @@ use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Enums\UserStatus;
 use App\Exceptions\InventoryConflict;
+use App\Exceptions\OrderConflict;
 use App\Models\DomainReservation;
 use App\Models\ProvisioningRun;
 use App\Models\PublicationRequest;
@@ -28,6 +30,7 @@ use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\InventoryLedgerService;
 use App\Services\InventoryReservationService;
+use App\Services\OrderService;
 use App\Services\ProductCatalogService;
 use App\Services\RoleAssignmentService;
 use App\Services\StoreWorkspaceService;
@@ -141,12 +144,44 @@ class StoreWorkspaceTest extends TestCase
             $this->assertArrayNotHasKey('products', $config);
         });
 
-        $this->getJson("http://{$domain}/api/store/config")
+        $public = $this->getJson("http://{$domain}/api/store/config")
             ->assertOk()
-            ->assertJsonPath('storeName', 'Server Store')
-            ->assertJsonPath('products.0.sku', 'SKU-1');
+            ->assertJsonPath('data.config.storeName', 'Server Store')
+            ->assertJsonPath('data.config.products.0.sku', 'SKU-1')
+            ->json('data.config');
+        $this->assertArrayNotHasKey('customCoupons', $public);
+        $this->assertFalse($public['enableBankTransfer']);
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
         $this->assertFalse(tenancy()->initialized);
+    }
+
+    public function test_workspace_rejects_enabled_demo_payment_accounts(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('payment-policy');
+        $initial = $this->actingAs($owner)
+            ->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->json('data');
+        $product = [
+            ...$this->product('PAYMENT-SKU'),
+            'id' => $initial['config']['products'][0]['id'],
+            'revision' => $initial['config']['products'][0]['revision'],
+        ];
+        $config = $this->config('Payment Policy Store', [$product]);
+        $config['enableBankTransfer'] = true;
+        $config['bankName'] = 'Demo Bank';
+        $config['bankAccountName'] = 'Demo Merchant';
+        $config['bankAccountNumber'] = '123456789012';
+
+        $this->actingAs($owner)
+            ->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+                'revision' => $initial['revision'],
+                'catalogRevision' => $initial['catalogRevision'],
+                'config' => $config,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('config.bankAccountNumber');
+        $tenant->run(fn () => $this->assertSame(1, (int) DB::table('store_configs')->where('is_current', true)->value('revision')));
     }
 
     public function test_inventory_adjustment_is_atomic_revisioned_and_idempotent(): void
@@ -183,6 +218,364 @@ class StoreWorkspaceTest extends TestCase
         $tenant->run(function (): void {
             $this->assertSame(2, DB::table('inventory_operations')->count());
             $this->assertSame(2, DB::table('inventory_movements')->count());
+        });
+    }
+
+    public function test_public_checkout_prices_reserves_replays_and_merchant_accepts_atomically(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('order-checkout');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")
+            ->assertOk()
+            ->assertJsonPath('data.workspaceRevision', 1)
+            ->assertJsonPath('data.catalogRevision', 1)
+            ->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+        $key = (string) Str::uuid();
+        $payload = [
+            'workspaceRevision' => 1,
+            'catalogRevision' => 1,
+            'lines' => [['productId' => $productId, 'quantity' => 2]],
+            'couponCode' => 'SAVE10',
+            'payment' => ['method' => 'cod'],
+            'customer' => ['name' => 'Checkout Customer', 'phone' => '+967700000001'],
+            'address' => ['city' => 'Sanaa', 'area' => 'Old City', 'details' => 'Gate 1'],
+        ];
+
+        $created = $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("http://{$domain}/api/store/orders", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.replayed', false)
+            ->assertJsonPath('data.order.status', OrderStatus::Submitted->value)
+            ->assertJsonPath('data.order.totals.itemsSubtotalMinor', 2500)
+            ->assertJsonPath('data.order.totals.discountMinor', 250)
+            ->assertJsonPath('data.order.totals.shippingMinor', 500)
+            ->assertJsonPath('data.order.totals.taxMinor', 338)
+            ->assertJsonPath('data.order.totals.paymentFeeMinor', 100)
+            ->assertJsonPath('data.order.totals.grandTotalMinor', 3188)
+            ->json('data');
+        $orderId = (string) $created['order']['id'];
+        $additionalProductId = $this->addInventoryProduct($tenant, 'ORDER-APPEND-GUARD', 5);
+
+        $outsider = $this->user('order-outsider@example.test');
+        $centralOrdersUrl = "http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders";
+        $this->getJson($centralOrdersUrl)->assertUnauthorized();
+        $this->actingAs($outsider)->getJson($centralOrdersUrl)->assertForbidden();
+        Auth::forgetGuards();
+        $this->flushSession();
+
+        $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("http://{$domain}/api/store/orders", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.replayed', true)
+            ->assertJsonPath('data.order.id', $orderId);
+
+        $tenant->run(function () use ($orderId, $productId): void {
+            $this->assertSame(1, DB::table('orders')->where('id', $orderId)->count());
+            $this->assertSame(2, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
+            $this->assertSame('active', DB::table('inventory_reservations')->where('reference_id', $orderId)->value('status'));
+            $this->assertStringNotContainsString('Checkout Customer', (string) DB::table('orders')->where('id', $orderId)->value('customer_encrypted'));
+            $this->assertStringNotContainsString('Gate 1', (string) DB::table('order_addresses')->where('order_id', $orderId)->value('encrypted_payload'));
+        });
+
+        $list = $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders")
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', $orderId)
+            ->json('data.items.0');
+        $this->assertArrayNotHasKey('customer', $list);
+        $this->assertArrayNotHasKey('address', $list);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}")
+            ->assertOk()
+            ->assertJsonPath('data.customer.name', 'Checkout Customer')
+            ->assertJsonPath('data.address.details', 'Gate 1');
+        $transitionKey = (string) Str::uuid();
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $transitionKey])
+            ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/status", [
+                'status' => OrderStatus::Accepted->value,
+                'reasonCode' => 'merchant_accepted',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.replayed', false)
+            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $transitionKey])
+            ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/status", [
+                'status' => OrderStatus::Accepted->value,
+                'reasonCode' => 'merchant_accepted',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.replayed', true)
+            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $transitionKey])
+            ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/status", [
+                'status' => OrderStatus::Processing->value,
+                'reasonCode' => 'different_operation',
+            ])
+            ->assertConflict()
+            ->assertJsonPath('code', 'order_idempotency_conflict');
+        $tenant->run(function () use ($additionalProductId, $orderId, $owner, $productId): void {
+            $this->assertSame(8, (int) DB::table('products')->where('id', $productId)->value('stock_quantity'));
+            $this->assertSame(0, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
+            $this->assertSame('committed', DB::table('inventory_reservations')->value('status'));
+            $this->assertSame([1, 2], DB::table('order_status_history')->where('order_id', $orderId)->orderBy('sequence')->pluck('sequence')->map('intval')->all());
+            try {
+                DB::table('order_items')->update(['product_name' => 'tampered']);
+                $this->fail('Immutable order snapshots must reject direct database mutation.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('order history and snapshots are immutable', $exception->getMessage());
+            }
+
+            try {
+                DB::table('order_items')->insert([
+                    'order_id' => $orderId,
+                    'product_id' => $additionalProductId,
+                    'product_name' => 'Injected free item',
+                    'sku' => 'ORDER-APPEND-GUARD',
+                    'unit_price_minor' => 0,
+                    'quantity' => 1,
+                    'line_total_minor' => 0,
+                    'tracked_at_submission' => false,
+                    'created_at' => now(),
+                ]);
+                $this->fail('A committed order must reject appended snapshot items.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('order snapshots may only be inserted by their bound create operation', $exception->getMessage());
+            }
+
+            try {
+                DB::transaction(function () use ($orderId, $owner): void {
+                    $operationId = (string) Str::uuid();
+                    DB::table('order_operations')->insert([
+                        'id' => $operationId,
+                        'kind' => 'transition',
+                        'idempotency_scope' => 'negative-consistency-test',
+                        'idempotency_key' => (string) Str::uuid(),
+                        'request_fingerprint' => hash('sha256', 'negative-consistency-test'),
+                        'actor_type' => 'user',
+                        'actor_user_id' => (string) $owner->id,
+                        'created_at' => now()->addSecond(),
+                    ]);
+                    DB::table('order_status_history')->insert([
+                        'id' => (string) Str::uuid(),
+                        'order_id' => $orderId,
+                        'operation_id' => $operationId,
+                        'sequence' => 3,
+                        'from_status' => OrderStatus::Accepted->value,
+                        'to_status' => OrderStatus::Processing->value,
+                        'actor_type' => 'user',
+                        'actor_user_id' => (string) $owner->id,
+                        'reason_code' => 'unbound_direct_sql',
+                        'created_at' => now()->addSecond(),
+                    ]);
+                });
+                $this->fail('A child history insert must not diverge from the authoritative order status.');
+            } catch (\PDOException|QueryException $exception) {
+                $this->assertStringContainsString('order status history is inconsistent', $exception->getMessage());
+            }
+            $this->assertSame(2, DB::table('order_status_history')->where('order_id', $orderId)->count());
+        });
+    }
+
+    public function test_checkout_rejects_stale_quotes_client_totals_and_insufficient_stock_without_side_effects(): void
+    {
+        [$tenant, , $domain] = $this->readyTenant('order-boundaries');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+        $base = [
+            'workspaceRevision' => 999,
+            'catalogRevision' => 1,
+            'lines' => [['productId' => $productId, 'quantity' => 1]],
+            'payment' => ['method' => 'cod'],
+            'customer' => ['name' => 'Boundary Customer', 'phone' => '+967700000002'],
+            'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Gate 2'],
+        ];
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", $base)
+            ->assertConflict()->assertJsonPath('code', 'order_quote_stale');
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [...$base, 'workspaceRevision' => 1, 'grandTotal' => 1])
+            ->assertUnprocessable();
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                ...$base,
+                'workspaceRevision' => 1,
+                'payment' => ['method' => 'cod', 'reference' => 'must-not-be-accepted'],
+            ])->assertUnprocessable()->assertJsonValidationErrors('payment.reference');
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                ...$base,
+                'workspaceRevision' => 1,
+                'lines' => [['productId' => $productId, 'quantity' => 11]],
+            ])->assertConflict()->assertJsonPath('code', 'order_stock_conflict');
+        $tenant->run(function (): void {
+            $this->assertSame(0, DB::table('orders')->count());
+            $this->assertSame(0, DB::table('inventory_reservations')->where('reference_type', 'order')->count());
+        });
+    }
+
+    public function test_checkout_flag_does_not_take_storefront_browsing_offline(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('order-feature-flag');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $original = config('orders.checkout_enabled');
+
+        try {
+            config(['orders.checkout_enabled' => false]);
+            $this->getJson("http://{$domain}/api/store/config")
+                ->assertOk()
+                ->assertJsonPath('data.workspaceRevision', 1);
+            $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+                ->postJson("http://{$domain}/api/store/orders", [
+                    'workspaceRevision' => 1,
+                    'catalogRevision' => 1,
+                    'lines' => [['productId' => $bootstrap['config']['products'][0]['id'], 'quantity' => 1]],
+                    'payment' => ['method' => 'cod'],
+                    'customer' => ['name' => 'Feature Flag Customer', 'phone' => '+967700000003'],
+                    'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Gate 3'],
+                ])
+                ->assertStatus(503)
+                ->assertJsonPath('code', 'order_checkout_unavailable');
+            $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+                ->actingAs($owner)
+                ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders")
+                ->assertOk()
+                ->assertJsonPath('data.pagination.total', 0);
+            $tenant->run(fn () => $this->assertSame(0, DB::table('orders')->count()));
+        } finally {
+            config(['orders.checkout_enabled' => $original]);
+        }
+    }
+
+    public function test_order_create_rolls_back_all_effects_when_result_persistence_fails(): void
+    {
+        [$tenant, , $domain] = $this->readyTenant('order-failure-injection');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+
+        $tenant->run(function (): void {
+            DB::unprepared(<<<'SQL'
+                CREATE FUNCTION wp43_reject_operation_result() RETURNS trigger AS $$
+                BEGIN
+                    RAISE EXCEPTION 'injected operation result failure';
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER wp43_reject_operation_result
+                    BEFORE INSERT ON order_operation_results
+                    FOR EACH ROW EXECUTE FUNCTION wp43_reject_operation_result();
+                SQL);
+        });
+
+        try {
+            $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+                ->postJson("http://{$domain}/api/store/orders", [
+                    'workspaceRevision' => 1,
+                    'catalogRevision' => 1,
+                    'lines' => [['productId' => $productId, 'quantity' => 1]],
+                    'payment' => ['method' => 'cod'],
+                    'customer' => ['name' => 'Rollback Customer', 'phone' => '+967700000006'],
+                    'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Rollback gate'],
+                ])->assertServerError();
+        } finally {
+            $tenant->run(function () use ($productId): void {
+                DB::unprepared('DROP TRIGGER IF EXISTS wp43_reject_operation_result ON order_operation_results');
+                DB::unprepared('DROP FUNCTION IF EXISTS wp43_reject_operation_result()');
+                $this->assertSame(0, DB::table('orders')->count());
+                $this->assertSame(0, DB::table('order_operations')->count());
+                $this->assertSame(0, DB::table('inventory_reservations')->where('reference_type', 'order')->count());
+                $this->assertSame(0, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
+            });
+        }
+    }
+
+    public function test_concurrent_last_unit_checkout_has_exactly_one_winner(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('order-last-unit');
+        $product = $tenant->run(fn (): object => DB::table('products')->firstOrFail());
+        $productId = (string) $product->id;
+        $inventoryRevision = (int) $product->inventory_revision;
+        app(InventoryLedgerService::class)->adjust(
+            $tenant,
+            $owner,
+            [
+                'lines' => [['productId' => $productId, 'expectedInventoryRevision' => $inventoryRevision, 'movementKind' => 'correction', 'delta' => -9]],
+                'reasonCode' => 'prepare_last_unit_race',
+            ],
+            (string) Str::uuid(),
+            (string) Str::uuid(),
+        );
+        $payload = fn (): array => [
+            'workspaceRevision' => 1,
+            'catalogRevision' => 1,
+            'lines' => [['productId' => $productId, 'quantity' => 1]],
+            'payment' => ['method' => 'cod'],
+            'customer' => ['name' => 'Concurrent Customer', 'phone' => '+967700000007'],
+            'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Race gate'],
+            'idempotencyKey' => (string) Str::uuid(),
+            'requestId' => (string) Str::uuid(),
+        ];
+        $first = $payload();
+        $second = $payload();
+
+        $outcomes = $this->runConcurrentInventoryOperations([
+            fn (): array => app(OrderService::class)->create($tenant, $first),
+            fn (): array => app(OrderService::class)->create($tenant, $second),
+        ]);
+
+        $this->assertSame(['conflict', 'ok'], collect($outcomes)->pluck('status')->sort()->values()->all());
+        $this->assertSame(['order_stock_conflict'], collect($outcomes)->where('status', 'conflict')->pluck('code')->all());
+        $tenant->run(function () use ($productId): void {
+            $this->assertSame(1, DB::table('orders')->count());
+            $this->assertSame(1, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
+        });
+    }
+
+    public function test_due_order_expiry_releases_stock_and_appends_system_history_atomically(): void
+    {
+        [$tenant, , $domain] = $this->readyTenant('order-expiry');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+        $created = $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                'workspaceRevision' => 1,
+                'catalogRevision' => 1,
+                'lines' => [['productId' => $productId, 'quantity' => 3]],
+                'payment' => ['method' => 'cod'],
+                'customer' => ['name' => 'Expiry Customer', 'phone' => '+967700000004'],
+                'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Gate 4'],
+            ])->assertCreated()->json('data.order');
+        $orderId = (string) $created['id'];
+
+        $tenant->run(function () use ($orderId): void {
+            DB::statement('SET session_replication_role = replica');
+            try {
+                DB::table('orders')->where('id', $orderId)->update([
+                    'expires_at' => DB::raw("clock_timestamp() - interval '1 minute'"),
+                ]);
+                DB::table('inventory_reservations')->where('reference_id', $orderId)->update([
+                    'created_at' => DB::raw("clock_timestamp() - interval '3 minutes'"),
+                    'updated_at' => DB::raw("clock_timestamp() - interval '3 minutes'"),
+                    'expires_at' => DB::raw("clock_timestamp() - interval '1 minute'"),
+                ]);
+            } finally {
+                DB::statement('SET session_replication_role = origin');
+            }
+        });
+
+        $this->assertSame(1, app(OrderService::class)->expireDueBatch($tenant));
+        $tenant->run(function () use ($orderId, $productId): void {
+            $this->assertSame(OrderStatus::Expired->value, DB::table('orders')->where('id', $orderId)->value('status'));
+            $this->assertSame('expired', DB::table('inventory_reservations')->where('reference_id', $orderId)->value('status'));
+            $this->assertSame(10, (int) DB::table('products')->where('id', $productId)->value('stock_quantity'));
+            $this->assertSame(0, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
+            $this->assertSame(1, DB::table('order_status_history')->where('order_id', $orderId)->where('to_status', OrderStatus::Expired->value)->where('actor_type', 'system')->count());
         });
     }
 
@@ -680,7 +1073,7 @@ class StoreWorkspaceTest extends TestCase
 
         $routes = collect(app('router')->getRoutes()->getRoutes())->map(fn ($route): string => $route->uri())->all();
         $this->assertFalse(collect($routes)->contains(fn (string $uri): bool => str_contains($uri, 'reservation')));
-        $this->assertNotContains('api/store/orders', $routes);
+        $this->assertSame(1, collect($routes)->filter(fn (string $uri): bool => $uri === 'api/store/orders')->count());
     }
 
     public function test_inventory_mutation_http_validation_authorization_and_throttle_boundaries(): void
@@ -970,7 +1363,7 @@ class StoreWorkspaceTest extends TestCase
             ->assertForbidden();
         $this->getJson("http://{$domain}/api/store/config")
             ->assertOk()
-            ->assertJsonCount(0, 'products');
+            ->assertJsonCount(0, 'data.config.products');
 
         $published = $draft['products'][0];
         $published['status'] = 'published';
@@ -988,7 +1381,7 @@ class StoreWorkspaceTest extends TestCase
             ->json('data');
         $this->getJson("http://{$domain}/api/store/config")
             ->assertOk()
-            ->assertJsonPath('products.0.price', '15.00');
+            ->assertJsonPath('data.config.products.0.price', '15.00');
 
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($staff)
@@ -1023,7 +1416,7 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('data.products.0.status', 'archived');
         $this->getJson("http://{$domain}/api/store/config")
             ->assertOk()
-            ->assertJsonCount(0, 'products');
+            ->assertJsonCount(0, 'data.config.products');
 
         $tenant->run(function (): void {
             try {
@@ -1398,6 +1791,105 @@ class StoreWorkspaceTest extends TestCase
         });
     }
 
+    public function test_order_migration_archives_legacy_rows_immutably_refuses_history_loss_and_reapplies_when_empty(): void
+    {
+        $createLegacyTenant = function (string $id): Tenant {
+            $tenant = Tenant::query()->create([
+                'id' => $id,
+                'store_name' => 'Order migration '.$id,
+                'owner_name' => 'Migration Owner',
+                'owner_email' => $id.'@example.test',
+                'business_type' => 'retail',
+                'verification_status' => TenantVerificationStatus::Pending->value,
+                'provisioning_status' => ProvisioningState::NotStarted->value,
+                'publication_status' => PublicationStatus::Unpublished->value,
+                'theme_style' => 'elegant',
+            ]);
+            $this->tenantIds[] = $tenant->id;
+            $tenant->database()->manager()->createDatabase($tenant);
+            $this->schemas[] = (string) $tenant->database()->getName();
+
+            return $tenant;
+        };
+        $migrateThroughInventory = function (): void {
+            foreach ([
+                '2026_01_01_000001_create_store_configs_table.php',
+                '2026_01_01_000002_create_products_table.php',
+                '2026_01_01_000003_create_orders_table.php',
+                '2026_08_15_000004_harden_store_workspace.php',
+                '2026_08_16_000005_create_product_catalog_model.php',
+                '2026_08_16_000006_create_inventory_ledger.php',
+            ] as $file) {
+                (require database_path('migrations/tenant/'.$file))->up();
+            }
+        };
+
+        $populated = $createLegacyTenant('wp43-order-adoption');
+        $legacyId = (string) Str::uuid();
+        $populated->run(function () use ($legacyId, $migrateThroughInventory): void {
+            $migrateThroughInventory();
+            DB::table('orders')->insert([
+                'id' => $legacyId,
+                'customer_name' => 'Legacy Customer',
+                'customer_phone' => '+967700001111',
+                'customer_email' => 'legacy@example.test',
+                'shipping_address' => 'Legacy address',
+                'total_amount' => '12.34',
+                'payment_method' => 'cod',
+                'status' => 'pending',
+                'items_json' => json_encode([['name' => 'Unverified item', 'price' => 12.34]], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $migration = require database_path('migrations/tenant/2026_08_16_000007_create_authoritative_orders.php');
+            $migration->up();
+
+            $archived = DB::table('legacy_orders_wp43')->where('id', $legacyId)->firstOrFail();
+            $this->assertSame('legacy_unverified', $archived->origin);
+            $this->assertSame(1234, (int) $archived->total_amount_minor_projection);
+            $this->assertSame(0, DB::table('orders')->count());
+            try {
+                DB::table('legacy_orders_wp43')->where('id', $legacyId)->update(['status' => 'completed']);
+                $this->fail('Archived legacy orders must remain immutable evidence.');
+            } catch (QueryException $exception) {
+                $this->assertStringContainsString('order history and snapshots are immutable', $exception->getMessage());
+            }
+
+            DB::table('order_operations')->insert([
+                'id' => (string) Str::uuid(),
+                'kind' => 'create',
+                'idempotency_scope' => 'rollback-refusal',
+                'idempotency_key' => (string) Str::uuid(),
+                'request_fingerprint' => hash('sha256', 'rollback-refusal'),
+                'actor_type' => 'guest',
+                'actor_user_id' => null,
+                'created_at' => now(),
+            ]);
+            try {
+                $migration->down();
+                $this->fail('Order rollback must refuse to erase authoritative operation history.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('Refusing to erase authoritative order', $exception->getMessage());
+            }
+            $this->assertTrue(DB::getSchemaBuilder()->hasTable('order_operations'));
+        });
+
+        $empty = $createLegacyTenant('wp43-order-empty-reapply');
+        $empty->run(function () use ($migrateThroughInventory): void {
+            $migrateThroughInventory();
+            $migration = require database_path('migrations/tenant/2026_08_16_000007_create_authoritative_orders.php');
+            $migration->up();
+            $this->assertSame(0, DB::table('order_operations')->count());
+            $migration->down();
+            $this->assertTrue(DB::getSchemaBuilder()->hasTable('orders'));
+            $this->assertFalse(DB::getSchemaBuilder()->hasTable('order_operations'));
+            $migration->up();
+            $this->assertTrue(DB::getSchemaBuilder()->hasTable('order_operations'));
+            $this->assertSame(0, DB::table('orders')->count());
+        });
+    }
+
     /** @return array{Tenant, User, string} */
     private function readyTenant(string $label): array
     {
@@ -1604,7 +2096,7 @@ class StoreWorkspaceTest extends TestCase
                     DB::setDefaultConnection($central);
                     $operation();
                     $result = ['status' => 'ok'];
-                } catch (InventoryConflict $exception) {
+                } catch (InventoryConflict|OrderConflict $exception) {
                     $result = ['status' => 'conflict', 'code' => $exception->errorCode];
                 } catch (\Throwable $exception) {
                     $result = ['status' => 'error', 'code' => $exception::class.':'.$exception->getMessage()];
@@ -1650,6 +2142,19 @@ class StoreWorkspaceTest extends TestCase
             'fontFamily' => 'Cairo',
             'phone' => '+967700000000',
             'currency' => 'YER',
+            'requireEmail' => false,
+            'requireAddressDetails' => true,
+            'enableCustomerNotes' => true,
+            'minOrderAmount' => 0,
+            'freeShippingThreshold' => 100,
+            'shippingFee' => 5,
+            'taxRate' => 15,
+            'enableCashOnDelivery' => true,
+            'cashOnDeliveryFee' => 1,
+            'enableBankTransfer' => false,
+            'enableEWallets' => false,
+            'enableCoupons' => true,
+            'customCoupons' => [['code' => 'SAVE10', 'discountPercent' => 10, 'active' => true]],
         ];
     }
 

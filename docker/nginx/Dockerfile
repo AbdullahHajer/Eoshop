@@ -4,6 +4,11 @@ FROM node:22.23.1-alpine3.24 AS frontend-build
 
 WORKDIR /app
 
+ARG VITE_CENTRAL_DOMAINS=localhost,127.0.0.1,eoshop.local
+ARG VITE_TENANT_BASE_DOMAIN=eoshop.local
+ENV VITE_CENTRAL_DOMAINS=${VITE_CENTRAL_DOMAINS}
+ENV VITE_TENANT_BASE_DOMAIN=${VITE_TENANT_BASE_DOMAIN}
+
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci \

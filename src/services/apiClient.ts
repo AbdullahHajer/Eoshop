@@ -39,6 +39,7 @@ export class ApiError extends Error {
 }
 
 const messages: Record<ApiErrorCategory, string> = {
+  not_found: "المورد المطلوب غير موجود.",
   unauthenticated: "انتهت الجلسة أو لم يتم تسجيل الدخول.",
   forbidden: "لا تملك الصلاحية لتنفيذ هذا الإجراء.",
   conflict: "يتعارض الطلب مع الحالة الحالية للمورد.",
@@ -66,6 +67,7 @@ function normalizeErrors(value: unknown): Record<string, string[]> {
 function responseCategory(status: number): ApiErrorCategory {
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
+  if (status === 404) return "not_found";
   if (status === 409) return "conflict";
   if (status === 419) return "csrf";
   if (status === 422) return "validation";

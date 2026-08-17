@@ -21,10 +21,14 @@ import ResetPasswordGateway from "./components/ResetPasswordGateway";
 import { useUiAdapters } from "./adapters/UiAdaptersContext";
 import {
   isUiError,
+  isUiErrorCode,
   uiErrorMessage,
   type StoreSubmission,
   type StoreWorkspace,
   type UserProfile,
+  type CreateOrderInput,
+  type OrderReceipt,
+  type StorefrontBootstrap,
 } from "./adapters/uiAdapters";
 import {
   LatestWorkspaceLoad,
@@ -43,6 +47,16 @@ import {
   type WorkspaceConflictReviewState,
   type WorkspaceConflictState,
 } from "./workflows/merchantWorkspaceState";
+import { reconcileCartWithStorefront } from "./workflows/orderState";
+
+const centralFrontendDomains = (import.meta.env.VITE_CENTRAL_DOMAINS || "localhost,127.0.0.1,eoshop.local")
+  .split(",")
+  .map((domain: string) => domain.trim().toLowerCase())
+  .filter(Boolean);
+
+function isCentralFrontendHost(hostname: string): boolean {
+  return centralFrontendDomains.includes(hostname.trim().toLowerCase());
+}
 
 export default function App() {
   const {
@@ -52,9 +66,12 @@ export default function App() {
     provisioning,
     workspace: workspaceActions,
     inventory: inventoryActions,
+    orders: orderActions,
   } = useUiAdapters();
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
-  const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard">("landing");
+  const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard" | "storefront">("landing");
+  const [publicStorefront, setPublicStorefront] = useState<StorefrontBootstrap | null>(null);
+  const [publicStorefrontError, setPublicStorefrontError] = useState<string | null>(null);
   
   // Platform Administrator States
   const [platformStores, setPlatformStores] = useState<PlatformStore[]>([]);
@@ -65,7 +82,7 @@ export default function App() {
   
   // Customization Configuration
   const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
-  const [activeTab, setActiveTab] = useState<"branding" | "design" | "products" | "inventory" | "checkout" | "pages" | "ai" | "export">("branding");
+  const [activeTab, setActiveTab] = useState<"branding" | "design" | "products" | "inventory" | "orders" | "checkout" | "pages" | "ai" | "export">("branding");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   
   // Landing Page Interactive Phone Teaser Sector State
@@ -253,6 +270,24 @@ export default function App() {
       setIsAdminAuthModalOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (window.location.pathname.startsWith("/admin") || isCentralFrontendHost(window.location.hostname)) return;
+    const controller = new AbortController();
+    orderActions.loadStorefront(controller.signal)
+      .then((storefront) => {
+        setPublicStorefrontError(null);
+        setPublicStorefront(storefront);
+        setConfig(storefront.config);
+        setView("storefront");
+      })
+      .catch((error) => {
+        if (isUiError(error, "aborted")) return;
+        setPublicStorefrontError(uiErrorMessage(error, "تعذر تحميل المتجر من الخادم. حدّث الصفحة ثم حاول مجددًا."));
+        setView("storefront");
+      });
+    return () => controller.abort();
+  }, [orderActions]);
 
   const triggerToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
@@ -1001,6 +1036,50 @@ export default function App() {
     }, 4500);
   };
 
+  const submitLiveOrder = async (
+    input: Omit<CreateOrderInput, "workspaceRevision" | "catalogRevision">,
+  ): Promise<OrderReceipt> => {
+    if (!publicStorefront) throw new Error("بيانات المتجر غير جاهزة. حدّث الصفحة ثم حاول مجددًا.");
+    const payload: CreateOrderInput = {
+      ...input,
+      workspaceRevision: publicStorefront.workspaceRevision,
+      catalogRevision: publicStorefront.catalogRevision,
+    };
+    const serialized = JSON.stringify(payload);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
+    const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const storageKey = `eoshop:checkout:${window.location.host}`;
+    let idempotencyKey: string = crypto.randomUUID();
+    try {
+      const pending = JSON.parse(sessionStorage.getItem(storageKey) || "null") as { fingerprint?: string; key?: string } | null;
+      if (pending?.fingerprint === fingerprint && typeof pending.key === "string") idempotencyKey = pending.key;
+    } catch {
+      // A malformed browser entry is replaced with a fresh operation identity.
+    }
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key: idempotencyKey }));
+    } catch {
+      // Checkout remains available when browser storage is unavailable; no customer data is persisted.
+    }
+    try {
+      const result = await orderActions.create(payload, idempotencyKey);
+      try { sessionStorage.removeItem(storageKey); } catch { /* Browser storage is optional. */ }
+      return result.order;
+    } catch (error) {
+      if (!isUiError(error, "network") && !isUiError(error, "server") && !isUiError(error, "aborted")) {
+        try { sessionStorage.removeItem(storageKey); } catch { /* Browser storage is optional. */ }
+      }
+      if (isUiErrorCode(error, "conflict", "order_quote_stale")) {
+        const fresh = await orderActions.loadStorefront();
+        setPublicStorefront(fresh);
+        setConfig(fresh.config);
+        setCart((current) => reconcileCartWithStorefront(current, fresh.config.products).items);
+        throw new Error("تغير السعر أو محتوى المتجر. تم تحميل النسخة الأحدث؛ راجع السلة ثم أكد الطلب من جديد.");
+      }
+      throw error;
+    }
+  };
+
   const handleOpenCheckoutPreview = () => {
     if (cart.length === 0) {
       if (config.products && config.products.length > 0) {
@@ -1042,6 +1121,39 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {view === "storefront" && publicStorefront && (
+        <main className="min-h-screen bg-white">
+          <StorePreview
+            config={publicStorefront.config}
+            cart={cart}
+            addToCart={addToCart}
+            updateQuantity={updateQuantity}
+            calculateTotal={() => {}}
+            isCartDrawerOpen={isCartDrawerOpen}
+            setIsCartDrawerOpen={setIsCartDrawerOpen}
+            hasOrdered={hasOrdered}
+            handleCheckout={handleCheckout}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            mode="live"
+            submitOrder={submitLiveOrder}
+          />
+        </main>
+      )}
+
+      {view === "storefront" && !publicStorefront && publicStorefrontError && (
+        <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
+          <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-xl">
+            <AlertTriangle className="mx-auto h-10 w-10 text-rose-600" />
+            <h1 className="mt-4 text-xl font-black text-slate-900">تعذر تحميل المتجر</h1>
+            <p className="mt-2 text-sm text-slate-600">{publicStorefrontError}</p>
+            <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white">
+              إعادة المحاولة
+            </button>
+          </div>
+        </main>
+      )}
 
       {activeWorkspace && workspaceConflict && (
         <div className="fixed bottom-5 right-5 z-50 max-w-md rounded-2xl border border-rose-300 bg-white p-4 shadow-2xl">
@@ -1894,6 +2006,15 @@ export default function App() {
                       <span>المخزون 📦</span>
                     </button>
                   )}
+                  <button
+                    onClick={() => setActiveTab("orders")}
+                    className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 ${
+                      activeTab === "orders" ? "border-sky-600 text-sky-800 bg-sky-50" : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>الطلبات</span>
+                  </button>
                   <button
                     onClick={() => setActiveTab("checkout")}
                     className={`py-3.5 px-4 min-h-[44px] font-extrabold text-center border-b-2 transition shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 touch-manipulation cursor-pointer active:scale-[0.98] ${

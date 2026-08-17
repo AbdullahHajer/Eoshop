@@ -8,6 +8,7 @@ import {
   Headphones
 } from "lucide-react";
 import { StoreConfig, Product } from "../types";
+import type { CreateOrderInput, OrderReceipt } from "../adapters/uiAdapters";
 import ProductArt from "./ProductArt";
 
 interface StorePreviewProps {
@@ -26,6 +27,8 @@ interface StorePreviewProps {
   onBackToLanding?: () => void;
   externalPage?: string;
   onResetExternalPage?: () => void;
+  mode?: "preview" | "live";
+  submitOrder?: (input: Omit<CreateOrderInput, "workspaceRevision" | "catalogRevision">) => Promise<OrderReceipt>;
 }
 
 const getFontFamilyStyle = (fontName?: string) => {
@@ -58,7 +61,9 @@ export default function StorePreview({
   setSelectedCategory,
   previewDevice = "desktop",
   externalPage,
-  onResetExternalPage
+  onResetExternalPage,
+  mode = "preview",
+  submitOrder,
 }: StorePreviewProps) {
   
   // Navigation Page State inside store
@@ -87,12 +92,13 @@ export default function StorePreview({
   const [checkoutForm, setCheckoutForm] = useState({
     fullName: "",
     phone: "",
+    email: "",
     city: "صنعاء",
     address: "",
     notes: ""
   });
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "wallet">("cod");
-  const [selectedWallet, setSelectedWallet] = useState<"kuraimi" | "jawali" | "onecash" | "floos" | "bank">("kuraimi");
+  const [selectedWallet, setSelectedWallet] = useState<string>("w-kuraimi");
   const [transferRefNumber, setTransferRefNumber] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -102,6 +108,7 @@ export default function StorePreview({
   const [placedOrderDetails, setPlacedOrderDetails] = useState<any>(null);
   const [copiedWalletNum, setCopiedWalletNum] = useState<string | null>(null);
   const [formValidationErr, setFormValidationErr] = useState("");
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
 
   useEffect(() => {
     setActiveImageIndex(0);
@@ -2116,12 +2123,16 @@ export default function StorePreview({
                 }
               ];
 
-          const activeWallets = customWalletsList.filter(w => w.active !== false);
+          const activeWallets = (mode === "preview" || config.enableEWallets === true ? customWalletsList : [])
+            .filter(w => w.active === true && w.id.trim() && w.name.trim() && w.accountNumber.trim() && w.accountName.trim());
 
-          const bankWallet = config.enableBankTransfer !== false ? {
+          const bankWallet = (mode === "preview" || (config.enableBankTransfer === true
+            && Boolean(config.bankName?.trim())
+            && Boolean(config.bankAccountName?.trim())
+            && Boolean(config.bankIban?.trim() || config.bankAccountNumber?.trim()))) ? {
             id: "bank-transfer",
             name: `${config.bankName || "تحويل بنكي"} / آيبان`,
-            accountNumber: config.bankIban ? `IBAN: ${config.bankIban}` : (config.bankAccountNumber || "123456789012"),
+            accountNumber: config.bankIban ? `IBAN: ${config.bankIban}` : (config.bankAccountNumber || "PREVIEW-ACCOUNT"),
             accountName: config.bankAccountName || config.storeName || "المتجر الرسمي",
             icon: "💳",
             badge: "إيداع رسمي معتمد 🏛️",
@@ -2132,17 +2143,22 @@ export default function StorePreview({
             ...activeWallets,
             ...(bankWallet ? [bankWallet] : [])
           ];
+          const codAvailable = mode === "preview" || config.enableCashOnDelivery === true;
+          const transferAvailable = WALLETS.length > 0;
+          const effectiveWalletId = WALLETS.some((wallet) => wallet.id === selectedWallet) ? selectedWallet : WALLETS[0]?.id;
 
           const handleApplyCoupon = () => {
             const code = couponCode.trim().toUpperCase();
             if (!code) return;
 
-            const allCoupons = config.customCoupons || [
-              { code: "WELCOME10", discountPercent: 10, active: true },
-              { code: "SUMMER20", discountPercent: 20, active: true },
-              { code: "SALE10", discountPercent: 10, active: true },
-              { code: "10", discountPercent: 10, active: true }
-            ];
+            if (mode === "live") {
+              setCouponDiscount(0);
+              setCouponApplied(false);
+              setCouponMessage("سيتم التحقق من القسيمة وحساب الخصم بدقة على الخادم عند إرسال الطلب.");
+              return;
+            }
+
+            const allCoupons = config.customCoupons || [];
 
             const matched = allCoupons.find(c => (c.active !== false) && c.code.trim().toUpperCase() === code);
 
@@ -2154,7 +2170,7 @@ export default function StorePreview({
             } else {
               setCouponDiscount(0);
               setCouponApplied(false);
-              setCouponMessage("❌ كود الخصم غير صحيح أو منتهي الصلاحية (جرب الكود التجريبي: WELCOME10)");
+              setCouponMessage("❌ كود الخصم غير صحيح أو منتهي الصلاحية");
             }
           };
 
@@ -2162,16 +2178,77 @@ export default function StorePreview({
           const codFee = (paymentMethod === "cod" && config.cashOnDeliveryFee) ? config.cashOnDeliveryFee : 0;
           const finalCheckoutTotal = Math.max(0, cartTotal - couponDiscount + shippingCost + codFee);
 
-          const handlePlaceOrderSubmit = (e: React.FormEvent) => {
+          const handlePlaceOrderSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
-            if (!checkoutForm.fullName.trim() || !checkoutForm.phone.trim() || !checkoutForm.address.trim()) {
+            if (!checkoutForm.fullName.trim() || !checkoutForm.phone.trim() || !checkoutForm.address.trim() || (config.requireEmail && !checkoutForm.email.trim())) {
               setFormValidationErr("يرجى تعبئة كافة الحقول المطلوبة (الاسم الكامل، رقم الجوال، والعنوان) للمتابعة.");
               return;
             }
             setFormValidationErr("");
 
-            const orderNum = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
-            const currentWallet = WALLETS.find(w => w.id === selectedWallet);
+            const currentWallet = WALLETS.find(w => w.id === effectiveWalletId);
+            if (mode === "live") {
+              if (!submitOrder || orderSubmitting) return;
+              if ((paymentMethod === "cod" && !codAvailable) || (paymentMethod === "wallet" && !currentWallet)) {
+                setFormValidationErr("وسيلة الدفع المحددة غير مفعلة لهذا المتجر. اختر وسيلة متاحة قبل إرسال الطلب.");
+                return;
+              }
+              setOrderSubmitting(true);
+              try {
+                const payment = paymentMethod === "cod"
+                  ? { method: "cod" as const }
+                  : currentWallet?.id === "bank-transfer"
+                    ? { method: "bank_transfer" as const, reference: transferRefNumber || undefined }
+                    : { method: "wallet" as const, channelId: currentWallet?.id, reference: transferRefNumber || undefined };
+                const receipt = await submitOrder({
+                  lines: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+                  couponCode: couponCode.trim() || undefined,
+                  payment,
+                  customer: {
+                    name: checkoutForm.fullName.trim(),
+                    phone: checkoutForm.phone.trim(),
+                    email: checkoutForm.email.trim() || undefined,
+                    notes: checkoutForm.notes.trim() || undefined,
+                  },
+                  address: {
+                    city: checkoutForm.city.trim(),
+                    area: checkoutForm.address.trim(),
+                    details: checkoutForm.address.trim(),
+                  },
+                });
+                const minor = (value: number) => value / 100;
+                const orderObj = {
+                  orderNum: receipt.number,
+                  date: new Date(receipt.createdAt).toLocaleString("ar-SA"),
+                  customer: { ...checkoutForm },
+                  paymentMethod: receipt.paymentState === "due_on_delivery" ? "الدفع عند الاستلام" : "تحويل بانتظار التحقق",
+                  walletName: paymentMethod === "wallet" ? currentWallet?.name : null,
+                  walletAccount: paymentMethod === "wallet" ? currentWallet?.accountNumber : null,
+                  transferRefNumber: paymentMethod === "wallet" ? transferRefNumber : null,
+                  items: (receipt.items || []).map((item) => ({
+                    product: { name: item.name, price: minor(item.unitPriceMinor) },
+                    quantity: item.quantity,
+                  })),
+                  subtotal: minor(receipt.totals.itemsSubtotalMinor),
+                  discount: minor(receipt.totals.discountMinor),
+                  shipping: minor(receipt.totals.shippingMinor),
+                  tax: minor(receipt.totals.taxMinor),
+                  codFee: minor(receipt.totals.paymentFeeMinor),
+                  total: minor(receipt.totals.grandTotalMinor),
+                  currency: receipt.currencyCode,
+                };
+                setPlacedOrderDetails(orderObj);
+                setOrderCompleted(true);
+                handleCheckout();
+              } catch (error) {
+                setFormValidationErr(error instanceof Error ? error.message : "تعذر إرسال الطلب. حاول مرة أخرى.");
+              } finally {
+                setOrderSubmitting(false);
+              }
+              return;
+            }
+
+            const orderNum = `PREVIEW-${Math.floor(10000 + Math.random() * 90000)}`;
 
             const orderObj = {
               orderNum,
@@ -2187,6 +2264,7 @@ export default function StorePreview({
               subtotal: cartTotal,
               discount: couponDiscount,
               shipping: shippingCost,
+              tax: 0,
               codFee: codFee,
               total: finalCheckoutTotal,
               currency: config.currency || "ر.س"
@@ -2405,8 +2483,10 @@ export default function StorePreview({
                       </div>` : ''}
                       <div class="summary-row">
                         <span>رسوم الشحن والتوصيل:</span>
-                        <span style="color:#4ade80; font-weight: bold;">مجاني 🚚</span>
+                        <span style="color:#4ade80; font-weight: bold;">${order.shipping === 0 ? 'مجاني 🚚' : order.shipping + ' ' + order.currency}</span>
                       </div>
+                      ${order.tax > 0 ? `<div class="summary-row"><span>الضريبة:</span><span>+ ${order.tax} ${order.currency}</span></div>` : ''}
+                      ${order.codFee > 0 ? `<div class="summary-row"><span>رسوم الدفع عند الاستلام:</span><span>+ ${order.codFee} ${order.currency}</span></div>` : ''}
                       <div class="total-row">
                         <span>الإجمالي النهائي المستحق:</span>
                         <span>${order.total} ${order.currency}</span>
@@ -2621,8 +2701,22 @@ ${itemsListStr}
                       )}
                       <div className="flex justify-between text-slate-300">
                         <span>رسوم الشحن:</span>
-                        <span className="text-emerald-400 font-bold">مجاني 🚚</span>
+                        <span className="text-emerald-400 font-bold">
+                          {placedOrderDetails.shipping === 0 ? "مجاني 🚚" : `${placedOrderDetails.shipping} ${placedOrderDetails.currency}`}
+                        </span>
                       </div>
+                      {placedOrderDetails.tax > 0 && (
+                        <div className="flex justify-between text-slate-300">
+                          <span>الضريبة:</span>
+                          <span>+ {placedOrderDetails.tax} {placedOrderDetails.currency}</span>
+                        </div>
+                      )}
+                      {placedOrderDetails.codFee > 0 && (
+                        <div className="flex justify-between text-slate-300">
+                          <span>رسوم الدفع عند الاستلام:</span>
+                          <span>+ {placedOrderDetails.codFee} {placedOrderDetails.currency}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm font-extrabold text-white pt-2 border-t border-slate-700">
                         <span>الإجمالي النهائي المستحق:</span>
                         <span className="text-sky-400 text-base">{placedOrderDetails.total} {placedOrderDetails.currency}</span>
@@ -2788,6 +2882,21 @@ ${itemsListStr}
                           </div>
                         </div>
 
+                        {config.requireEmail && (
+                          <div className="space-y-1">
+                            <label className="block text-xs font-extrabold text-slate-700">
+                              البريد الإلكتروني <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              required
+                              value={checkoutForm.email}
+                              onChange={(e) => setCheckoutForm({ ...checkoutForm, email: e.target.value })}
+                              className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
+                            />
+                          </div>
+                        )}
+
                         {/* Detailed Address */}
                         <div className="space-y-1">
                           <label className="block text-xs font-extrabold text-slate-700">
@@ -2804,6 +2913,7 @@ ${itemsListStr}
                         </div>
 
                         {/* Delivery Notes */}
+                        {config.enableCustomerNotes !== false && (
                         <div className="space-y-1">
                           <label className="block text-xs font-extrabold text-slate-700">
                             ملاحظات اختيارية لمندوب التوصيل
@@ -2816,6 +2926,7 @@ ${itemsListStr}
                             className="w-full border rounded-xl px-3.5 py-2.5 text-xs text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
                           />
                         </div>
+                        )}
                       </div>
                     </div>
 
@@ -2835,7 +2946,7 @@ ${itemsListStr}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         
                         {/* Option A: Cash on Delivery */}
-                        <div 
+                        {codAvailable && (<div
                           onClick={() => setPaymentMethod("cod")}
                           className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
                             paymentMethod === "cod"
@@ -2855,10 +2966,10 @@ ${itemsListStr}
                               تسليم مبلغ الشحنة نقداً لمندوب التوصيل عند استلام واستكشاف منتجاتك بنفسك.
                             </p>
                           </div>
-                        </div>
+                        </div>)}
 
                         {/* Option B: E-Wallets */}
-                        <div 
+                        {transferAvailable && (<div
                           onClick={() => setPaymentMethod("wallet")}
                           className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
                             paymentMethod === "wallet"
@@ -2878,11 +2989,17 @@ ${itemsListStr}
                               تحويل مباشر عبر الكريمي، جوالي، ون كاش، فلوس، جيب، أو تحويل إلكتروني.
                             </p>
                           </div>
-                        </div>
+                        </div>)}
                       </div>
 
+                      {!codAvailable && !transferAvailable && (
+                        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs font-bold text-amber-900">
+                          لا توجد وسيلة دفع مفعلة لهذا المتجر حالياً. تواصل مع المتجر قبل إرسال الطلب.
+                        </div>
+                      )}
+
                       {/* E-WALLET SELECTION SUB-PANEL */}
-                      {paymentMethod === "wallet" && (
+                      {paymentMethod === "wallet" && transferAvailable && (
                         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 animate-fadeIn">
                           <div className="space-y-1">
                             <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
@@ -2895,7 +3012,7 @@ ${itemsListStr}
                           {/* Wallets Selector Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {WALLETS.map((w) => {
-                              const isSelected = selectedWallet === w.id;
+                              const isSelected = effectiveWalletId === w.id;
                               return (
                                 <div
                                   key={w.id}
@@ -2921,7 +3038,7 @@ ${itemsListStr}
 
                           {/* Selected Wallet Information Box */}
                           {(() => {
-                            const activeW = WALLETS.find(w => w.id === selectedWallet) || WALLETS[0];
+                            const activeW = WALLETS.find(w => w.id === effectiveWalletId) || WALLETS[0];
                             if (!activeW) return null;
                             return (
                               <div className={`p-4 rounded-xl border space-y-3 ${activeW.bgColor}`}>
@@ -3030,6 +3147,12 @@ ${itemsListStr}
 
                       {/* Financial Breakdown */}
                       <div className="space-y-2 pt-3 border-t border-slate-200 text-xs font-bold">
+                        {mode === "live" && (
+                          <p className="rounded-lg border border-sky-200 bg-sky-50 p-2 text-[11px] text-sky-800">
+                            الأرقام النهائية، الخصم، الضريبة والشحن يحسبها الخادم وتظهر في الإيصال بعد الإرسال.
+                          </p>
+                        )}
+                        {mode !== "live" && <>
                         <div className="flex justify-between text-slate-600">
                           <span>المجموع الفرعي:</span>
                           <span className="font-mono">{cartTotal} {config.currency}</span>
@@ -3062,23 +3185,25 @@ ${itemsListStr}
                             {finalCheckoutTotal} {config.currency}
                           </span>
                         </div>
+                        </>}
                       </div>
 
                       {/* Submit Order Button */}
                       <button
                         type="submit"
+                        disabled={orderSubmitting || (mode === "live" && !codAvailable && !transferAvailable)}
                         className={`w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] ${
                           !isElegant ? "bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 font-mono shadow-sky-600/20" : "hover:opacity-90"
                         }`}
                         style={{ backgroundColor: isElegant ? primaryColor : undefined }}
                       >
-                        <span>تأكيد وإرسال الطلب النهائي 🚀</span>
+                        <span>{orderSubmitting ? "جارٍ تثبيت السعر وحجز المخزون..." : mode === "live" ? "تأكيد الطلب بالسعر الخادمي" : "معاينة إرسال الطلب"}</span>
                         <Check className="w-5 h-5 stroke-[3]" />
                       </button>
 
                       <p className="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1">
                         <Lock className="w-3 h-3 text-emerald-600" />
-                        <span>عملية شراء آمنة ومشفرة 100%</span>
+                        <span>تُعالج بيانات الطلب وفق ضوابط حماية النظام</span>
                       </p>
                     </div>
                   </div>
@@ -3186,6 +3311,7 @@ ${itemsListStr}
                              style={{ borderColor: isElegant ? "#f2eae1" : "#cbd5e1" }}>
                           <button 
                             onClick={() => updateQuantity(item.product.id, 1)}
+                            aria-label={`زيادة كمية ${item.product.name}`}
                             className="p-1 hover:text-sky-600"
                           >
                             <Plus className="w-3 h-3" />
@@ -3193,6 +3319,7 @@ ${itemsListStr}
                           <span className="text-xs font-bold w-4 text-center text-slate-800">{item.quantity}</span>
                           <button 
                             onClick={() => updateQuantity(item.product.id, -1)}
+                            aria-label={`تقليل كمية ${item.product.name}`}
                             className="p-1 hover:text-rose-600"
                           >
                             <Minus className="w-3 h-3" />
@@ -3229,7 +3356,7 @@ ${itemsListStr}
                       setIsCartDrawerOpen(false);
                       setStorePage("checkout");
                       const container = document.getElementById("store-preview-scroll-container");
-                      if (container) {
+                      if (container && typeof container.scrollTo === "function") {
                         container.scrollTo({ top: 0, behavior: "smooth" });
                       }
                     }}

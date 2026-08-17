@@ -14,3 +14,7 @@ Schedule::command('catalog:prune-media')
 Schedule::command('inventory:expire-reservations')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('orders:expire')
+    ->everyMinute()
+    ->withoutOverlapping();

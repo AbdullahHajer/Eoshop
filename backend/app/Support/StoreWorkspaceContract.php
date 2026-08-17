@@ -53,6 +53,7 @@ final class StoreWorkspaceContract
             if (strlen($encoded) > 262_144) {
                 $validator->errors()->add('config', 'The store workspace may not exceed 256 KiB.');
             }
+            CheckoutPolicyContract::appendErrors($validator, $config);
         });
 
         return $validator;

@@ -477,6 +477,66 @@ describe("adapter-backed interface flows", () => {
     expect((screen.getAllByRole("button", { name: "تحديث عدد الكمية للكل" }).at(-1) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("serializes merchant order transitions and reuses the logical idempotency key after failure", async () => {
+    let rejectFirst!: (error: Error) => void;
+    const firstAttempt = new Promise<never>((_resolve, reject) => { rejectFirst = reject; });
+    const order = {
+      id: "22222222-2222-4222-8222-222222222222",
+      number: "EO-222222222222",
+      status: "submitted" as const,
+      paymentState: "due_on_delivery",
+      currencyCode: "YER",
+      totals: {
+        itemsSubtotalMinor: 1000,
+        discountMinor: 0,
+        shippingMinor: 0,
+        taxMinor: 0,
+        paymentFeeMinor: 0,
+        grandTotalMinor: 1000,
+      },
+      items: [],
+      createdAt: "2026-08-17T10:00:00Z",
+    };
+    const updateStatus = vi.fn()
+      .mockImplementationOnce(() => firstAttempt)
+      .mockResolvedValueOnce({ ...order, status: "accepted" });
+    const adapters = createFakeUiAdapters({
+      orders: {
+        list: vi.fn().mockResolvedValue({ items: [order], total: 1 }),
+        updateStatus,
+      },
+    });
+    renderInterface(
+      <ControlPanel
+        config={workspace.config}
+        activeTenantId={submission.id}
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="orders"
+        setActiveTab={vi.fn()}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+      />,
+      adapters,
+    );
+
+    const advance = await screen.findByRole("button", { name: /accepted/ });
+    fireEvent.click(advance);
+    fireEvent.click(advance);
+    await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(1));
+    expect((advance as HTMLButtonElement).disabled).toBe(true);
+    const firstKey = updateStatus.mock.calls[0][4];
+
+    rejectFirst(new Error("ambiguous network failure"));
+    await screen.findByText("ambiguous network failure");
+    fireEvent.click(screen.getByRole("button", { name: /accepted/ }));
+    await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(2));
+    expect(updateStatus.mock.calls[1][4]).toBe(firstKey);
+  });
+
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {
     const save = vi.fn()
       .mockImplementationOnce(async (_tenantId, _revision, _catalogRevision, config) => ({

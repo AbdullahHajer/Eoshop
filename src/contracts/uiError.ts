@@ -1,6 +1,7 @@
 export type UiErrorCategory =
   | "unauthenticated"
   | "forbidden"
+  | "not_found"
   | "conflict"
   | "csrf"
   | "validation"
@@ -18,6 +19,7 @@ export interface UiErrorShape extends Error {
 const categories: readonly UiErrorCategory[] = [
   "unauthenticated",
   "forbidden",
+  "not_found",
   "conflict",
   "csrf",
   "validation",

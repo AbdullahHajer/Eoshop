@@ -155,13 +155,13 @@ class TenancyActivationTest extends TestCase
 
         $this->getJson($this->urlOnHost('a-store.example.test', '/api/store/config'))
             ->assertOk()
-            ->assertJsonPath('marker', 'store-a');
+            ->assertJsonPath('data.config.marker', 'store-a');
 
         $this->assertCentralContext();
 
         $this->getJson($this->urlOnHost('b-store.example.test', '/api/store/config'))
             ->assertOk()
-            ->assertJsonPath('marker', 'store-b');
+            ->assertJsonPath('data.config.marker', 'store-b');
 
         $this->assertCentralContext();
     }

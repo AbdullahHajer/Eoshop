@@ -49,6 +49,12 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
       adjust: async () => unexpected("inventory.adjust"),
       updatePolicy: async () => unexpected("inventory.updatePolicy"),
     },
+    orders: {
+      loadStorefront: async () => unexpected("orders.loadStorefront"),
+      create: async () => unexpected("orders.create"),
+      list: async () => unexpected("orders.list"),
+      updateStatus: async () => unexpected("orders.updateStatus"),
+    },
   };
 
   return {
@@ -60,5 +66,6 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
     workspace: { ...adapters.workspace, ...overrides.workspace },
     catalog: { ...adapters.catalog, ...overrides.catalog },
     inventory: { ...adapters.inventory, ...overrides.inventory },
+    orders: { ...adapters.orders, ...overrides.orders },
   };
 }

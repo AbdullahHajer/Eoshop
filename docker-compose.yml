@@ -38,6 +38,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
       QUEUE_CONNECTION: database
       DB_QUEUE_CONNECTION: pgsql
+      ORDER_CHECKOUT_ENABLED: ${ORDER_CHECKOUT_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -71,6 +72,7 @@ services:
       SESSION_CONNECTION: pgsql
       DB_CACHE_CONNECTION: pgsql
       DB_CACHE_LOCK_CONNECTION: pgsql
+      ORDER_CHECKOUT_ENABLED: ${ORDER_CHECKOUT_ENABLED:-false}
     command: ["php", "artisan", "queue:work", "database", "--queue=provisioning", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
     depends_on:
       db:
@@ -97,6 +99,7 @@ services:
       SESSION_CONNECTION: pgsql
       DB_CACHE_CONNECTION: pgsql
       DB_CACHE_LOCK_CONNECTION: pgsql
+      ORDER_CHECKOUT_ENABLED: ${ORDER_CHECKOUT_ENABLED:-false}
     command: ["php", "artisan", "schedule:work", "--no-interaction"]
     depends_on:
       db:
@@ -112,6 +115,9 @@ services:
     build:
       context: .
       dockerfile: docker/nginx/Dockerfile
+      args:
+        VITE_CENTRAL_DOMAINS: ${VITE_CENTRAL_DOMAINS:-localhost,127.0.0.1,eoshop.local}
+        VITE_TENANT_BASE_DOMAIN: ${VITE_TENANT_BASE_DOMAIN:-eoshop.local}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:80"
