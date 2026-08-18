@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Incremental frontend decomposition |
 | Work Package | WP 5.2 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-18 |
 | Branch | `codex/wp-5.2-control-panel-workflow-panels` |
 | Base | Protected `main` at `af732e1` |
@@ -89,13 +89,13 @@ The extracted panels never receive the full `ControlPanelProps` object. Their le
 
 - [x] Pass frontend lint, tests, production build and dependency audit.
 - [x] Pass backend quality, PostgreSQL integration and repository-safety gates unchanged.
-- [ ] Confirm the four required CI checks on the PR head.
+- [x] Confirm the four required CI checks on the PR head.
 
 ### T5 — Evidence and delivery
 
-- [ ] Record verification evidence and rollback observations.
-- [ ] Complete independent read-only review with no blocking findings.
-- [ ] Commit implementation separately from closeout evidence, push, open PR and merge.
+- [x] Record verification evidence and rollback observations.
+- [x] Complete independent read-only review with no blocking findings.
+- [x] Commit implementation separately from closeout evidence, push, open PR and merge.
 
 ## Acceptance criteria
 
