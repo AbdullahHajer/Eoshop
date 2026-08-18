@@ -4,7 +4,7 @@ import {
   Store, Paintbrush, Package, Sparkles, Smartphone, Monitor, 
   ArrowRight, ArrowLeft, Plus, Trash2, Check, ShoppingBag, 
   X, ExternalLink, Save, RefreshCw, Eye, Code, Phone, Info,
-  ShieldCheck, LogOut, FileCheck, Sliders, Users, Settings, AlertTriangle,
+  ShieldCheck, LogOut, FileCheck, Sliders, Users, Settings,
   Layout, Palette, Zap, CheckCircle2, LogIn, User
 } from "lucide-react";
 
@@ -18,6 +18,11 @@ import DomainSetupModal from "./components/DomainSetupModal";
 import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
 import ResetPasswordGateway from "./components/ResetPasswordGateway";
+import AppToast, { type AppToastMessage } from "./app/AppToast";
+import type { AppView } from "./app/appTypes";
+import { isCentralFrontendHost } from "./app/hostRouting";
+import PublicStorefrontScreen from "./features/storefront/PublicStorefrontScreen";
+import WorkspaceRecoveryOverlays from "./features/store-builder/WorkspaceRecoveryOverlays";
 import { useUiAdapters } from "./adapters/UiAdaptersContext";
 import {
   isUiError,
@@ -49,15 +54,6 @@ import {
 } from "./workflows/merchantWorkspaceState";
 import { reconcileCartWithStorefront } from "./workflows/orderState";
 
-const centralFrontendDomains = (import.meta.env.VITE_CENTRAL_DOMAINS || "localhost,127.0.0.1,eoshop.local")
-  .split(",")
-  .map((domain: string) => domain.trim().toLowerCase())
-  .filter(Boolean);
-
-function isCentralFrontendHost(hostname: string): boolean {
-  return centralFrontendDomains.includes(hostname.trim().toLowerCase());
-}
-
 export default function App() {
   const {
     auth,
@@ -69,7 +65,7 @@ export default function App() {
     orders: orderActions,
   } = useUiAdapters();
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
-  const [view, setView] = useState<"landing" | "templates" | "builder" | "merchant_dashboard" | "storefront">("landing");
+  const [view, setView] = useState<AppView>("landing");
   const [publicStorefront, setPublicStorefront] = useState<StorefrontBootstrap | null>(null);
   const [publicStorefrontError, setPublicStorefrontError] = useState<string | null>(null);
   
@@ -154,7 +150,7 @@ export default function App() {
   };
   
   // App-level alerts / messages
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [toast, setToast] = useState<AppToastMessage | null>(null);
   
   // AI Generation States
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1101,169 +1097,42 @@ export default function App() {
 
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
-      {/* Dynamic Toast Alerts */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-xl border text-sm md:text-base font-semibold max-w-lg text-center ${
-              toast.type === "success" 
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-                : toast.type === "error" 
-                ? "bg-rose-50 text-rose-800 border-rose-200" 
-                : "bg-amber-50 text-amber-800 border-amber-200"
-            }`}
-          >
-            <Sparkles className="w-5 h-5 shrink-0" />
-            <span>{toast.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AppToast toast={toast} />
 
-      {view === "storefront" && publicStorefront && (
-        <main className="min-h-screen bg-white">
-          <StorePreview
-            config={publicStorefront.config}
-            cart={cart}
-            addToCart={addToCart}
-            updateQuantity={updateQuantity}
-            calculateTotal={() => {}}
-            isCartDrawerOpen={isCartDrawerOpen}
-            setIsCartDrawerOpen={setIsCartDrawerOpen}
-            hasOrdered={hasOrdered}
-            handleCheckout={handleCheckout}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            mode="live"
-            submitOrder={submitLiveOrder}
-          />
-        </main>
+      {view === "storefront" && (
+        <PublicStorefrontScreen
+          storefront={publicStorefront}
+          error={publicStorefrontError}
+          cart={cart}
+          addToCart={addToCart}
+          updateQuantity={updateQuantity}
+          isCartDrawerOpen={isCartDrawerOpen}
+          setIsCartDrawerOpen={setIsCartDrawerOpen}
+          hasOrdered={hasOrdered}
+          handleCheckout={handleCheckout}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          submitOrder={submitLiveOrder}
+        />
       )}
 
-      {view === "storefront" && !publicStorefront && publicStorefrontError && (
-        <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
-          <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-xl">
-            <AlertTriangle className="mx-auto h-10 w-10 text-rose-600" />
-            <h1 className="mt-4 text-xl font-black text-slate-900">تعذر تحميل المتجر</h1>
-            <p className="mt-2 text-sm text-slate-600">{publicStorefrontError}</p>
-            <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white">
-              إعادة المحاولة
-            </button>
-          </div>
-        </main>
-      )}
-
-      {activeWorkspace && workspaceConflict && (
-        <div className="fixed bottom-5 right-5 z-50 max-w-md rounded-2xl border border-rose-300 bg-white p-4 shadow-2xl">
-          <p className="text-sm font-black text-slate-900">تعارضت تعديلاتك مع نسخة أحدث</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            جمّدنا المحرر واحتفظنا بلقطة تعديلاتك. حمّل نسخة الخادم، وسنعيد فقط الحقول غير المتعارضة؛ الحقول التي عدّلها الطرفان تبقى كما هي على الخادم حتى تراجعها يدويًا.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={workspaceLoading || workspaceSaving}
-              onClick={() => void reloadActiveWorkspace(false)}
-              className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-            >
-              تحميل نسخة الخادم
-            </button>
-            <button
-              type="button"
-              disabled={!workspaceConflict.serverReloaded || workspaceLoading || workspaceSaving}
-              onClick={applyNonConflictingChanges}
-              className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800 disabled:opacity-40"
-            >
-              تطبيق التغييرات الآمنة
-            </button>
-            <button
-              type="button"
-              disabled={workspaceLoading || workspaceSaving}
-              onClick={() => void reloadActiveWorkspace(true)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-50"
-            >
-              تجاهل تعديلاتي
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeWorkspace && workspaceConflictReview?.tenantId === activeWorkspace.tenantId && (
-        <div className="fixed bottom-5 right-5 z-50 max-h-[70vh] w-[min(34rem,calc(100vw-2rem))] overflow-auto rounded-2xl border border-amber-300 bg-white p-4 shadow-2xl">
-          <p className="text-sm font-black text-slate-900">قيم تحتاج مراجعة يدوية</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            طبّقنا الحقول الآمنة فقط. الحقول التالية عدّلها الطرفان، لذلك أبقينا قيمة الخادم في المحرر واحتفظنا بقيمتك هنا دون إرسال تلقائي.
-          </p>
-          <div className="mt-3 space-y-3">
-            {workspaceConflictReview.conflictingFields.map((field) => (
-              <div key={String(field)} className="rounded-xl border border-slate-200 p-3 text-xs">
-                <p className="font-black text-slate-800">{String(field)}</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  <div>
-                    <p className="mb-1 font-bold text-amber-700">قيمتك المحفوظة للاسترداد</p>
-                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-amber-50 p-2 text-[10px]">
-                      {JSON.stringify(workspaceConflictReview.draft[field], null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <p className="mb-1 font-bold text-sky-700">قيمة الخادم الحالية</p>
-                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-sky-50 p-2 text-[10px]">
-                      {JSON.stringify(workspaceConflictReview.server[field], null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={archiveConflictDraft}
-              className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white"
-            >
-              حفظ لقطتي كمسودة محلية
-            </button>
-            <button
-              type="button"
-              onClick={discardConflictReview}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
-            >
-              تجاهل القيم المتعارضة
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeWorkspace && localDraft && (
-        <div className="fixed bottom-5 left-5 z-50 max-w-md rounded-2xl border border-amber-300 bg-white p-4 shadow-2xl">
-          <p className="text-sm font-black text-slate-900">توجد مسودة محلية لم تُدمج</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            بيانات الخادم معروضة الآن. لن نستبدلها بالمسودة إلا بعد اختيارك الصريح.
-          </p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
-              onClick={() => void saveStore(localDraft, true)}
-              className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-            >
-              استيراد المسودة إلى المتجر
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem("mobtaker_custom_store");
-                setLocalDraft(null);
-              }}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
-            >
-              تجاهل المسودة
-            </button>
-          </div>
-        </div>
-      )}
+      <WorkspaceRecoveryOverlays
+        activeWorkspace={activeWorkspace}
+        conflict={workspaceConflict}
+        conflictReview={workspaceConflictReview}
+        localDraft={localDraft}
+        loading={workspaceLoading}
+        saving={workspaceSaving}
+        reloadWorkspace={(discardChanges) => void reloadActiveWorkspace(discardChanges)}
+        applyNonConflictingChanges={applyNonConflictingChanges}
+        archiveConflictDraft={archiveConflictDraft}
+        discardConflictReview={discardConflictReview}
+        importLocalDraft={(draft) => void saveStore(draft, true)}
+        discardLocalDraft={() => {
+          localStorage.removeItem("mobtaker_custom_store");
+          setLocalDraft(null);
+        }}
+      />
 
       {/* ----------------- 1. LANDING PAGE VIEW ----------------- */}
       {view === "landing" && (
