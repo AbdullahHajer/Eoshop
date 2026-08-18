@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.2 — Control panel workflow panels |
-| Status | Local gates complete; ready for PR |
+| Status | Complete and merged |
 | Verified | 2026-08-18 |
 | Branch | `codex/wp-5.2-control-panel-workflow-panels` |
 | Base | `af732e1073c425a7327b7de65ca130c411e33334` |
-| Implementation commit | `fc2760a` |
+| Implementation commit | `fc2760a91e0388fcc06647f836efbb13666888c7` |
 
 ## Delivered boundaries
 
@@ -60,8 +60,11 @@ Environment: `eoshop/backend-quality:wp52` built from `docker/php/Dockerfile` ta
 
 The implementation changes React composition and tests only. Reverting `fc2760a` restores the inline workflow markup and original test timeout without changing APIs, databases, tenant schemas, browser drafts or server-owned state.
 
-## Delivery evidence pending
+## Delivery evidence
 
-- Pull request URL and immutable head SHA.
-- Four required PR check results.
-- Merge commit and protected `main` check results.
+- Evidence commit: `c508856248a6ef82bbe25c141f96c7d6859b7a03`.
+- Implementation PR: [#28](https://github.com/sas-prog1/Eoshop/pull/28), merged 2026-08-18.
+- PR head: `c508856248a6ef82bbe25c141f96c7d6859b7a03`.
+- PR CI run: [32183518707](https://github.com/sas-prog1/Eoshop/actions/runs/32183518707); Repository safety, Frontend quality, Backend quality and Container integration all passed.
+- Merge commit: `912e80a6ecbfadf131a84afb3c8fc167e332e879`.
+- Protected `main` CI run: [32184022904](https://github.com/sas-prog1/Eoshop/actions/runs/32184022904); all four required jobs passed.
