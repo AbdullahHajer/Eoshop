@@ -18,7 +18,9 @@ describe("UI adapter architecture boundary", () => {
   it("keeps App and screen components behind the adapter layer", () => {
     const sources = [
       join(sourceRoot, "App.tsx"),
+      ...componentSources(join(sourceRoot, "app")),
       ...componentSources(join(sourceRoot, "components")),
+      ...componentSources(join(sourceRoot, "features")),
       ...componentSources(join(sourceRoot, "workflows")),
     ];
     const violations = sources.flatMap((path) => {
