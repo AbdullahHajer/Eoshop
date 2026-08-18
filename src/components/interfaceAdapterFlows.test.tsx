@@ -204,6 +204,98 @@ describe("adapter-backed interface flows", () => {
     expect(screen.getByText(/عرض من الخادم/)).toBeTruthy();
   });
 
+  it("guards a deferred assistant request against a second submit", async () => {
+    let resolveIdeas!: (value: Awaited<ReturnType<UiAdapters["assistant"]["generateStoreIdeas"]>>) => void;
+    const generateStoreIdeas = vi.fn(() => new Promise<Awaited<ReturnType<UiAdapters["assistant"]["generateStoreIdeas"]>>>((resolve) => {
+      resolveIdeas = resolve;
+    }));
+    const user = userEvent.setup();
+    renderInterface(
+      <ControlPanel
+        config={ELEGANT_PRESET}
+        activeTenantId={null}
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="ai"
+        setActiveTab={vi.fn()}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+      />,
+      createFakeUiAdapters({ assistant: { generateStoreIdeas } }),
+    );
+
+    await user.type(screen.getByPlaceholderText(/بخور العود الأزرق/), "فكرة مؤجلة");
+    await user.click(screen.getByRole("button", { name: /اقترح لي نصوصاً إبداعية/ }));
+    const loadingButton = screen.getByRole("button", { name: "جاري تفعيل الإبداع..." });
+    expect((loadingButton as HTMLButtonElement).disabled).toBe(true);
+    await user.click(loadingButton);
+    expect(generateStoreIdeas).toHaveBeenCalledTimes(1);
+
+    resolveIdeas({
+      storeName: "متجر",
+      slogan: "شعار مؤجل",
+      logoIcon: null,
+      primaryColor: "#000000",
+      secondaryColor: "#ffffff",
+      themeStyle: "elegant",
+      bannerText: "عرض",
+      products: [],
+    });
+    expect(await screen.findByText(/شعار مؤجل/)).toBeTruthy();
+  });
+
+  it("preserves the assistant fallback when generation fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    renderInterface(
+      <ControlPanel
+        config={ELEGANT_PRESET}
+        activeTenantId={null}
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="ai"
+        setActiveTab={vi.fn()}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+      />,
+      createFakeUiAdapters({ assistant: { generateStoreIdeas: vi.fn().mockRejectedValue(new Error("offline")) } }),
+    );
+
+    await user.type(screen.getByPlaceholderText(/بخور العود الأزرق/), "فكرة");
+    await user.click(screen.getByRole("button", { name: /اقترح لي نصوصاً إبداعية/ }));
+    expect(await screen.findByText(/التميز يبدأ من الاختيار الصحيح لهويتك/)).toBeTruthy();
+  });
+
+  it("keeps completion fallback in the coordinator when no domain callback is supplied", async () => {
+    const setActiveTab = vi.fn();
+    const user = userEvent.setup();
+    renderInterface(
+      <ControlPanel
+        config={ELEGANT_PRESET}
+        activeTenantId={null}
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="branding"
+        setActiveTab={setActiveTab}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+      />,
+      createFakeUiAdapters(),
+    );
+
+    await user.click(screen.getByRole("button", { name: /تم الانتهاء من التخصيص/ }));
+    expect(setActiveTab).toHaveBeenCalledWith("export");
+  });
+
   it("aborts an in-flight catalog upload when the active tenant changes", async () => {
     let resolveUpload!: (value: { id: string; url: string; mimeType: string; byteSize: number }) => void;
     let capturedSignal: AbortSignal | undefined;

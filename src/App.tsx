@@ -11,6 +11,7 @@ import {
 import { Product, StoreConfig, ELEGANT_PRESET, TECH_PRESET } from "./types";
 import StorePreview from "./components/StorePreview";
 import ControlPanel from "./components/ControlPanel";
+import type { ControlTab } from "./features/store-builder/controlPanelTypes";
 import RegistrationGateway from "./components/RegistrationGateway";
 import AuthGateway from "./components/AuthGateway";
 import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
@@ -78,7 +79,7 @@ export default function App() {
   
   // Customization Configuration
   const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
-  const [activeTab, setActiveTab] = useState<"branding" | "design" | "products" | "inventory" | "orders" | "checkout" | "pages" | "ai" | "export">("branding");
+  const [activeTab, setActiveTab] = useState<ControlTab>("branding");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   
   // Landing Page Interactive Phone Teaser Sector State
