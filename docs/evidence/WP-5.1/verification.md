@@ -6,7 +6,7 @@
 | Branch | `codex/wp-5.1-frontend-feature-shell` |
 | Base | `dcbb63c8819197f04d2fede566bfd2e9646694ab` |
 | Verification date | 2026-08-18 |
-| Status | Local gates passed; PR delivery pending |
+| Status | Complete and merged |
 
 ## Implemented boundaries
 
@@ -99,6 +99,9 @@ No backend or database files changed. Reverting the frontend extraction restores
 ## GitHub delivery
 
 - Implementation commit: `b70f29f` (`refactor(wp5.1): extract frontend application shell`).
-- Pull request: pending.
-- Required pull-request checks: pending.
-- Merge commit and protected-main checks: pending.
+- Evidence commit: `13601f6` (`docs(wp5.1): record local verification evidence`).
+- Pull request: [#26](https://github.com/sas-prog1/Eoshop/pull/26), merged on 2026-08-18.
+- Final PR head: `13601f6688f4614d64999670c1f4c0622e467628`.
+- Required PR run: [32175384255](https://github.com/sas-prog1/Eoshop/actions/runs/32175384255) — Repository safety, Frontend quality, Backend quality and Container integration all passed.
+- Merge commit: `7480e4025788ffb0773907611977f06c5d8f0503`.
+- Protected-main run: [32175826769](https://github.com/sas-prog1/Eoshop/actions/runs/32175826769) — all four required jobs passed on the merge commit.

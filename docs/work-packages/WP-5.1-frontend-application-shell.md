@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Incremental frontend decomposition |
 | Work Package | WP 5.1 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-18 |
 | Branch | `codex/wp-5.1-frontend-feature-shell` |
 | Base | Protected `main` at `dcbb63c` |
@@ -68,13 +68,13 @@ Reduce `App.tsx` from a screen-and-workflow monolith into an application composi
 
 - [x] Pass frontend lint, tests, production build and audit.
 - [x] Pass backend quality, PostgreSQL integration and repository-safety gates unchanged.
-- [ ] Confirm the four required CI checks on the PR head.
+- [x] Confirm the four required CI checks on the PR head.
 
 ### T5 — Evidence and delivery
 
 - [x] Record verification evidence and rollback observations.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit implementation separately from closeout evidence, push, open PR and merge.
+- [x] Commit implementation separately from closeout evidence, push, open PR and merge.
 
 ## Acceptance criteria
 
