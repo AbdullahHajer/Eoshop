@@ -50,6 +50,8 @@
 - [WP 2.2 verification — 2026-08-15](evidence/WP-2.2/verification.md)
 - [WP 2.3 verification — 2026-08-15](evidence/WP-2.3/verification.md)
 - [WP 3.1 verification — 2026-08-15](evidence/WP-3.1/verification.md)
+- [WP 5.1 verification — 2026-08-18](evidence/WP-5.1/verification.md)
+- [WP 5.2 verification — 2026-08-18](evidence/WP-5.2/verification.md)
 
 ## Documentation rules
 
