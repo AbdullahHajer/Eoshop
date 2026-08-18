@@ -6,7 +6,7 @@ Eoshop is an Arabic-first platform concept that helps small merchants create a d
 
 The repository is an **advanced product prototype under stabilization**, not a production-ready commerce platform yet.
 
-The current React interface demonstrates merchant onboarding, AI-assisted store identity, visual store customization, product and inventory screens, checkout and platform administration. Some flows remain browser simulations. Authentication, store persistence, tenant activation, checkout and order processing must not be treated as secure or production-capable until their modernization work packages are complete.
+The current React interface supports real server-owned authentication, tenant provisioning, publication, store persistence, product catalog, inventory and order processing. The interface is still undergoing incremental usability and structural refinement, and local Pilot operation is not a claim of public production readiness. Use the [Pilot QA runbook](docs/qa/pilot-test-runbook.md) for the supported test journey and deliberate limitations.
 
 ## Modernization approach
 

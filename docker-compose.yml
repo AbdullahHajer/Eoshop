@@ -36,6 +36,8 @@ services:
       DB_DATABASE: ${POSTGRES_DB:-platform_main}
       DB_USERNAME: ${POSTGRES_USER:-eoshop}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      CENTRAL_DOMAINS: ${CENTRAL_DOMAINS:-localhost,127.0.0.1,eoshop.local}
+      TENANT_BASE_DOMAIN: ${TENANT_BASE_DOMAIN:-eoshop.local}
       QUEUE_CONNECTION: database
       DB_QUEUE_CONNECTION: pgsql
       ORDER_CHECKOUT_ENABLED: ${ORDER_CHECKOUT_ENABLED:-false}
@@ -66,6 +68,8 @@ services:
       DB_DATABASE: ${POSTGRES_DB:-platform_main}
       DB_USERNAME: ${POSTGRES_USER:-eoshop}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      CENTRAL_DOMAINS: ${CENTRAL_DOMAINS:-localhost,127.0.0.1,eoshop.local}
+      TENANT_BASE_DOMAIN: ${TENANT_BASE_DOMAIN:-eoshop.local}
       QUEUE_CONNECTION: database
       DB_QUEUE_CONNECTION: pgsql
       DB_QUEUE_RETRY_AFTER: 180
@@ -96,6 +100,8 @@ services:
       DB_DATABASE: ${POSTGRES_DB:-platform_main}
       DB_USERNAME: ${POSTGRES_USER:-eoshop}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      CENTRAL_DOMAINS: ${CENTRAL_DOMAINS:-localhost,127.0.0.1,eoshop.local}
+      TENANT_BASE_DOMAIN: ${TENANT_BASE_DOMAIN:-eoshop.local}
       SESSION_CONNECTION: pgsql
       DB_CACHE_CONNECTION: pgsql
       DB_CACHE_LOCK_CONNECTION: pgsql

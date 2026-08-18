@@ -1,0 +1,108 @@
+name: Pilot defect
+description: Report one reproducible Eoshop Pilot problem without secrets or private customer data.
+title: "[Pilot] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include passwords, cookies, CSRF/reset tokens, `.env` values or private customer data. Report security-sensitive findings privately to the project owner.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Registration / login / session
+        - Store draft / submission
+        - Administration / approval
+        - Provisioning / publication
+        - Workspace customization
+        - Products / media
+        - Inventory
+        - Orders / checkout
+        - Public storefront
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Critical includes authentication bypass, cross-tenant exposure, data loss, wrong authoritative price or overselling.
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build / commit
+      placeholder: git commit SHA or Pilot handoff version
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Edge 140 / Windows 11
+    validations:
+      required: true
+  - type: input
+    id: identity
+    attributes:
+      label: Test identity and store
+      description: Sanitized test email plus tenant/store ID or handle. Never include the password.
+      placeholder: qa+ali-20260819@example.test / qa-ali-20260819
+  - type: textarea
+    id: preconditions
+    attributes:
+      label: Preconditions and visible state
+      placeholder: verification=approved, provisioning=active, publication=published
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Enter sanitized value ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: input
+    id: request
+    attributes:
+      label: HTTP status, machine code or request ID
+      description: Include sanitized identifiers only; do not paste raw sensitive payloads.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Screenshots, short video, safe console excerpt or network status.
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      options:
+        - Every time
+        - Intermittent
+        - Once
+    validations:
+      required: true

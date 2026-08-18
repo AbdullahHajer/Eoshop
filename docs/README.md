@@ -22,6 +22,7 @@
 - [WP 3.2 — Server-owned store workspace](work-packages/WP-3.2-server-owned-store-workspace.md)
 - [WP 5.1 — Frontend application shell decomposition](work-packages/WP-5.1-frontend-application-shell.md)
 - [WP 5.2 — Control panel workflow panels](work-packages/WP-5.2-control-panel-workflow-panels.md)
+- [WP 5.3 — Pilot QA readiness](work-packages/WP-5.3-pilot-qa-readiness.md)
 
 ## Architecture decisions
 
@@ -52,6 +53,11 @@
 - [WP 3.1 verification — 2026-08-15](evidence/WP-3.1/verification.md)
 - [WP 5.1 verification — 2026-08-18](evidence/WP-5.1/verification.md)
 - [WP 5.2 verification — 2026-08-18](evidence/WP-5.2/verification.md)
+
+## QA handoff
+
+- [Pilot QA runbook](qa/pilot-test-runbook.md)
+- [Pilot defect issue form](../.github/ISSUE_TEMPLATE/pilot-bug.yml)
 
 ## Documentation rules
 
