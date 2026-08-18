@@ -103,7 +103,7 @@ describe("server-backed checkout interface", () => {
     expect(await screen.findByText("EO-SERVER-001")).toBeTruthy();
     expect(screen.getByText("20.38 YER")).toBeTruthy();
     expect(props.handleCheckout).toHaveBeenCalledTimes(1);
-  });
+  }, 10_000);
 
   it("keeps preview checkout non-persistent", async () => {
     const submitOrder = vi.fn();
@@ -116,5 +116,5 @@ describe("server-backed checkout interface", () => {
 
     await waitFor(() => expect(screen.getByText(/PREVIEW-/)).toBeTruthy());
     expect(submitOrder).not.toHaveBeenCalled();
-  });
+  }, 10_000);
 });

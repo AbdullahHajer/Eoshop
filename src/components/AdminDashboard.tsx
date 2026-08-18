@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { PlatformStore, ProvisioningStatus, VerificationStatus } from "../adapters/uiAdapters";
+import { publicStoreUrl } from "../utils/publicStoreUrl";
 
 export type { PlatformStore } from "../adapters/uiAdapters";
 
@@ -237,7 +238,7 @@ export default function AdminDashboard({
                       <p className="sm:col-span-2 text-[11px] text-amber-700">موانع النشر: {storeRecord.publicationBlockers.join("، ")}</p>
                     )}
                     {storeRecord.publicDomain && storeRecord.publicationStatus === "published" && (
-                      <a href={`http://${storeRecord.publicDomain}`} target="_blank" rel="noreferrer" className="sm:col-span-2 flex items-center gap-1 font-bold text-emerald-700">
+                      <a href={publicStoreUrl(storeRecord.publicDomain)} target="_blank" rel="noreferrer" className="sm:col-span-2 flex items-center gap-1 font-bold text-emerald-700">
                         <ExternalLink className="h-3.5 w-3.5" /> فتح المتجر المنشور
                       </a>
                     )}
