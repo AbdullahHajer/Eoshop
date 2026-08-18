@@ -72,7 +72,7 @@ Reduce `App.tsx` from a screen-and-workflow monolith into an application composi
 
 ### T5 — Evidence and delivery
 
-- [ ] Record verification evidence and rollback observations.
+- [x] Record verification evidence and rollback observations.
 - [x] Complete independent read-only review with no blocking findings.
 - [ ] Commit implementation separately from closeout evidence, push, open PR and merge.
 
