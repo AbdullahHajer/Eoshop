@@ -82,8 +82,8 @@ Deliver a repeatable local Pilot environment that a QA team can use now to exerc
 
 ### T5 — Evidence and delivery
 
-- [ ] Record immutable verification evidence and the QA handoff entry point.
-- [ ] Complete independent read-only review with no blocking findings.
+- [x] Record immutable verification evidence and the QA handoff entry point.
+- [x] Complete independent read-only review with no blocking findings.
 - [ ] Commit implementation separately from closeout evidence, push, open PR and merge.
 
 ## Risks and controls
