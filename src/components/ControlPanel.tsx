@@ -1,35 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Plus, Trash2, Sparkles, Check, RefreshCw, Smartphone, Monitor, Info, HelpCircle, Upload,
-  Download, FileCode, ArrowDownToLine, Copy, CheckCircle2, FileText, Code, Settings, Share2,
+  Plus, Trash2, Sparkles, Check, RefreshCw, Smartphone, Info, HelpCircle, Upload,
+  Download, FileCode, ArrowDownToLine, Copy, FileText, Code, Settings, Share2,
   Edit3, ChevronDown, ChevronUp, Package, Search, Tag, CreditCard, Truck, Percent, ShoppingBag,
   ShieldCheck, DollarSign, Gift, Layers, CheckSquare, AlertTriangle, ArrowRight, Save, ToggleLeft, ToggleRight
 } from "lucide-react";
 import { StoreConfig, Product, Coupon, EWallet } from "../types";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
 import type { OrderReceipt } from "../adapters/uiAdapters";
-
-type ControlTab = "branding" | "design" | "products" | "inventory" | "orders" | "checkout" | "pages" | "ai" | "export";
-
-interface ControlPanelProps {
-  config: StoreConfig;
-  activeTenantId: string | null;
-  canViewInventory?: boolean;
-  canManageInventory?: boolean;
-  handleConfigChange: (key: keyof StoreConfig, value: any) => void;
-  handleProductChange: (index: number, key: keyof Product, value: any) => void;
-  handleProductMediaChange: (productId: string, urls: string[]) => void;
-  adjustInventory?: (targets: Array<{ productId: string; targetOnHand: number }>) => Promise<boolean>;
-  updateInventoryPolicy?: (productId: string, manageStock: boolean, lowStockThreshold: number) => Promise<boolean>;
-  addEmptyProduct: () => void;
-  deleteProduct: (id: string) => void;
-  activeTab: ControlTab;
-  setActiveTab: (tab: ControlTab) => void;
-  previewDevice: "desktop" | "mobile";
-  setPreviewDevice: (device: "desktop" | "mobile") => void;
-  onOpenCheckoutPreview?: () => void;
-  onOpenDomainModal?: () => void;
-}
+import AiCopywriterPanel from "../features/store-builder/AiCopywriterPanel";
+import { CustomizationCompletionBar, PreviewDeviceSelector } from "../features/store-builder/ControlPanelChrome";
+import type { ControlPanelProps, CopywriterOutput } from "../features/store-builder/controlPanelTypes";
+import MerchantOrdersPanel from "../features/orders/MerchantOrdersPanel";
+import StoreSubmissionPanel from "../features/tenancy/StoreSubmissionPanel";
+import { merchantOrderActions } from "../workflows/orderState";
 
 export default function ControlPanel({
   config,
@@ -55,7 +39,7 @@ export default function ControlPanel({
   // AI assistant states inside control panel
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
-  const [copyOutput, setCopyOutput] = useState<{ slogan?: string; banner?: string; productDesc?: string } | null>(null);
+  const [copyOutput, setCopyOutput] = useState<CopywriterOutput | null>(null);
 
   // Product accordion & search & stock filter states
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
@@ -378,30 +362,7 @@ export default function ControlPanel({
 
   return (
     <div className="flex flex-col h-full bg-white min-h-0 overflow-hidden">
-      {/* 1. TOP HEADER DEVICES TOGGLE */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
-        <h3 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">نمط المعاينة</h3>
-        <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200/90 shadow-2xs">
-          <button
-            onClick={() => setPreviewDevice("desktop")}
-            className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition touch-manipulation cursor-pointer active:scale-95 ${
-              previewDevice === "desktop" ? "bg-amber-500 text-slate-950 shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Monitor className="w-4 h-4" />
-            <span>كمبيوتر</span>
-          </button>
-          <button
-            onClick={() => setPreviewDevice("mobile")}
-            className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition touch-manipulation cursor-pointer active:scale-95 ${
-              previewDevice === "mobile" ? "bg-amber-500 text-slate-950 shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>جوال</span>
-          </button>
-        </div>
-      </div>
+      <PreviewDeviceSelector device={previewDevice} onChange={setPreviewDevice} />
 
       {/* 2. TABBED CONTENTS */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -2485,41 +2446,14 @@ export default function ControlPanel({
 
         {/* --- CHECKOUT & PAYMENT CUSTOMIZATION TAB (تعديل إتمام الطلب والدفع) --- */}
         {activeTab === "orders" && (
-          <div className="space-y-4 p-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h3 className="font-black text-slate-900">الطلبات المسجلة على الخادم</h3>
-              <p className="mt-1 text-xs text-slate-500">الأسعار والحالات وحركات المخزون المعروضة هنا مصدرها الخادم.</p>
-            </div>
-            {ordersError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{ordersError}</div>}
-            {ordersLoading && <div className="p-4 text-center text-xs font-bold text-slate-500">جارٍ تحميل الطلبات...</div>}
-            {!ordersLoading && merchantOrders.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">لا توجد طلبات مسجلة بعد.</div>}
-            {merchantOrders.map((order) => {
-              const next = order.status === "submitted" ? "accepted" : order.status === "accepted" ? "processing" : order.status === "processing" ? "completed" : null;
-              const transitionPending = pendingOrderIds.has(order.id);
-              return (
-                <div key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-mono text-sm font-black text-slate-900">{order.number}</p>
-                      <p className="text-[11px] text-slate-500">{new Date(order.createdAt).toLocaleString("ar-SA")}</p>
-                    </div>
-                    <span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-700">{order.status}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <span className="font-mono text-sm font-black">{(order.totals.grandTotalMinor / 100).toFixed(2)} {order.currencyCode}</span>
-                    <div className="flex gap-2">
-                      {order.status === "submitted" && (
-                        <button disabled={transitionPending} onClick={() => void advanceOrder(order, "cancelled")} className="rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50">إلغاء</button>
-                      )}
-                      {next && (
-                        <button disabled={transitionPending} onClick={() => void advanceOrder(order, next)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">نقل إلى {next}</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <MerchantOrdersPanel
+            orders={merchantOrders}
+            loading={ordersLoading}
+            error={ordersError}
+            pendingOrderIds={pendingOrderIds}
+            actionsFor={merchantOrderActions}
+            onAdvance={(order, status) => void advanceOrder(order, status)}
+          />
         )}
 
         {activeTab === "checkout" && (() => {
@@ -3566,125 +3500,34 @@ export default function ControlPanel({
 
         {/* --- AI ASSISTANT / COPYWRITER TAB --- */}
         {activeTab === "ai" && (
-          <div className="space-y-5 animate-fadeIn">
-            <div className="bg-sky-50 p-4 rounded-xl border border-sky-100 space-y-1">
-              <h4 className="font-bold text-sky-800 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" />
-                <span>مساعد المحتوى والكتابة الإبداعية</span>
-              </h4>
-              <p className="text-[11px] text-sky-600 leading-relaxed">
-                هل تواجه صعوبة في كتابة شعارات تسويقية أو عروض إعلانية جذابة؟ اكتب فكرتك أو المنتج، وسيقوم مساعدنا الذكي باقتراح أفكار فورية لتستعملها فوراً!
-              </p>
-            </div>
-
-            <form onSubmit={triggerCopyWrite} className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-600">عن ماذا تود الكتابة؟</label>
-                <input
-                  type="text"
-                  value={assistantPrompt}
-                  onChange={(e) => setAssistantPrompt(e.target.value)}
-                  placeholder="مثال: بخور العود الأزرق الملكي الفاخر..."
-                  className="w-full bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 rounded-xl px-4 py-3 text-sm focus:outline-none transition text-slate-800"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isGeneratingCopy || !assistantPrompt.trim()}
-                className="w-full bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black py-3 min-h-[44px] rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer touch-manipulation disabled:opacity-50"
-              >
-                {isGeneratingCopy ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>جاري تفعيل الإبداع...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>اقترح لي نصوصاً إبداعية ✨</span>
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            {copyOutput && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 text-xs animate-fadeIn">
-                <div className="space-y-1">
-                  <span className="font-extrabold text-[10px] text-sky-600 uppercase block">اقتراح الشعار (Slogan):</span>
-                  <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-100 font-semibold leading-relaxed">
-                    "{copyOutput.slogan}"
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="font-extrabold text-[10px] text-sky-600 uppercase block">عرض ترويجي للإعلان:</span>
-                  <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-100 leading-relaxed">
-                    "{copyOutput.banner}"
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="font-extrabold text-[10px] text-sky-600 uppercase block">وصف تسويقي للمنتج الأول:</span>
-                  <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-slate-100 leading-relaxed text-[11px]">
-                    "{copyOutput.productDesc}"
-                  </p>
-                </div>
-
-                <p className="text-[10px] text-slate-400 text-center">
-                  * انسخ أي نص وألصقه في علامات تبويب "معلومات المتجر" أو "المنتجات" لتراه يظهر فوراً!
-                </p>
-              </div>
-            )}
-          </div>
+          <AiCopywriterPanel
+            prompt={assistantPrompt}
+            loading={isGeneratingCopy}
+            output={copyOutput}
+            onPromptChange={setAssistantPrompt}
+            onSubmit={triggerCopyWrite}
+          />
         )}
 
         {/* --- STORE ACTIVATION & SUBDOMAIN REQUEST TAB --- */}
         {activeTab === "export" && (
-          <div className="space-y-5 animate-fadeIn">
-            <div className="rounded-2xl border border-indigo-200 bg-gradient-to-l from-indigo-50 to-sky-50 p-5">
-              <h4 className="flex items-center gap-2 text-sm font-black text-indigo-950"><Sparkles className="h-5 w-5 text-indigo-600" /> إرسال طلب المتجر الحقيقي</h4>
-              <p className="mt-2 text-xs leading-relaxed text-indigo-800">ستفتح نافذة متصلة بالخادم لاختيار عنوان متاح وباقة فعلية. إرسال الطلب يحجز العنوان ويضع المتجر للمراجعة فقط؛ تجهيز قاعدة البيانات والنشر عمليتان لاحقتان محميتان.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">ملخص التصميم الحالي</span>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div>
-                  <h5 className="text-sm font-extrabold text-slate-900">{config.storeName}</h5>
-                  <p className="text-xs text-slate-500">{config.slogan}</p>
-                </div>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{config.products.length} منتج</span>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">رفع مستندات التحقق، الدفع الإلكتروني، والنطاقات الخارجية ليست مفعلة في هذه المرحلة ولن تدّعي الواجهة نجاحها.</div>
-            <button type="button" onClick={() => onOpenDomainModal?.()} disabled={!onOpenDomainModal} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-emerald-600 via-sky-600 to-indigo-600 px-6 py-4 text-sm font-extrabold text-white shadow-lg disabled:opacity-50">
-              <Sparkles className="h-5 w-5" /> اختيار العنوان والباقة وإرسال الطلب
-            </button>
-          </div>
+          <StoreSubmissionPanel
+            storeName={config.storeName}
+            slogan={config.slogan}
+            productCount={config.products.length}
+            onOpen={onOpenDomainModal}
+          />
         )}
       </div>
 
       {/* Sticky Bottom Action Bar for Finishing Customization */}
       {activeTab !== "export" && (
-        <div className="p-3 bg-slate-50/90 backdrop-blur-xs border-t border-slate-200 shrink-0 shadow-lg flex items-center justify-between gap-2">
-          <div className="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 min-w-0 truncate">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="truncate">هل انتهيت من تعديل القالب والمنتجات؟</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (onOpenDomainModal) {
-                onOpenDomainModal();
-              } else {
-                setActiveTab("export");
-              }
-            }}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs rounded-xl shadow-md hover:shadow-emerald-600/30 transition flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
-          >
-            <span>تم الانتهاء من التخصيص 🚀</span>
-            <Download className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <CustomizationCompletionBar
+          onComplete={() => {
+            if (onOpenDomainModal) onOpenDomainModal();
+            else setActiveTab("export");
+          }}
+        />
       )}
     </div>
   );

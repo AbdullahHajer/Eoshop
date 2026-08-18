@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import type { OrderReceipt } from "../adapters/uiAdapters";
 
 export type CartLine = { product: Product; quantity: number };
 
@@ -6,6 +7,20 @@ export interface CartReconciliation {
   items: CartLine[];
   removed: number;
   changed: number;
+}
+
+export interface MerchantOrderAction {
+  status: OrderReceipt["status"];
+  label: string;
+  tone: "danger" | "primary";
+}
+
+export function merchantOrderActions(order: OrderReceipt): MerchantOrderAction[] {
+  const actions: MerchantOrderAction[] = [];
+  if (order.status === "submitted") actions.push({ status: "cancelled", label: "إلغاء", tone: "danger" });
+  const next = order.status === "submitted" ? "accepted" : order.status === "accepted" ? "processing" : order.status === "processing" ? "completed" : null;
+  if (next) actions.push({ status: next, label: `نقل إلى ${next}`, tone: "primary" });
+  return actions;
 }
 
 export function reconcileCartWithStorefront(cart: CartLine[], products: Product[]): CartReconciliation {

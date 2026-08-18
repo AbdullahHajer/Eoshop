@@ -20,6 +20,8 @@
 - [WP 2.3 — Domain, packages and publication](work-packages/WP-2.3-domain-packages-publication.md)
 - [WP 3.1 — Unified frontend API boundary](work-packages/WP-3.1-unified-api-client.md)
 - [WP 3.2 — Server-owned store workspace](work-packages/WP-3.2-server-owned-store-workspace.md)
+- [WP 5.1 — Frontend application shell decomposition](work-packages/WP-5.1-frontend-application-shell.md)
+- [WP 5.2 — Control panel workflow panels](work-packages/WP-5.2-control-panel-workflow-panels.md)
 
 ## Architecture decisions
 

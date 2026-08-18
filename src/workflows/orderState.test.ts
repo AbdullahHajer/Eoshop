@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "../types";
-import { reconcileCartWithStorefront } from "./orderState";
+import type { OrderReceipt } from "../adapters/uiAdapters";
+import { merchantOrderActions, reconcileCartWithStorefront } from "./orderState";
 
 const product = (id: string, price: number, available = 10): Product => ({
   id,
@@ -37,5 +38,19 @@ describe("reconcileCartWithStorefront", () => {
 
     expect(result.items).toEqual([]);
     expect(result.removed).toBe(2);
+  });
+});
+
+describe("merchantOrderActions", () => {
+  const order = { status: "submitted" } as OrderReceipt;
+
+  it.each([
+    ["submitted", ["cancelled", "accepted"]],
+    ["accepted", ["processing"]],
+    ["processing", ["completed"]],
+    ["completed", []],
+    ["cancelled", []],
+  ] as const)("returns only coordinator-approved actions for %s", (status, expected) => {
+    expect(merchantOrderActions({ ...order, status }).map((action) => action.status)).toEqual(expected);
   });
 });
