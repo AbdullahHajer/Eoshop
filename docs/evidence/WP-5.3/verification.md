@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.3 — Pilot QA readiness |
-| Status | Verification complete; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-19 |
 | Branch | `codex/wp-5.3-pilot-qa-readiness` |
 | Base | `a47b65e40b3827617e8e1e06a94de78a8279c146` |
@@ -79,4 +79,9 @@ Environment: pinned `node:22.23.1-alpine3.24` through the `frontend-quality` tar
 ## Delivery status
 
 - Implementation is recorded separately in `fb59aa6835dbdebcb51c2f3e3a7bdf7e640a5bbd`.
-- Evidence commit, pull request, required CI results, merge commit and protected-`main` run will be recorded during closeout.
+- Evidence commit: `5e561d1f17767bb5452d3c1678b656626f46036a`.
+- Implementation PR: [#30](https://github.com/sas-prog1/Eoshop/pull/30), merged 2026-08-19.
+- PR head: `5e561d1f17767bb5452d3c1678b656626f46036a`.
+- PR CI run: [32198539515](https://github.com/sas-prog1/Eoshop/actions/runs/32198539515); Repository safety, Backend quality, Frontend quality and Container integration all passed.
+- Merge commit: `c8f0a901f1d2acef7d3e0c56f5d661e2418756ba`.
+- Protected `main` CI run: [32198916345](https://github.com/sas-prog1/Eoshop/actions/runs/32198916345); all four required jobs passed.
