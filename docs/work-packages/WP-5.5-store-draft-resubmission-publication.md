@@ -88,7 +88,7 @@ Complete the merchant-controlled store lifecycle: save a new store draft on the 
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact verification evidence and remaining product handoff.
+- [x] Record exact verification evidence and remaining product handoff.
 - [x] Obtain final independent read-only approval with no blocking findings.
 - [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
