@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 0 — Baseline, governance and unified operation |
 | Work Package | WP 0.2 |
-| Status | Implemented; local gates passed |
+| Status | Complete and merged |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-0.2-single-server` |
 | ADR | [ADR 0001](../decisions/ADR-0001-laravel-single-application-server.md) |

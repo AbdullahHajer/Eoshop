@@ -45,6 +45,12 @@ final class PublicationReadiness
         ) {
             $blockers[] = 'provisioning_not_ready';
         }
+        if (! in_array('provisioning_not_ready', $blockers, true)
+            && $tenant->getAttribute('verification_status') === TenantVerificationStatus::Approved->value
+            && ! TenantWorkspaceReadiness::isMaterialized($tenant)
+        ) {
+            $blockers[] = 'workspace_not_ready';
+        }
         if (! $publication instanceof PublicationRequest
             || ! in_array($publication->getAttribute('status'), [PublicationRequestStatus::Requested, PublicationRequestStatus::Published], true)
             || $publication->getAttribute('tenant_id') !== $tenantId

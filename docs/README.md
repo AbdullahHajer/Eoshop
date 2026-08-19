@@ -5,6 +5,7 @@
 - [Architecture modernization plan](architecture-modernization-plan.md) — the phased delivery strategy and target architecture.
 - [HTML architecture plan](architecture-modernization-plan.html) — formatted Arabic presentation of the same strategy.
 - [Target architecture diagram](architecture-target.svg) — standalone architecture image used by the HTML and Markdown plans.
+- [Current delivery state](current-state.md) — the authoritative delivered/active/deferred sequence.
 
 ## Work packages
 
@@ -20,9 +21,14 @@
 - [WP 2.3 — Domain, packages and publication](work-packages/WP-2.3-domain-packages-publication.md)
 - [WP 3.1 — Unified frontend API boundary](work-packages/WP-3.1-unified-api-client.md)
 - [WP 3.2 — Server-owned store workspace](work-packages/WP-3.2-server-owned-store-workspace.md)
+- [WP 3.3 — Interface preservation through API adapters](work-packages/WP-3.3-interface-preservation.md)
+- [WP 4.1 — Product, pricing and media authority](work-packages/WP-4.1-product-pricing-inventory-model.md)
+- [WP 4.2 — Inventory ledger and reservations](work-packages/WP-4.2-inventory-ledger-reservations.md)
+- [WP 4.3 — Server-authoritative orders](work-packages/WP-4.3-server-authoritative-orders.md)
 - [WP 5.1 — Frontend application shell decomposition](work-packages/WP-5.1-frontend-application-shell.md)
 - [WP 5.2 — Control panel workflow panels](work-packages/WP-5.2-control-panel-workflow-panels.md)
 - [WP 5.3 — Pilot QA readiness](work-packages/WP-5.3-pilot-qa-readiness.md)
+- [WP 5.4 — Merchant portal and store lifecycle](work-packages/WP-5.4-merchant-portal-lifecycle.md)
 
 ## Architecture decisions
 
@@ -37,6 +43,12 @@
 - [ADR 0008 — Domain, subscription and publication boundaries](decisions/ADR-0008-domain-subscription-publication-boundaries.md)
 - [ADR 0009 — Unified frontend API boundary](decisions/ADR-0009-unified-frontend-api-boundary.md)
 - [ADR 0010 — Server-owned store workspace](decisions/ADR-0010-server-owned-store-workspace.md)
+- [ADR 0011 — Interface API adapters](decisions/ADR-0011-interface-api-adapters.md)
+- [ADR 0012 — Server-owned catalog, pricing and media](decisions/ADR-0012-server-owned-catalog-pricing-media.md)
+- [ADR 0013 — Append-only inventory ledger](decisions/ADR-0013-append-only-inventory-ledger.md)
+- [ADR 0014 — Server-authoritative orders](decisions/ADR-0014-server-authoritative-orders.md)
+- [ADR 0015 — Incremental frontend feature boundaries](decisions/ADR-0015-incremental-frontend-feature-boundaries.md)
+- [ADR 0016 — Merchant and platform product shells](decisions/ADR-0016-merchant-and-platform-product-shells.md)
 
 ## Evidence
 
@@ -51,6 +63,11 @@
 - [WP 2.2 verification — 2026-08-15](evidence/WP-2.2/verification.md)
 - [WP 2.3 verification — 2026-08-15](evidence/WP-2.3/verification.md)
 - [WP 3.1 verification — 2026-08-15](evidence/WP-3.1/verification.md)
+- [WP 3.2 verification — 2026-08-16](evidence/WP-3.2/verification.md)
+- [WP 3.3 verification — 2026-08-16](evidence/WP-3.3/verification.md)
+- [WP 4.1 verification — 2026-08-16](evidence/WP-4.1/verification.md)
+- [WP 4.2 verification — 2026-08-16](evidence/WP-4.2/verification.md)
+- [WP 4.3 verification — 2026-08-18](evidence/WP-4.3/verification.md)
 - [WP 5.1 verification — 2026-08-18](evidence/WP-5.1/verification.md)
 - [WP 5.2 verification — 2026-08-18](evidence/WP-5.2/verification.md)
 - [WP 5.3 verification — 2026-08-19](evidence/WP-5.3/verification.md)

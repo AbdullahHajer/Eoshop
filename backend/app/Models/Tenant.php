@@ -17,6 +17,16 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     protected $guarded = [];
 
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'publication_requested_at' => 'immutable_datetime',
+            'published_at' => 'immutable_datetime',
+            'active_at' => 'immutable_datetime',
+        ];
+    }
+
     /**
      * @return HasMany<Domain, $this>
      */

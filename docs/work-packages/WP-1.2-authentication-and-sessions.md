@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 1 — Identity, authentication and authorization |
 | Work Package | WP 1.2 |
-| Status | Ready to merge; local, independent-review and GitHub gates passed |
+| Status | Complete and merged |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-1.2-auth-sessions` |
 | Base | Protected `main` at `f0833de` |

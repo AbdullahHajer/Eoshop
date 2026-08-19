@@ -188,6 +188,7 @@ class TenancyActivationTest extends TestCase
     public function test_context_returns_to_central_when_the_tenant_pipeline_throws(): void
     {
         $tenant = $this->createReadyTenant('Exception Host', 'exception.example.test');
+        $this->insertConfig($tenant, 'exception-store');
         $request = Request::create($this->urlOnHost(
             (string) $tenant->domains()->firstOrFail()->domain,
             '/api/store/config',

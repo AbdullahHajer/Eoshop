@@ -1,0 +1,349 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Circle,
+  Clock3,
+  Copy,
+  ExternalLink,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Plus,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  ShoppingBag,
+  Store,
+  UserRound,
+} from "lucide-react";
+import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
+import { publicStoreUrl } from "../../utils/publicStoreUrl";
+import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycleTone } from "./lifecycle";
+
+interface MerchantPortalProps {
+  user: UserProfile;
+  stores: StoreSubmission[];
+  loading: boolean;
+  error: string | null;
+  onReload: () => void;
+  onCreateStore: () => void;
+  onOpenBuilder: (store: StoreSubmission) => void;
+  onLogout: () => void;
+  onCopyPublicUrl: (url: string) => void;
+}
+
+const toneClasses: Record<MerchantLifecycleTone, string> = {
+  neutral: "border-slate-200 bg-slate-50 text-slate-700",
+  info: "border-sky-200 bg-sky-50 text-sky-800",
+  warning: "border-amber-200 bg-amber-50 text-amber-900",
+  danger: "border-rose-200 bg-rose-50 text-rose-800",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+};
+
+const stageNames = ["تقديم الطلب", "المراجعة", "التجهيز", "النشر"];
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat("ar-YE", { dateStyle: "medium" }).format(parsed);
+}
+
+export default function MerchantPortal({
+  user,
+  stores,
+  loading,
+  error,
+  onReload,
+  onCreateStore,
+  onOpenBuilder,
+  onLogout,
+  onCopyPublicUrl,
+}: MerchantPortalProps) {
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(stores[0]?.id ?? null);
+
+  useEffect(() => {
+    if (!stores.length) {
+      setSelectedStoreId(null);
+      return;
+    }
+    if (!stores.some((store) => store.id === selectedStoreId)) setSelectedStoreId(stores[0].id);
+  }, [selectedStoreId, stores]);
+
+  const selectedStore = stores.find((store) => store.id === selectedStoreId) ?? stores[0] ?? null;
+  const selectedLifecycle = selectedStore ? deriveMerchantLifecycle(selectedStore) : null;
+  const totals = useMemo(() => ({
+    published: stores.filter((store) => deriveMerchantLifecycle(store).isPublished).length,
+    attention: stores.filter((store) => ["danger", "warning"].includes(deriveMerchantLifecycle(store).tone)).length,
+    ready: stores.filter((store) => deriveMerchantLifecycle(store).canOpenBuilder).length,
+  }), [stores]);
+
+  let publicUrl: string | null = null;
+  if (selectedStore && selectedLifecycle?.isPublished && selectedStore.publicDomain) {
+    try {
+      publicUrl = publicStoreUrl(selectedStore.publicDomain);
+    } catch {
+      publicUrl = null;
+    }
+  }
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-slate-950 p-2.5 text-white shadow-lg shadow-slate-900/10">
+              <Store className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-base font-black tracking-tight">مبتكر</p>
+              <p className="text-[11px] font-bold text-slate-500">بوابة التاجر</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onReload}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">تحديث</span>
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">خروج</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[250px_minmax(0,1fr)] lg:px-8">
+        <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+          <div className="mb-5 rounded-2xl bg-slate-950 p-4 text-white">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+              <UserRound className="h-5 w-5" />
+            </div>
+            <p className="truncate text-sm font-black">{user.fullName}</p>
+            <p className="mt-1 truncate text-[11px] text-slate-300">{user.email}</p>
+          </div>
+          <nav aria-label="تنقل بوابة التاجر" className="space-y-1.5">
+            <div className="flex items-center gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-black text-sky-800">
+              <LayoutDashboard className="h-4 w-4" /> نظرة عامة
+            </div>
+            <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500">
+              <ShoppingBag className="h-4 w-4" /> متاجري
+            </div>
+            <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-400">
+              <Settings2 className="h-4 w-4" /> الحساب <span className="mr-auto text-[9px]">قريبًا</span>
+            </div>
+          </nav>
+        </aside>
+
+        <main className="min-w-0 space-y-6">
+          <section className="overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-slate-900 to-sky-950 p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
+            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
+              <div>
+                <p className="mb-2 text-xs font-bold text-sky-300">مساحة العمل الرئيسية</p>
+                <h1 className="text-2xl font-black sm:text-3xl">مرحبًا {user.fullName.split(" ")[0] || "بك"}</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+                  تابع رحلة كل متجر من الطلب حتى النشر، واعرف الإجراء التالي والمسؤول عنه دون تخمين.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onCreateStore}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
+              >
+                <Plus className="h-4 w-4" /> إنشاء متجر جديد
+              </button>
+            </div>
+          </section>
+
+          <section aria-label="ملخص الحساب" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "إجمالي المتاجر", value: stores.length, icon: Store, color: "text-sky-700 bg-sky-50" },
+              { label: "متاجر منشورة", value: totals.published, icon: CheckCircle2, color: "text-emerald-700 bg-emerald-50" },
+              { label: "جاهزة للإدارة", value: totals.ready, icon: Settings2, color: "text-indigo-700 bg-indigo-50" },
+              { label: "تحتاج متابعة", value: totals.attention, icon: AlertTriangle, color: "text-amber-700 bg-amber-50" },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></div>
+                <p className="text-2xl font-black">{value}</p>
+                <p className="text-xs font-bold text-slate-500">{label}</p>
+              </div>
+            ))}
+          </section>
+
+          {error && (
+            <section role="alert" className="flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+              <div><p className="font-black">تعذر تحميل متاجرك</p><p className="mt-1 text-sm">{error}</p></div>
+              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+            </section>
+          )}
+
+          {!loading && !error && stores.length === 0 && (
+            <section className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-700"><Store className="h-7 w-7" /></div>
+              <h2 className="text-xl font-black">ابدأ متجرك الأول</h2>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-500">لا توجد متاجر مرتبطة بحسابك حتى الآن. ابدأ الإنشاء وسنحفظ رحلة المتجر وحالته في هذه الصفحة.</p>
+              <button type="button" onClick={onCreateStore} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><Plus className="h-4 w-4" /> إنشاء متجر</button>
+            </section>
+          )}
+
+          {loading && stores.length === 0 && (
+            <section aria-live="polite" className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm font-bold text-slate-500 shadow-sm">
+              <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin text-sky-600" /> جارٍ تحميل متاجرك من الخادم…
+            </section>
+          )}
+
+          {stores.length > 0 && selectedStore && selectedLifecycle && (
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
+              <section aria-label="قائمة المتاجر" className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div><h2 className="font-black">متاجري</h2><p className="text-[11px] text-slate-500">اختر متجرًا لعرض رحلته</p></div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">{stores.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {stores.map((store) => {
+                    const state = deriveMerchantLifecycle(store);
+                    const selected = store.id === selectedStore.id;
+                    return (
+                      <button
+                        key={store.id}
+                        type="button"
+                        onClick={() => setSelectedStoreId(store.id)}
+                        aria-current={selected ? "true" : undefined}
+                        className={`w-full rounded-2xl border p-3 text-right transition ${selected ? "border-sky-300 bg-sky-50 shadow-sm" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${toneClasses[state.tone]}`}><Store className="h-4 w-4" /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-black">{store.storeName}</p>
+                            <p className="mt-1 truncate text-[11px] text-slate-500">{store.requestedDomain || store.internalDomain || "لم يخصص عنوان بعد"}</p>
+                          </div>
+                          <ArrowLeft className="mt-2 h-4 w-4 text-slate-400" />
+                        </div>
+                        <span className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${toneClasses[state.tone]}`}>{state.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="min-w-0 space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-black">{selectedStore.storeName}</h2>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${toneClasses[selectedLifecycle.tone]}`}>{selectedLifecycle.label}</span>
+                      </div>
+                      <p className="text-sm text-slate-500">{selectedStore.businessType} · أُنشئ في {formatDate(selectedStore.createdAt)}</p>
+                    </div>
+                    {selectedLifecycle.canOpenBuilder && (
+                      <button type="button" onClick={() => onOpenBuilder(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800">
+                        <Settings2 className="h-4 w-4" /> إدارة المتجر
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-4 gap-2" aria-label="مراحل تجهيز المتجر">
+                    {stageNames.map((name, index) => {
+                      const complete = index < selectedLifecycle.completedSteps;
+                      const current = index === Math.min(selectedLifecycle.completedSteps, 3) && !selectedLifecycle.isPublished;
+                      return (
+                        <div key={name} className="min-w-0 text-center">
+                          <div className="flex items-center">
+                            <span className={`h-px flex-1 ${index === 0 ? "bg-transparent" : complete ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${complete ? "border-emerald-500 bg-emerald-500 text-white" : current ? "border-sky-500 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-400"}`}>
+                              {complete ? <Check className="h-4 w-4" /> : current ? <Clock3 className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
+                            </span>
+                            <span className={`h-px flex-1 ${index === stageNames.length - 1 ? "bg-transparent" : index + 1 < selectedLifecycle.completedSteps ? "bg-emerald-400" : "bg-slate-200"}`} />
+                          </div>
+                          <p className="mt-2 truncate text-[10px] font-bold text-slate-500 sm:text-xs">{name}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={`rounded-3xl border p-5 sm:p-6 ${toneClasses[selectedLifecycle.tone]}`}>
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-black opacity-75">الحالة الحالية</p>
+                      <h3 className="mt-1 text-lg font-black">{selectedLifecycle.headline}</h3>
+                      <p className="mt-2 text-sm leading-7 opacity-90">{selectedLifecycle.explanation}</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-3 rounded-2xl bg-white/70 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div><p className="text-[11px] font-black opacity-70">الخطوة التالية</p><p className="mt-1 text-sm font-bold">{selectedLifecycle.nextAction}</p></div>
+                    <div className="rounded-xl border border-current/10 bg-white px-3 py-2 text-center"><p className="text-[10px] font-bold opacity-60">المسؤول</p><p className="text-xs font-black">{selectedLifecycle.actionOwnerLabel}</p></div>
+                  </div>
+                </div>
+
+                {selectedStore.reviewFeedback && selectedStore.verificationStatus === "rejected" && (
+                  <div className="rounded-2xl border border-rose-200 bg-white p-4"><p className="text-xs font-black text-rose-700">ملاحظة فريق المراجعة لك</p><p className="mt-2 text-sm leading-7 text-slate-700">{selectedStore.reviewFeedback}</p></div>
+                )}
+
+                {selectedStore.publicationBlockers.length > 0 && !selectedLifecycle.isPublished && (
+                  <div className="rounded-2xl border border-amber-200 bg-white p-4">
+                    <p className="text-xs font-black text-amber-800">متطلبات النشر غير المكتملة</p>
+                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {selectedStore.publicationBlockers.map((blocker) => <li key={blocker} className="flex items-center gap-2 text-xs font-bold text-slate-600"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" />{publicationBlockerLabel(blocker)}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {publicUrl && (
+                  <div className="rounded-3xl border border-emerald-200 bg-emerald-950 p-5 text-white shadow-lg shadow-emerald-950/10 sm:p-6">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                      <div className="min-w-0"><p className="text-xs font-black text-emerald-300">رابط المتجر المنشور</p><p dir="ltr" className="mt-2 truncate text-left text-sm font-bold text-white">{publicUrl}</p></div>
+                      <div className="flex shrink-0 gap-2">
+                        <button type="button" onClick={() => onCopyPublicUrl(publicUrl!)} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black hover:bg-white/20"><Copy className="h-4 w-4" /> نسخ</button>
+                        <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-emerald-950 hover:bg-emerald-300"><ExternalLink className="h-4 w-4" /> فتح</a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4"><Package className="mb-3 h-4 w-4 text-sky-600" /><p className="text-[10px] font-bold text-slate-400">الباقة</p><p className="mt-1 text-sm font-black">{selectedStore.plan?.name || "غير محددة"}</p></div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4"><CheckCircle2 className="mb-3 h-4 w-4 text-emerald-600" /><p className="text-[10px] font-bold text-slate-400">تاريخ التفعيل</p><p className="mt-1 text-sm font-black">{formatDate(selectedStore.activeAt)}</p></div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4"><ExternalLink className="mb-3 h-4 w-4 text-indigo-600" /><p className="text-[10px] font-bold text-slate-400">تاريخ النشر</p><p className="mt-1 text-sm font-black">{formatDate(selectedStore.publishedAt)}</p></div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-black text-slate-700">صلاحيات هذا الحساب داخل المتجر</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {([
+                      ["إعدادات وتصميم المتجر", selectedStore.capabilities.workspaceManage],
+                      ["المنتجات", selectedStore.capabilities.catalogManage],
+                      ["عرض المخزون", selectedStore.capabilities.inventoryView],
+                      ["تعديل المخزون", selectedStore.capabilities.inventoryManage],
+                      ["عرض الطلبات", selectedStore.capabilities.ordersView],
+                      ["إدارة الطلبات", selectedStore.capabilities.ordersManage],
+                    ] as const).map(([label, allowed]) => (
+                      <span key={String(label)} className={`rounded-full border px-3 py-1.5 text-[11px] font-black ${allowed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
+                        {allowed ? "متاح: " : "غير متاح: "}{label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
