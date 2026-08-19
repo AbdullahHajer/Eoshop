@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Incremental frontend decomposition |
 | Work Package | WP 5.3 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-19 |
 | Branch | `codex/wp-5.3-pilot-qa-readiness` |
 | Base | Protected `main` at `a47b65e` |
@@ -84,7 +84,7 @@ Deliver a repeatable local Pilot environment that a QA team can use now to exerc
 
 - [x] Record immutable verification evidence and the QA handoff entry point.
 - [x] Complete independent read-only review with no blocking findings.
-- [ ] Commit implementation separately from closeout evidence, push, open PR and merge.
+- [x] Commit implementation separately from closeout evidence, push, open PR and merge.
 
 ## Risks and controls
 
