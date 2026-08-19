@@ -76,6 +76,38 @@ class SubscriptionService
         ]);
     }
 
+    public function forResubmission(
+        Tenant $tenant,
+        Plan $plan,
+        User $actor,
+        TenantSubscription $current,
+    ): TenantSubscription {
+        if ($current->getAttribute('tenant_id') !== $tenant->getKey()) {
+            throw new DomainException('The subscription does not belong to the resubmitted store.');
+        }
+
+        $status = $current->getAttribute('status');
+        if ($status === SubscriptionStatus::Active && ! $current->isCurrentlyActive()) {
+            $current->forceFill(['status' => SubscriptionStatus::Expired])->save();
+            $status = SubscriptionStatus::Expired;
+        }
+
+        if ($current->getAttribute('plan_key') === $plan->getKey()
+            && in_array($status, [SubscriptionStatus::PendingActivation, SubscriptionStatus::Active], true)
+        ) {
+            return $current;
+        }
+
+        if (in_array($status, [SubscriptionStatus::PendingActivation, SubscriptionStatus::Active], true)) {
+            $current->forceFill([
+                'status' => SubscriptionStatus::Cancelled,
+                'cancelled_at' => CarbonImmutable::now('UTC'),
+            ])->save();
+        }
+
+        return $this->createForSubmission($tenant, $plan, $actor);
+    }
+
     public function activate(Tenant $tenant, User $actor, DateTimeInterface $endsAt, Request $request): TenantSubscription
     {
         $end = CarbonImmutable::instance($endsAt);

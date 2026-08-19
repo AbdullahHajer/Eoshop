@@ -16,6 +16,10 @@ export interface StoreSubmission {
     inventoryManage: boolean;
     ordersView: boolean;
     ordersManage: boolean;
+    draftEdit: boolean;
+    resubmit: boolean;
+    publish: boolean;
+    unpublish: boolean;
   };
   internalDomain: string | null;
   requestedDomain: string | null;
@@ -58,6 +62,10 @@ export function mapSubmission(value: unknown): StoreSubmission {
         inventoryManage: booleanField(capabilities, "inventoryManage", "صلاحيات طلب المتجر"),
         ordersView: booleanField(capabilities, "ordersView", "صلاحيات طلب المتجر"),
         ordersManage: booleanField(capabilities, "ordersManage", "صلاحيات طلب المتجر"),
+        draftEdit: booleanField(capabilities, "draftEdit", "صلاحيات طلب المتجر"),
+        resubmit: booleanField(capabilities, "resubmit", "صلاحيات طلب المتجر"),
+        publish: booleanField(capabilities, "publish", "صلاحيات طلب المتجر"),
+        unpublish: booleanField(capabilities, "unpublish", "صلاحيات طلب المتجر"),
       };
     })(),
     internalDomain: nullableStringField(dto, "internalDomain", "طلب المتجر"),
@@ -88,6 +96,59 @@ export interface StoreSubmissionInput {
   handle: string;
   planKey: string;
   config: Record<string, unknown>;
+  draftId?: string;
+  expectedDraftRevision?: number;
+}
+
+export interface StoreDraft {
+  id: string;
+  tenantId: string | null;
+  status: "draft" | "submitted" | "correction_required";
+  revision: number;
+  storeName: string;
+  businessType: string;
+  themeStyle: "elegant" | "tech";
+  handle: string | null;
+  planKey: string | null;
+  config: Record<string, unknown>;
+  savedAt: string | null;
+  submittedAt: string | null;
+}
+
+export interface StoreDraftInput {
+  expectedRevision: number;
+  storeName: string;
+  businessType: string;
+  themeStyle: "elegant" | "tech";
+  handle: string | null;
+  planKey: string | null;
+  config: Record<string, unknown>;
+}
+
+function numberField(dto: Record<string, unknown>, key: string, context: string): number {
+  const value = dto[key];
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new ApiError(`استجابة ${context} لا تحتوي ${key} صالحًا.`, "unexpected", 200);
+  }
+  return value;
+}
+
+function mapDraft(value: unknown): StoreDraft {
+  const dto = record(value, "مسودة المتجر");
+  return {
+    id: stringField(dto, "id", "مسودة المتجر"),
+    tenantId: nullableStringField(dto, "tenantId", "مسودة المتجر"),
+    status: enumField(dto, "status", ["draft", "submitted", "correction_required"] as const, "مسودة المتجر"),
+    revision: numberField(dto, "revision", "مسودة المتجر"),
+    storeName: stringField(dto, "storeName", "مسودة المتجر"),
+    businessType: stringField(dto, "businessType", "مسودة المتجر"),
+    themeStyle: enumField(dto, "themeStyle", ["elegant", "tech"] as const, "مسودة المتجر"),
+    handle: nullableStringField(dto, "handle", "مسودة المتجر"),
+    planKey: nullableStringField(dto, "planKey", "مسودة المتجر"),
+    config: record(dto.config, "إعدادات مسودة المتجر"),
+    savedAt: nullableStringField(dto, "savedAt", "مسودة المتجر"),
+    submittedAt: nullableStringField(dto, "submittedAt", "مسودة المتجر"),
+  };
 }
 
 interface PendingSubmission {
@@ -157,6 +218,33 @@ function clearPendingSubmission(pending: PendingSubmission): void {
 }
 
 export const provisioningApi = {
+  async currentDraft(signal?: AbortSignal): Promise<StoreDraft | null> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft", { signal });
+    const envelope = record(response, "استجابة المسودة الحالية");
+    return envelope.data === null ? null : mapDraft(envelope.data);
+  },
+
+  async correctionDraft(tenantId: string, signal?: AbortSignal): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>(`/api/merchant/stores/${encodeURIComponent(tenantId)}/draft`, { signal });
+    return mapDraft(record(response, "استجابة مسودة التصحيح").data);
+  },
+
+  async saveDraft(input: StoreDraftInput): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft", {
+      method: "PUT",
+      body: input,
+    });
+    return mapDraft(record(response, "استجابة حفظ المسودة").data);
+  },
+
+  async saveCorrection(tenantId: string, input: StoreDraftInput): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>(`/api/merchant/stores/${encodeURIComponent(tenantId)}/draft`, {
+      method: "PATCH",
+      body: input,
+    });
+    return mapDraft(record(response, "استجابة حفظ التصحيح").data);
+  },
+
   async listStores(): Promise<StoreSubmission[]> {
     const response = await apiClient.request<{ data: unknown }>("/api/merchant/stores");
     const envelope = record(response, "قائمة متاجر التاجر");
@@ -177,6 +265,8 @@ export const provisioningApi = {
         handle: input.handle,
         planKey: input.planKey,
         config: input.config,
+        draftId: input.draftId,
+        expectedDraftRevision: input.expectedDraftRevision,
       },
       headers: { "Idempotency-Key": pending.idempotencyKey },
       retrySafety: "idempotent",
@@ -187,5 +277,37 @@ export const provisioningApi = {
     const envelope = record(response, "استجابة طلب المتجر");
     const meta = record(envelope.meta, "بيانات تكرار طلب المتجر");
     return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار طلب المتجر") } };
+  },
+
+  async resubmit(tenantId: string, expectedRevision: number): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
+    const storageKey = `eoshop.pending-store-resubmission.v1:${tenantId}`;
+    let idempotencyKey: string = crypto.randomUUID();
+    try {
+      const pending = JSON.parse(localStorage.getItem(storageKey) || "null") as { revision?: number; key?: string } | null;
+      if (pending?.revision === expectedRevision && typeof pending.key === "string") idempotencyKey = pending.key;
+      localStorage.setItem(storageKey, JSON.stringify({ revision: expectedRevision, key: idempotencyKey }));
+    } catch {
+      // Browser recovery is optional; the server remains authoritative.
+    }
+    const response = await apiClient.request<StoreSubmissionResponse>(`/api/merchant/stores/${encodeURIComponent(tenantId)}/resubmit`, {
+      method: "POST",
+      body: { expectedRevision },
+      headers: { "Idempotency-Key": idempotencyKey },
+      retrySafety: "idempotent",
+    });
+    try { localStorage.removeItem(storageKey); } catch { /* optional recovery */ }
+    const envelope = record(response, "استجابة إعادة إرسال المتجر");
+    const meta = record(envelope.meta, "بيانات تكرار إعادة الإرسال");
+    return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار إعادة الإرسال") } };
+  },
+
+  async publish(tenantId: string): Promise<StoreSubmission> {
+    const response = await apiClient.request<{ data: unknown }>(`/api/merchant/stores/${encodeURIComponent(tenantId)}/publication/publish`, { method: "POST" });
+    return mapSubmission(record(response, "استجابة نشر المتجر").data);
+  },
+
+  async unpublish(tenantId: string): Promise<StoreSubmission> {
+    const response = await apiClient.request<{ data: unknown }>(`/api/merchant/stores/${encodeURIComponent(tenantId)}/publication/unpublish`, { method: "POST" });
+    return mapSubmission(record(response, "استجابة إلغاء نشر المتجر").data);
   },
 };

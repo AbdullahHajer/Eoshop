@@ -22,6 +22,8 @@ class StoreSubmissionResource extends JsonResource
         $activeAt = $this->getAttribute('active_at');
         $publishedAt = $this->getAttribute('published_at');
         $actor = $request->user();
+        $publicationBlockers = PublicationReadiness::blockers($this->resource);
+        $canManagePublication = $actor instanceof User && $actor->can('managePublication', $this->resource);
 
         return [
             'id' => $this->getKey(),
@@ -40,6 +42,13 @@ class StoreSubmissionResource extends JsonResource
                 'inventoryManage' => $actor instanceof User && $actor->can('updateInventory', $this->resource),
                 'ordersView' => $actor instanceof User && $actor->can('viewOrders', $this->resource),
                 'ordersManage' => $actor instanceof User && $actor->can('updateOrders', $this->resource),
+                'draftEdit' => $actor instanceof User && $actor->can('editStoreDraft', $this->resource),
+                'resubmit' => $actor instanceof User && $actor->can('resubmitStore', $this->resource),
+                'publish' => $canManagePublication
+                    && $this->getAttribute('publication_status') !== 'published'
+                    && $publicationBlockers === [],
+                'unpublish' => $canManagePublication
+                    && $this->getAttribute('publication_status') === 'published',
             ],
             'internalDomain' => $this->whenLoaded('domains', function (): ?string {
                 $domain = $this->domains->firstWhere('kind', DomainKind::Internal);
@@ -65,7 +74,7 @@ class StoreSubmissionResource extends JsonResource
                 ];
             }),
             'subscriptionStatus' => $this->whenLoaded('currentPublicationRequest', fn (): ?string => $this->currentPublicationRequest?->subscription?->getAttribute('status')?->value),
-            'publicationBlockers' => PublicationReadiness::blockers($this->resource),
+            'publicationBlockers' => $publicationBlockers,
             'createdAt' => $createdAt instanceof CarbonInterface ? $createdAt->toIso8601String() : null,
             'activeAt' => $activeAt instanceof CarbonInterface ? $activeAt->toIso8601String() : null,
             'publishedAt' => $publishedAt instanceof CarbonInterface ? $publishedAt->toIso8601String() : null,

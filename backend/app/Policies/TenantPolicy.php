@@ -3,6 +3,9 @@
 namespace App\Policies;
 
 use App\Enums\PermissionKey;
+use App\Enums\ProvisioningState;
+use App\Enums\PublicationStatus;
+use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
 use App\Models\Tenant;
@@ -39,8 +42,7 @@ class TenantPolicy
             [TenantVerificationStatus::Pending, TenantVerificationStatus::Approved],
             [TenantVerificationStatus::Pending, TenantVerificationStatus::Rejected] => $user->hasPlatformPermission(PermissionKey::PlatformStoresReview),
             [TenantVerificationStatus::Approved, TenantVerificationStatus::Suspended],
-            [TenantVerificationStatus::Suspended, TenantVerificationStatus::Approved],
-            [TenantVerificationStatus::Rejected, TenantVerificationStatus::Pending] => $user->hasPlatformPermission(PermissionKey::PlatformStoresManage),
+            [TenantVerificationStatus::Suspended, TenantVerificationStatus::Approved] => $user->hasPlatformPermission(PermissionKey::PlatformStoresManage),
             default => false,
         };
     }
@@ -91,6 +93,43 @@ class TenantPolicy
             && $user->hasTenantPermission($tenant, PermissionKey::TenantProductsManage);
     }
 
+    public function editStoreDraft(User $user, Tenant $tenant): bool
+    {
+        return $tenant->getAttribute('verification_status') === TenantVerificationStatus::Rejected->value
+            && $tenant->getAttribute('provisioning_status') === ProvisioningState::NotStarted->value
+            && $this->hasActiveOwnerMembership($user, $tenant);
+    }
+
+    public function ownStore(User $user, Tenant $tenant): bool
+    {
+        return $this->hasActiveOwnerMembership($user, $tenant);
+    }
+
+    public function resubmitStore(User $user, Tenant $tenant): bool
+    {
+        return $this->editStoreDraft($user, $tenant);
+    }
+
+    public function managePublication(User $user, Tenant $tenant): bool
+    {
+        return $this->hasActiveOwnerMembership($user, $tenant)
+            && $user->hasTenantPermission($tenant, PermissionKey::TenantPublicationManage);
+    }
+
+    public function publishMerchant(User $user, Tenant $tenant): bool
+    {
+        return $this->managePublication($user, $tenant)
+            && $tenant->getAttribute('verification_status') === TenantVerificationStatus::Approved->value
+            && $tenant->getAttribute('provisioning_status') === ProvisioningState::Active->value
+            && $tenant->getAttribute('publication_status') !== PublicationStatus::Published->value;
+    }
+
+    public function unpublishMerchant(User $user, Tenant $tenant): bool
+    {
+        return $this->managePublication($user, $tenant)
+            && $tenant->getAttribute('publication_status') === PublicationStatus::Published->value;
+    }
+
     public function updateProductCatalog(User $user, Tenant $tenant): bool
     {
         return $user->hasTenantPermission($tenant, PermissionKey::TenantProductsManage);
@@ -114,5 +153,17 @@ class TenantPolicy
     public function updateOrders(User $user, Tenant $tenant): bool
     {
         return $user->hasTenantPermission($tenant, PermissionKey::TenantOrdersManage);
+    }
+
+    private function hasActiveOwnerMembership(User $user, Tenant $tenant): bool
+    {
+        return DB::connection((string) config('tenancy.database.central_connection'))
+            ->table('tenant_user')
+            ->join('roles', 'roles.id', '=', 'tenant_user.role_id')
+            ->where('tenant_user.tenant_id', $tenant->getKey())
+            ->where('tenant_user.user_id', $user->getKey())
+            ->where('tenant_user.status', TenantMembershipStatus::Active->value)
+            ->where('roles.key', SystemRole::MerchantOwner->value)
+            ->exists();
     }
 }

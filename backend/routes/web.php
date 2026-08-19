@@ -11,6 +11,8 @@ use App\Http\Controllers\MerchantInventoryController;
 use App\Http\Controllers\MerchantOrderController;
 use App\Http\Controllers\MerchantProductCatalogController;
 use App\Http\Controllers\MerchantStoreController;
+use App\Http\Controllers\MerchantStoreDraftController;
+use App\Http\Controllers\MerchantStoreLifecycleController;
 use App\Http\Controllers\MerchantWorkspaceController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlatformController;
@@ -68,6 +70,23 @@ Route::middleware('central.domain')->group(function (): void {
         Route::get('/domains/availability', [DomainAvailabilityController::class, 'show'])
             ->middleware('throttle:domain.availability');
         Route::get('/merchant/stores', [MerchantStoreController::class, 'index']);
+        Route::get('/merchant/store-draft', [MerchantStoreDraftController::class, 'current']);
+        Route::put('/merchant/store-draft', [MerchantStoreDraftController::class, 'saveCurrent'])
+            ->middleware('throttle:merchant.mutations');
+        Route::get('/merchant/stores/{tenant}/draft', [MerchantStoreDraftController::class, 'correction'])
+            ->can('editStoreDraft', 'tenant');
+        Route::patch('/merchant/stores/{tenant}/draft', [MerchantStoreDraftController::class, 'saveCorrection'])
+            ->can('editStoreDraft', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::post('/merchant/stores/{tenant}/resubmit', [MerchantStoreLifecycleController::class, 'resubmit'])
+            ->can('ownStore', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::post('/merchant/stores/{tenant}/publication/publish', [MerchantStoreLifecycleController::class, 'publish'])
+            ->can('managePublication', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::post('/merchant/stores/{tenant}/publication/unpublish', [MerchantStoreLifecycleController::class, 'unpublish'])
+            ->can('managePublication', 'tenant')
+            ->middleware('throttle:merchant.mutations');
         Route::get('/merchant/stores/{tenant}/publication', [MerchantStoreController::class, 'show'])
             ->can('viewMerchant', 'tenant');
         Route::get('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'show'])

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\StoreDraftConflict;
 use App\Exceptions\StoreSubmissionConflict;
 use App\Http\Requests\StoreSubmissionRequest;
 use App\Http\Resources\StoreSubmissionResource;
@@ -18,6 +19,11 @@ class StoreSubmissionController extends Controller
 
         try {
             $result = $submissions->submit($request->validated(), $actor, $request);
+        } catch (StoreDraftConflict $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $exception->errorCode,
+            ], 409);
         } catch (StoreSubmissionConflict $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
         }

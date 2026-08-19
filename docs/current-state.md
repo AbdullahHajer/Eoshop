@@ -17,16 +17,15 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 
 ## Active
 
-- WP 5.4: merchant portal, deterministic navigation and truthful store lifecycle visibility.
+- WP 5.5: server-owned drafts, rejected-store correction/resubmission and merchant publication controls.
 
 ## Approved next sequence
 
-1. WP 5.4 — Merchant portal and store lifecycle.
-2. WP 5.5 — Server-owned store draft, correction/resubmission and merchant publication.
-3. Merchant operational modules and continued builder decomposition.
-4. Platform administration console with users, audit, platform settings and operational queues.
-5. UX/browser acceptance, accessibility and responsive hardening.
-6. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
+1. WP 5.5 — Server-owned store draft, correction/resubmission and merchant publication.
+2. Merchant operational modules and continued builder decomposition.
+3. Platform administration console with users, audit, platform settings and operational queues.
+4. UX/browser acceptance, accessibility and responsive hardening.
+5. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 

@@ -18,8 +18,16 @@ class StoreSubmission extends Model
     {
         return [
             'payload_snapshot' => 'array',
+            'revision' => 'integer',
             'submitted_at' => 'immutable_datetime',
+            'revised_at' => 'immutable_datetime',
         ];
+    }
+
+    /** @return BelongsTo<StoreDraft, $this> */
+    public function draft(): BelongsTo
+    {
+        return $this->belongsTo(StoreDraft::class, 'store_draft_id');
     }
 
     /** @return BelongsTo<Tenant, $this> */

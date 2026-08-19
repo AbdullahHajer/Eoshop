@@ -14,6 +14,8 @@ import {
   Plus,
   RefreshCw,
   Settings2,
+  Send,
+  PauseCircle,
   ShieldCheck,
   ShoppingBag,
   Store,
@@ -31,6 +33,9 @@ interface MerchantPortalProps {
   onReload: () => void;
   onCreateStore: () => void;
   onOpenBuilder: (store: StoreSubmission) => void;
+  onCorrectStore: (store: StoreSubmission) => void;
+  onPublish: (store: StoreSubmission) => Promise<void>;
+  onUnpublish: (store: StoreSubmission) => Promise<void>;
   onLogout: () => void;
   onCopyPublicUrl: (url: string) => void;
 }
@@ -61,10 +66,15 @@ export default function MerchantPortal({
   onReload,
   onCreateStore,
   onOpenBuilder,
+  onCorrectStore,
+  onPublish,
+  onUnpublish,
   onLogout,
   onCopyPublicUrl,
 }: MerchantPortalProps) {
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(stores[0]?.id ?? null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!stores.length) {
@@ -90,6 +100,19 @@ export default function MerchantPortal({
       publicUrl = null;
     }
   }
+
+  const runAction = async (key: string, action: () => Promise<void>) => {
+    if (busyAction) return;
+    setBusyAction(key);
+    setActionError(null);
+    try {
+      await action();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "تعذر تنفيذ الإجراء. حدّث الحالة ثم حاول مجددًا.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#f5f7fb] text-slate-900">
@@ -249,12 +272,31 @@ export default function MerchantPortal({
                       </div>
                       <p className="text-sm text-slate-500">{selectedStore.businessType} · أُنشئ في {formatDate(selectedStore.createdAt)}</p>
                     </div>
-                    {selectedLifecycle.canOpenBuilder && (
-                      <button type="button" onClick={() => onOpenBuilder(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800">
-                        <Settings2 className="h-4 w-4" /> إدارة المتجر
-                      </button>
-                    )}
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {selectedStore.capabilities.draftEdit && (
+                        <button type="button" disabled={Boolean(busyAction)} onClick={() => onCorrectStore(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">
+                          <Settings2 className="h-4 w-4" /> تصحيح الطلب
+                        </button>
+                      )}
+                      {selectedLifecycle.canOpenBuilder && (
+                        <button type="button" disabled={Boolean(busyAction)} onClick={() => onOpenBuilder(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-50">
+                          <Settings2 className="h-4 w-4" /> إدارة المتجر
+                        </button>
+                      )}
+                      {selectedStore.capabilities.publish && (
+                        <button type="button" disabled={Boolean(busyAction)} onClick={() => void runAction(`publish:${selectedStore.id}`, () => onPublish(selectedStore))} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">
+                          <Send className="h-4 w-4" /> {busyAction === `publish:${selectedStore.id}` ? "جارٍ النشر…" : "نشر المتجر"}
+                        </button>
+                      )}
+                      {selectedStore.capabilities.unpublish && (
+                        <button type="button" disabled={Boolean(busyAction)} onClick={() => void runAction(`unpublish:${selectedStore.id}`, () => onUnpublish(selectedStore))} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-black text-amber-900 disabled:opacity-50">
+                          <PauseCircle className="h-4 w-4" /> {busyAction === `unpublish:${selectedStore.id}` ? "جارٍ الإيقاف…" : "إلغاء النشر"}
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {actionError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{actionError}</p>}
 
                   <div className="mt-6 grid grid-cols-4 gap-2" aria-label="مراحل تجهيز المتجر">
                     {stageNames.map((name, index) => {
@@ -332,6 +374,8 @@ export default function MerchantPortal({
                       ["تعديل المخزون", selectedStore.capabilities.inventoryManage],
                       ["عرض الطلبات", selectedStore.capabilities.ordersView],
                       ["إدارة الطلبات", selectedStore.capabilities.ordersManage],
+                      ["تصحيح الطلب", selectedStore.capabilities.draftEdit],
+                      ["النشر", selectedStore.capabilities.publish || selectedStore.capabilities.unpublish],
                     ] as const).map(([label, allowed]) => (
                       <span key={String(label)} className={`rounded-full border px-3 py-1.5 text-[11px] font-black ${allowed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
                         {allowed ? "متاح: " : "غير متاح: "}{label}

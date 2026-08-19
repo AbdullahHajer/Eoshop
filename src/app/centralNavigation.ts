@@ -5,6 +5,7 @@ export type CentralRoute =
   | { name: "merchant" }
   | { name: "merchant-new" }
   | { name: "merchant-design"; tenantId: string }
+  | { name: "merchant-correction"; tenantId: string }
   | { name: "admin" }
   | { name: "auth-flow" }
   | { name: "unknown" };
@@ -20,6 +21,15 @@ export function parseCentralRoute(pathname: string): CentralRoute {
   if (design) {
     try {
       return { name: "merchant-design", tenantId: decodeURIComponent(design[1]) };
+    } catch {
+      return { name: "unknown" };
+    }
+  }
+
+  const correction = pathname.match(/^\/app\/stores\/([^/]+)\/correction\/?$/);
+  if (correction) {
+    try {
+      return { name: "merchant-correction", tenantId: decodeURIComponent(correction[1]) };
     } catch {
       return { name: "unknown" };
     }

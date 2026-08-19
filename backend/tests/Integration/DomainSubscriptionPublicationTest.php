@@ -298,7 +298,7 @@ class DomainSubscriptionPublicationTest extends TestCase
         $this->startBrowserSessionAs($manager);
         $this->patchJson("/api/admin/stores/{$first->id}/status", [
             'status' => TenantVerificationStatus::Pending->value,
-        ])->assertStatus(409);
+        ])->assertForbidden();
         $this->assertSame(TenantVerificationStatus::Rejected->value, $first->refresh()->verification_status);
         $this->assertSame('rejected', $first->publication_status);
         $this->assertSame(1, DomainReservation::query()
@@ -307,7 +307,7 @@ class DomainSubscriptionPublicationTest extends TestCase
             ->count());
     }
 
-    public function test_rejected_legacy_adoption_can_reopen_without_an_open_request_collision(): void
+    public function test_platform_cannot_reopen_a_rejected_legacy_submission(): void
     {
         $tenant = Tenant::query()->create([
             'id' => 'legacy-rejected-reopen',
@@ -364,15 +364,14 @@ class DomainSubscriptionPublicationTest extends TestCase
         $this->startBrowserSessionAs($manager);
         $this->patchJson("/api/admin/stores/{$tenant->id}/status", [
             'status' => TenantVerificationStatus::Pending->value,
-        ])->assertOk()
-            ->assertJsonPath('data.verificationStatus', 'pending')
-            ->assertJsonPath('data.publicationStatus', 'requested');
+        ])->assertForbidden();
 
-        $this->assertSame(1, DB::table('publication_requests')
+        $this->assertSame(TenantVerificationStatus::Rejected->value, $tenant->refresh()->verification_status);
+        $this->assertSame(0, DB::table('publication_requests')
             ->where('tenant_id', $tenant->id)
             ->where('status', 'requested')
             ->count());
-        $this->assertSame(2, DB::table('publication_requests')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(1, DB::table('publication_requests')->where('tenant_id', $tenant->id)->count());
     }
 
     public function test_merchant_recovery_endpoints_enforce_active_exact_membership(): void

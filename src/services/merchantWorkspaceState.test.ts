@@ -33,6 +33,22 @@ describe("merchant workspace account and request isolation", () => {
     expect(coordinator.isCurrent(second.sequence)).toBe(false);
   });
 
+  it("invalidates a delayed account-A draft before account B starts restoring", async () => {
+    const coordinator = new LatestWorkspaceLoad();
+    const accountA = coordinator.begin();
+    let releaseAccountA: (() => void) | undefined;
+    const delayedAccountA = new Promise<void>((resolve) => { releaseAccountA = resolve; });
+
+    coordinator.invalidate();
+    const accountB = coordinator.begin();
+    releaseAccountA?.();
+    await delayedAccountA;
+
+    expect(accountA.signal.aborted).toBe(true);
+    expect(coordinator.isCurrent(accountA.sequence)).toBe(false);
+    expect(coordinator.isCurrent(accountB.sequence)).toBe(true);
+  });
+
   it("restores only a local draft or a clean preset after an account reset", () => {
     const previousTenantConfig = { ...ELEGANT_PRESET, storeName: "Previous tenant secret" };
     const localDraft = { ...ELEGANT_PRESET, storeName: "Unpublished local draft" } as StoreConfig;

@@ -47,6 +47,7 @@ enum SystemRole: string
             ],
             self::MerchantOwner => [
                 PermissionKey::TenantStoreManage,
+                PermissionKey::TenantPublicationManage,
                 PermissionKey::TenantMembersManage,
                 PermissionKey::TenantProductsManage,
                 PermissionKey::TenantInventoryView,

@@ -700,6 +700,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $provisioningMigration = 'database/migrations/system/2026_08_14_000007_create_tenant_provisioning_lifecycle.php'
     $publicationMigration = 'database/migrations/system/2026_08_15_000008_create_domain_subscription_publication_lifecycle.php'
     $inventoryPermissionsMigration = 'database/migrations/system/2026_08_16_000009_add_inventory_permissions.php'
+    $draftLifecycleMigration = 'database/migrations/system/2026_08_19_000010_create_store_drafts_and_merchant_publication.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$draftLifecycleMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$inventoryPermissionsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$publicationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$provisioningMigration --force --no-interaction
@@ -715,6 +717,41 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     Invoke-Compose exec -T backend php artisan migrate --path=$publicationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$inventoryPermissionsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
+    $draftAdoptionUserId = '01J00000000000000000000055'
+    $draftAdoptionSql = @"
+INSERT INTO users (id, name, email, password, status, created_at, updated_at)
+VALUES ('$draftAdoptionUserId', 'WP 5.5 Adoption Owner', 'wp55-adoption-owner@example.test', NULL, 'active', now(), now());
+INSERT INTO store_submissions (tenant_id, submitted_by_user_id, idempotency_key, request_fingerprint, payload_snapshot, initial_config_id, submitted_at)
+VALUES (
+  '$adoptionTenantId',
+  '$draftAdoptionUserId',
+  '00000000-0000-4000-8000-000000000055',
+  repeat('a', 64),
+  json_build_object(
+    'storeName', 'WP 5.5 Adopted Draft',
+    'businessType', 'retail',
+    'themeStyle', 'elegant',
+    'handle', 'wp21-adopt',
+    'planKey', 'starter',
+    'config', json_build_object('storeName', 'WP 5.5 Adopted Draft', 'products', json_build_array())
+  ),
+  '00000000-0000-4000-8000-000000000056',
+  now()
+);
+"@
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $draftAdoptionSql
+    )
+    Invoke-Compose exec -T backend php artisan migrate --path=$draftLifecycleMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
+    $draftAdoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT d.status || ':' || d.revision::text || ':' || s.revision::text || ':' || d.store_name FROM store_submissions s JOIN store_drafts d ON d.id = s.store_draft_id WHERE s.tenant_id = '$adoptionTenantId';"
+    )).Trim()
+    if ($draftAdoptionResult -ne 'submitted:1:1:WP 5.5 Adopted Draft') {
+        throw "WP 5.5 server-draft adoption failed. Received: $draftAdoptionResult"
+    }
     $adoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
         '-tAc', "SELECT t.provisioning_status || ':' || r.schema_origin FROM tenants t JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$adoptionTenantId';"
