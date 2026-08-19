@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.4 — Merchant portal and store lifecycle |
-| Status | Implementation verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-19 |
 | Branch | `codex/wp-5.4-merchant-portal` |
 | Base | `50600c2169addf12bfd6c9d929f15e16ee313ca8` |
@@ -63,4 +63,8 @@ Environment: `eoshop/backend-quality:wp54`, built from the current working tree.
 ## Delivery status
 
 - Implementation is recorded separately in `fce2e63b2248ffd3c37015ba957371f243f5e561`.
-- Evidence commit, pull request, protected CI and merge facts will be appended only after they exist.
+- Evidence is recorded separately in `02a528108917a4239e176af2cb5629d29c521551`.
+- Pull request [#32](https://github.com/sas-prog1/Eoshop/pull/32) was merged from head `02a528108917a4239e176af2cb5629d29c521551`.
+- Pull-request CI run [32217429400](https://github.com/sas-prog1/Eoshop/actions/runs/32217429400) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `55d68791cd39ff673e6423541c3b305fb8302b21`.
+- Protected-main CI run [32223098794](https://github.com/sas-prog1/Eoshop/actions/runs/32223098794) passed the same four required jobs after merge.
