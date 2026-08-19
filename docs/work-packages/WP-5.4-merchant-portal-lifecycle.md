@@ -86,8 +86,8 @@ Turn the authenticated merchant experience from a collection of modals and a sto
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact verification evidence and remaining WP 5.5 handoff items.
-- [ ] Obtain independent read-only approval with no blocking findings.
+- [x] Record exact verification evidence and remaining WP 5.5 handoff items.
+- [x] Obtain independent read-only approval with no blocking findings.
 - [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Risks and controls
