@@ -98,8 +98,8 @@ Turn each eligible store into a clear operational workspace. A merchant should e
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact evidence and remaining extraction debt.
-- [ ] Obtain final independent read-only approval.
+- [x] Record exact evidence and remaining extraction debt.
+- [x] Obtain final independent read-only approval.
 - [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
