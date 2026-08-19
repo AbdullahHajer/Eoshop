@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.4 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-19 |
 | Branch | `codex/wp-5.4-merchant-portal` |
 | Base | Protected `main` at `50600c2` |
@@ -88,7 +88,7 @@ Turn the authenticated merchant experience from a collection of modals and a sto
 
 - [x] Record exact verification evidence and remaining WP 5.5 handoff items.
 - [x] Obtain independent read-only approval with no blocking findings.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Risks and controls
 
