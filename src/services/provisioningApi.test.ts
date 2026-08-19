@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { provisioningApi } from "./provisioningApi";
+import { mapSubmission, provisioningApi } from "./provisioningApi";
 import { apiClient } from "./apiClient";
 
 afterEach(() => {
@@ -8,6 +8,28 @@ afterEach(() => {
 });
 
 describe("provisioningApi", () => {
+  it("fails closed when a lifecycle enum or critical projection field is malformed", () => {
+    expect(() => mapSubmission({
+      id: "tenant-invalid",
+      storeName: "Invalid store",
+      businessType: "retail",
+      verificationStatus: "secret_future_state",
+      provisioningStatus: "active",
+      publicationStatus: "published",
+      reviewFeedback: null,
+      capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+      internalDomain: null,
+      requestedDomain: null,
+      publicDomain: "invalid.example.test",
+      plan: null,
+      subscriptionStatus: "active",
+      publicationBlockers: [],
+      createdAt: null,
+      activeAt: null,
+      publishedAt: null,
+    })).toThrow(/عقد طلب المتجر/);
+  });
+
   it("submits the store with CSRF and a durable idempotency key", async () => {
     const response = {
       data: {
@@ -17,12 +39,17 @@ describe("provisioningApi", () => {
         verificationStatus: "pending",
         provisioningStatus: "not_started",
         publicationStatus: "requested",
+        reviewFeedback: null,
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
         internalDomain: "store-tenant-1.eoshop.local",
         requestedDomain: "store-one.eoshop.local",
+        publicDomain: null,
         plan: { key: "starter", name: "Starter", activationMode: "automatic" },
         subscriptionStatus: "active",
         publicationBlockers: ["review_not_approved", "provisioning_not_ready"],
         createdAt: "2026-08-14T00:00:00Z",
+        activeAt: null,
+        publishedAt: null,
       },
       meta: { replayed: false },
     };
@@ -72,12 +99,17 @@ describe("provisioningApi", () => {
         verificationStatus: "pending",
         provisioningStatus: "not_started",
         publicationStatus: "requested",
+        reviewFeedback: null,
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
         internalDomain: "store-tenant-2.eoshop.local",
         requestedDomain: "store-two.eoshop.local",
+        publicDomain: null,
         plan: { key: "pro", name: "Pro", activationMode: "manual" },
         subscriptionStatus: "pending_activation",
         publicationBlockers: ["review_not_approved"],
         createdAt: "2026-08-15T00:00:00Z",
+        activeAt: null,
+        publishedAt: null,
       },
       meta: { replayed: true },
     };

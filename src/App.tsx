@@ -24,7 +24,9 @@ import type { AppView } from "./app/appTypes";
 import { isCentralFrontendHost } from "./app/hostRouting";
 import PublicStorefrontScreen from "./features/storefront/PublicStorefrontScreen";
 import WorkspaceRecoveryOverlays from "./features/store-builder/WorkspaceRecoveryOverlays";
+import MerchantPortal from "./features/merchant/MerchantPortal";
 import { useUiAdapters } from "./adapters/UiAdaptersContext";
+import { parseCentralRoute, pushCentralPath, replaceCentralPath } from "./app/centralNavigation";
 import {
   isUiError,
   isUiErrorCode,
@@ -164,6 +166,8 @@ export default function App() {
   
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [merchantStores, setMerchantStores] = useState<StoreSubmission[]>([]);
+  const [merchantStoresLoading, setMerchantStoresLoading] = useState(false);
+  const [merchantStoresError, setMerchantStoresError] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<StoreWorkspace | null>(null);
   const [localDraft, setLocalDraft] = useState<StoreConfig | null>(null);
   const [workspaceSaving, setWorkspaceSaving] = useState(false);
@@ -250,20 +254,59 @@ export default function App() {
     }
 
     localStorage.removeItem("mobtaker_user_registration");
+    const initialRoute = parseCentralRoute(window.location.pathname);
     auth.session()
-      .then((profile) => {
+      .then(async (profile) => {
         setAuthUser(profile);
-        if (profile) void restoreMerchantState(profile);
+        if (!isCentralFrontendHost(window.location.hostname)) return;
+        if (!profile) {
+          if (["merchant", "merchant-new", "merchant-design"].includes(initialRoute.name)) replaceCentralPath("/");
+          return;
+        }
+
+        if (profile.role === "admin" && initialRoute.name !== "auth-flow") {
+          replaceCentralPath("/admin");
+          setIsAdminAuthModalOpen(false);
+          setIsAdminOpen(true);
+          void loadPlatformStores();
+          return;
+        }
+
+        if (initialRoute.name === "admin" || initialRoute.name === "auth-flow") return;
+
+        const requestedTenantId = initialRoute.name === "merchant-design" ? initialRoute.tenantId : undefined;
+        const outcome = await restoreMerchantState(profile, requestedTenantId);
+        if (outcome.status === "error") {
+          if (outcome.sessionActive) {
+            setView("merchant_dashboard");
+            replaceCentralPath("/app");
+          }
+          return;
+        }
+        if (initialRoute.name === "merchant-new") {
+          setView("templates");
+          replaceCentralPath("/app/new");
+          return;
+        }
+        if (requestedTenantId && outcome.loadedTenantId === requestedTenantId) {
+          setView("builder");
+          replaceCentralPath(`/app/stores/${encodeURIComponent(requestedTenantId)}/design`);
+          return;
+        }
+        setView("merchant_dashboard");
+        replaceCentralPath("/app");
       })
       .catch(() => {
         setAuthUser(null);
         resetTenantOwnedState();
+        if (["merchant", "merchant-new", "merchant-design"].includes(initialRoute.name)) replaceCentralPath("/");
       });
 
     // Dedicated Admin Route Check (/admin or #admin)
     const currentPath = window.location.pathname;
     const currentHash = window.location.hash;
-    if (currentPath === "/admin" || currentPath.startsWith("/admin") || currentHash === "#admin") {
+    if (isCentralFrontendHost(window.location.hostname)
+      && (currentPath === "/admin" || currentPath.startsWith("/admin") || currentHash === "#admin")) {
       setIsAdminAuthModalOpen(true);
     }
   }, []);
@@ -311,6 +354,8 @@ export default function App() {
     setPendingArchivedProductIds([]);
     setActiveWorkspace(null);
     setMerchantStores([]);
+    setMerchantStoresLoading(false);
+    setMerchantStoresError(null);
     setRegisteredUser(null);
     setConfig(tenantSafeConfig(localDraft));
     setCart([]);
@@ -363,33 +408,48 @@ export default function App() {
     }
   };
 
-  const restoreMerchantState = async (user: UserProfile): Promise<MerchantRestoreResult> => {
+  const restoreMerchantState = async (
+    user: UserProfile,
+    requestedTenantId?: string,
+  ): Promise<{ status: MerchantRestoreResult; loadedTenantId: string | null; sessionActive: boolean }> => {
     const restoreSequence = ++merchantRestoreSequence.current;
+    setMerchantStoresLoading(true);
+    setMerchantStoresError(null);
     try {
       const stores = await provisioning.listStores();
-      if (restoreSequence !== merchantRestoreSequence.current) return "error";
+      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
       setMerchantStores(stores);
-      if (stores.length === 0) return classifyMerchantRestore(0);
+      if (stores.length === 0) return { status: classifyMerchantRestore(0), loadedTenantId: null, sessionActive: true };
 
       const fallback = stores[0];
       setRegisteredUser(merchantProfile(user, fallback));
-      const editable = stores.filter((store) => store.verificationStatus === "approved" && store.provisioningStatus === "active");
+      const editable = stores.filter((store) => store.verificationStatus === "approved"
+        && store.provisioningStatus === "active"
+        && store.capabilities.workspaceManage);
       const preferredId = localStorage.getItem("eoshop.active-tenant-id");
-      const selected = editable.find((store) => store.id === preferredId) ?? editable[0];
+      const selected = editable.find((store) => store.id === requestedTenantId)
+        ?? editable.find((store) => store.id === preferredId)
+        ?? editable[0];
+      let loadedTenantId: string | null = null;
       if (selected) {
-        await loadMerchantWorkspace(selected, user);
-        if (restoreSequence !== merchantRestoreSequence.current) return "error";
+        if (await loadMerchantWorkspace(selected, user)) loadedTenantId = selected.id;
+        if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
       }
 
-      return classifyMerchantRestore(stores.length);
+      return { status: classifyMerchantRestore(stores.length), loadedTenantId, sessionActive: true };
     } catch (requestError) {
-      if (restoreSequence !== merchantRestoreSequence.current) return "error";
-      if (isUiError(requestError, "unauthenticated")) {
+      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
+      const sessionActive = !isUiError(requestError, "unauthenticated");
+      if (!sessionActive) {
         setAuthUser(null);
         resetTenantOwnedState();
       }
-      triggerToast(uiErrorMessage(requestError, "تعذر استعادة متاجر الحساب من الخادم."), "error");
-      return classifyMerchantRestore(0, true);
+      const message = uiErrorMessage(requestError, "تعذر استعادة متاجر الحساب من الخادم.");
+      setMerchantStoresError(message);
+      triggerToast(message, "error");
+      return { status: classifyMerchantRestore(0, true), loadedTenantId: null, sessionActive };
+    } finally {
+      if (restoreSequence === merchantRestoreSequence.current) setMerchantStoresLoading(false);
     }
   };
 
@@ -724,6 +784,7 @@ export default function App() {
     setAuthUser(null);
     resetTenantOwnedState();
     setView("landing");
+    replaceCentralPath("/");
     setIsLogoutConfirmOpen(false);
     triggerToast("تم تسجيل الخروج وإنهاء جلسة الحساب بنجاح 🛡️", "info");
   };
@@ -1096,6 +1157,79 @@ export default function App() {
     triggerToast("تم فتح نافذة المعاينة المباشرة لصفحة الشراء والدفع! 💳", "success");
   };
 
+  const openMerchantPortal = () => {
+    if (recoverableWorkspaceChanges) {
+      const confirmed = window.confirm("توجد تعديلات غير محفوظة في المحرر. الرجوع إلى بوابة التاجر سيتجاهلها. هل تريد المتابعة؟");
+      if (!mayDiscardDirtyWorkspace(true, confirmed)) return;
+      workspaceEditGeneration.current += 1;
+      if (activeWorkspace) setConfig(activeWorkspace.config);
+      setPendingArchivedProductIds([]);
+      setWorkspaceConflict(null);
+      setWorkspaceConflictReview(null);
+    }
+    setView("merchant_dashboard");
+    pushCentralPath("/app");
+  };
+
+  const openMerchantBuilder = async (store: StoreSubmission) => {
+    if (!authUser || store.verificationStatus !== "approved" || store.provisioningStatus !== "active" || !store.capabilities.workspaceManage) return;
+    try {
+      const loaded = activeWorkspace?.tenantId === store.id || await loadMerchantWorkspace(store, authUser);
+      if (!loaded) return;
+      setView("builder");
+      pushCentralPath(`/app/stores/${encodeURIComponent(store.id)}/design`);
+    } catch (requestError) {
+      if (isUiError(requestError, "aborted")) return;
+      triggerToast(uiErrorMessage(requestError, "تعذر فتح مساحة عمل المتجر."), "error");
+    }
+  };
+
+  const reloadMerchantPortal = () => {
+    if (!authUser || merchantStoresLoading) return;
+    void restoreMerchantState(authUser);
+  };
+
+  const copyPublicStoreUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      triggerToast("تم نسخ رابط المتجر المنشور.", "success");
+    } catch {
+      triggerToast("تعذر نسخ الرابط تلقائيًا. يمكنك تحديده ونسخه يدويًا.", "error");
+    }
+  };
+
+  useEffect(() => {
+    if (!isCentralFrontendHost(window.location.hostname)) return;
+    const handlePopState = () => {
+      const route = parseCentralRoute(window.location.pathname);
+      if (route.name === "merchant" && authUser) {
+        if (recoverableWorkspaceChanges) {
+          const confirmed = window.confirm("توجد تعديلات غير محفوظة في المحرر. الرجوع إلى بوابة التاجر سيتجاهلها. هل تريد المتابعة؟");
+          if (!mayDiscardDirtyWorkspace(true, confirmed)) {
+            if (activeWorkspace) pushCentralPath(`/app/stores/${encodeURIComponent(activeWorkspace.tenantId)}/design`);
+            return;
+          }
+          workspaceEditGeneration.current += 1;
+          if (activeWorkspace) setConfig(activeWorkspace.config);
+          setPendingArchivedProductIds([]);
+          setWorkspaceConflict(null);
+          setWorkspaceConflictReview(null);
+        }
+        setView("merchant_dashboard");
+      } else if (route.name === "merchant-new" && authUser) {
+        setView("templates");
+      } else if (route.name === "landing") {
+        setView(authUser ? "merchant_dashboard" : "landing");
+        if (authUser) replaceCentralPath("/app");
+      } else if (route.name === "merchant-design" && authUser) {
+        const store = merchantStores.find((candidate) => candidate.id === route.tenantId);
+        if (store) void openMerchantBuilder(store);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [authUser, merchantStores, activeWorkspace, recoverableWorkspaceChanges]);
+
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
       <AppToast toast={toast} />
@@ -1114,6 +1248,23 @@ export default function App() {
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           submitOrder={submitLiveOrder}
+        />
+      )}
+
+      {view === "merchant_dashboard" && authUser && (
+        <MerchantPortal
+          user={authUser}
+          stores={merchantStores}
+          loading={merchantStoresLoading}
+          error={merchantStoresError}
+          onReload={reloadMerchantPortal}
+          onCreateStore={() => {
+            setView("templates");
+            pushCentralPath("/app/new");
+          }}
+          onOpenBuilder={(store) => void openMerchantBuilder(store)}
+          onLogout={handleLogout}
+          onCopyPublicUrl={(url) => void copyPublicStoreUrl(url)}
         />
       )}
 
@@ -1166,8 +1317,8 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      setAuthGatewayMode("login");
-                      setIsAuthGatewayOpen(true);
+                      setView("merchant_dashboard");
+                      pushCentralPath("/app");
                     }}
                     className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-2.5 rounded-xl transition font-bold text-xs shadow-2xs border border-slate-200/60"
                   >
@@ -1696,9 +1847,9 @@ export default function App() {
           <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm">
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => setView("templates")}
+                onClick={activeWorkspace ? openMerchantPortal : () => setView("templates")}
                 className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500"
-                title="الرجوع للقوالب"
+                title={activeWorkspace ? "الرجوع إلى بوابة التاجر" : "الرجوع للقوالب"}
               >
                 <ArrowRight className="w-5 h-5" />
               </button>
@@ -1769,13 +1920,19 @@ export default function App() {
               <button
                 disabled={workspaceSaving || workspaceLoading || inventoryPending || workspaceConflict !== null}
                 onClick={() => void saveStore().then((saved) => {
-                  if (saved) setIsDomainModalOpen(true);
+                  if (!saved) return;
+                  if (activeWorkspace) {
+                    setView("merchant_dashboard");
+                    pushCentralPath("/app");
+                  } else {
+                    setIsDomainModalOpen(true);
+                  }
                 })}
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-md hover:shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer ring-2 ring-emerald-400/30"
                 title="إنهاء التخصيص واختيار الدومين والاستضافة لمتجرك"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                <span>تم الانتهاء من التخصيص 🚀</span>
+                <span>{activeWorkspace ? "حفظ والعودة إلى بوابة التاجر" : "الانتهاء واختيار عنوان المتجر 🚀"}</span>
               </button>
 
               <button
@@ -2320,6 +2477,14 @@ export default function App() {
         onSubmitted={(submission) => {
           const domain = submission.requestedDomain ?? "العنوان المحجوز";
           triggerToast(`تم إرسال متجر ${submission.storeName} للمراجعة على العنوان ${domain}. سيبدأ التجهيز بعد الموافقة.`, "success");
+          setIsDomainModalOpen(false);
+          if (authUser) {
+            void restoreMerchantState(authUser).then((outcome) => {
+              if (outcome.status === "error" && !outcome.sessionActive) return;
+              setView("merchant_dashboard");
+              pushCentralPath("/app");
+            });
+          }
         }}
       />
 
@@ -2332,17 +2497,20 @@ export default function App() {
         onLoginSuccess={(user) => {
           resetTenantOwnedState();
           setAuthUser(user);
-          void restoreMerchantState(user).then((restoreResult) => {
-            if (!pendingAction) return;
-            if (restoreResult === "none") {
-              setIsRegisterModalOpen(true);
-              return;
-            }
-            if (restoreResult === "error") return;
-            if (pendingAction.type === "templates") setView("templates");
-            if (pendingAction.type === "builder") setView("builder");
-            if (pendingAction.type === "ai") void runAiGenerationDirectly(pendingAction.data);
+          if (user.role === "admin") {
             setPendingAction(null);
+            setIsAuthGatewayOpen(false);
+            replaceCentralPath("/admin");
+            setIsAdminOpen(true);
+            void loadPlatformStores();
+            return;
+          }
+          void restoreMerchantState(user).then((outcome) => {
+            if (outcome.status === "error" && !outcome.sessionActive) return;
+            setPendingAction(null);
+            setIsRegisterModalOpen(false);
+            setView("merchant_dashboard");
+            pushCentralPath("/app");
           });
           triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
         }}
@@ -2358,6 +2526,7 @@ export default function App() {
           setAuthUser(null);
           resetTenantOwnedState();
           setView("landing");
+          replaceCentralPath("/");
           triggerToast("تم تسجيل الخروج وإنهاء الجلسة بنجاح", "info");
         }}
         onStartStoreCreation={() => {

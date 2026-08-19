@@ -312,8 +312,11 @@ export default function AdminDashboard({
             className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
           >
             <h3 className="font-black text-slate-950">
-              سبب {reasonDecision.status === "rejected" ? "رفض" : "تعليق"} {reasonDecision.store.storeName}
+              {reasonDecision.status === "rejected" ? "ملاحظة المراجعة الظاهرة لصاحب" : "سبب تعليق"} متجر {reasonDecision.store.storeName}
             </h3>
+            {reasonDecision.status === "rejected" && (
+              <p className="mt-2 text-xs leading-6 text-amber-700">هذه الملاحظة ستظهر لصاحب المتجر. اكتب خطوات تصحيح واضحة، ولا تضع معلومات أمنية أو ملاحظات تشغيلية داخلية.</p>
+            )}
             <textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} required className="mt-4 min-h-32 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-rose-400" />
             <div className="mt-4 flex gap-2">
               <button type="submit" disabled={!reason.trim() || busyStoreId === reasonDecision.store.id} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">تأكيد القرار</button>

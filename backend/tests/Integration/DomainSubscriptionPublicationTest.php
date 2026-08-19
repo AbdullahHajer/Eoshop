@@ -128,6 +128,20 @@ class DomainSubscriptionPublicationTest extends TestCase
         ])->assertOk();
         $this->provision($tenant);
 
+        $tenant->run(fn () => DB::table('store_configs')
+            ->where('is_current', true)
+            ->update(['products_materialized' => false]));
+        $this->startBrowserSessionAs($merchant);
+        $this->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/publication")
+            ->assertOk()
+            ->assertJsonPath('data.publicationBlockers', fn (array $blockers): bool => in_array('workspace_not_ready', $blockers, true));
+        $this->startBrowserSessionAs($manager);
+        $this->postJson("http://127.0.0.1/api/admin/stores/{$tenant->id}/publication/publish")
+            ->assertConflict();
+        $tenant->run(fn () => DB::table('store_configs')
+            ->where('is_current', true)
+            ->update(['products_materialized' => true]));
+
         $internalHost = (string) $tenant->domains()->where('kind', 'internal')->firstOrFail()->domain;
         $publicHost = 'publish-shop.'.config('tenancy.tenant_base_domain');
         $this->getJson('http://'.$internalHost.'/api/store/config')->assertNotFound();
@@ -141,6 +155,19 @@ class DomainSubscriptionPublicationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.publicationStatus', 'published')
             ->assertJsonPath('data.publicDomain', $publicHost);
+        $this->startBrowserSessionAs($merchant);
+        $this->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/publication")
+            ->assertOk()
+            ->assertJsonPath('data.verificationStatus', 'approved')
+            ->assertJsonPath('data.provisioningStatus', 'active')
+            ->assertJsonPath('data.publicationStatus', 'published')
+            ->assertJsonPath('data.reviewFeedback', null)
+            ->assertJsonMissingPath('data.rejectionReason')
+            ->assertJsonPath('data.capabilities.workspaceManage', true)
+            ->assertJsonPath('data.publicDomain', $publicHost)
+            ->assertJsonPath('data.publicationBlockers', [])
+            ->assertJsonPath('data.activeAt', fn ($value): bool => is_string($value) && $value !== '')
+            ->assertJsonPath('data.publishedAt', fn ($value): bool => is_string($value) && $value !== '');
         $this->getJson('http://'.$publicHost.'/api/store/config')
             ->assertOk()
             ->assertJsonPath('data.config.storeName', 'Store publish-store');
@@ -258,6 +285,11 @@ class DomainSubscriptionPublicationTest extends TestCase
             'handle' => 'shared-shop',
             'status' => DomainReservationStatus::Released->value,
         ]);
+        $this->startBrowserSessionAs($firstOwner);
+        $this->getJson("/api/merchant/stores/{$first->id}/publication")
+            ->assertOk()
+            ->assertJsonPath('data.reviewFeedback', 'The initial submission is incomplete.')
+            ->assertJsonMissingPath('data.rejectionReason');
 
         $secondOwner = $this->createUser('release-second@example.test');
         $second = $this->submitStore($secondOwner, 'shared-shop', 'starter', 'release-second');
@@ -348,16 +380,33 @@ class DomainSubscriptionPublicationTest extends TestCase
         $owner = $this->createUser('recovery-owner@example.test');
         $tenant = $this->submitStore($owner, 'recovery-shop', 'starter', 'recovery-store');
         $outsider = $this->createUser('recovery-outsider@example.test');
+        $staff = $this->createUser('recovery-staff@example.test');
+        $staffRole = Role::query()->where('key', SystemRole::MerchantStaff->value)->firstOrFail();
+        app(RoleAssignmentService::class)->assignTenantRole($tenant, $staff, $staffRole, $owner);
 
         $this->startBrowserSessionAs($owner);
         $this->getJson('/api/merchant/stores')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $tenant->id)
-            ->assertJsonPath('data.0.requestedDomain', 'recovery-shop.'.config('tenancy.tenant_base_domain'));
+            ->assertJsonPath('data.0.requestedDomain', 'recovery-shop.'.config('tenancy.tenant_base_domain'))
+            ->assertJsonPath('data.0.reviewFeedback', null)
+            ->assertJsonMissingPath('data.0.rejectionReason')
+            ->assertJsonPath('data.0.capabilities.workspaceManage', true)
+            ->assertJsonPath('data.0.capabilities.catalogManage', true)
+            ->assertJsonPath('data.0.publicDomain', null)
+            ->assertJsonPath('data.0.activeAt', null)
+            ->assertJsonPath('data.0.publishedAt', null);
         $this->getJson("/api/merchant/stores/{$tenant->id}/publication")
             ->assertOk()
             ->assertJsonPath('data.id', $tenant->id);
+        $this->startBrowserSessionAs($staff);
+        $this->getJson('/api/merchant/stores')
+            ->assertOk()
+            ->assertJsonPath('data.0.capabilities.workspaceManage', false)
+            ->assertJsonPath('data.0.capabilities.catalogManage', true)
+            ->assertJsonPath('data.0.capabilities.inventoryManage', true)
+            ->assertJsonPath('data.0.capabilities.ordersManage', true);
         $this->startBrowserSessionAs($outsider);
         $this->getJson("/api/merchant/stores/{$tenant->id}/publication")
             ->assertForbidden();

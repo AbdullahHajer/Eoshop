@@ -37,12 +37,17 @@ const submission: StoreSubmission = {
   verificationStatus: "approved",
   provisioningStatus: "active",
   publicationStatus: "requested",
+  reviewFeedback: null,
+  capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
   internalDomain: "store-01.eoshop.local",
   requestedDomain: "merchant.eoshop.local",
+  publicDomain: null,
   plan: { key: "starter", name: "البداية", activationMode: "automatic" },
   subscriptionStatus: "active",
   publicationBlockers: [],
   createdAt: null,
+  activeAt: null,
+  publishedAt: null,
 };
 
 const workspace: StoreWorkspace = {
@@ -106,14 +111,88 @@ function appAdapters(save: UiAdapters["workspace"]["save"]): UiAdapters {
 
 async function openRestoredBuilder(adapters: UiAdapters, user: ReturnType<typeof userEvent.setup>) {
   renderInterface(<App />, adapters);
-  expect(await screen.findByText(/مرحباً، تاجر/)).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: /أنشئ متجرك الآن/ }));
-  expect(await screen.findByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeTruthy();
-  await user.click(screen.getAllByRole("button", { name: "تفعيل القالب" })[0]);
+  expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "إدارة المتجر" }));
   expect(await screen.findByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
 }
 
 describe("adapter-backed interface flows", () => {
+  it("routes an authenticated merchant to the durable portal and keeps pending stores visible", async () => {
+    const pendingStore: StoreSubmission = {
+      ...submission,
+      verificationStatus: "pending",
+      provisioningStatus: "not_started",
+      publicationBlockers: ["review_not_approved", "provisioning_not_ready"],
+    };
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      plans: { list: vi.fn().mockResolvedValue([]) },
+      provisioning: { listStores: vi.fn().mockResolvedValue([pendingStore]) },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+    expect(window.location.pathname).toBe("/app");
+    expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+  });
+
+  it("keeps an authenticated merchant inside the portal when store recovery fails", async () => {
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      plans: { list: vi.fn().mockResolvedValue([]) },
+      provisioning: { listStores: vi.fn().mockRejectedValue(new UiAdapterError("تعذر الاتصال بالخادم.", "server")) },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("تعذر الاتصال بالخادم");
+    expect(screen.getByRole("button", { name: "إعادة المحاولة" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/app");
+  });
+
+  it("restores the owned new-store route for an authenticated merchant", async () => {
+    window.history.replaceState({}, "", "/app/new");
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      plans: { list: vi.fn().mockResolvedValue([]) },
+      provisioning: { listStores: vi.fn().mockResolvedValue([]) },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/app/new");
+  });
+
+  it("restores an exact ready store design route without passing through templates", async () => {
+    window.history.replaceState({}, "", `/app/stores/${submission.id}/design`);
+    const adapters = appAdapters(vi.fn());
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
+    expect(window.location.pathname).toBe(`/app/stores/${submission.id}/design`);
+    expect(adapters.workspace.load).toHaveBeenCalledWith(submission.id, expect.any(AbortSignal));
+  });
+
+  it("requires an explicit decision before leaving a dirty workspace for the merchant portal", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    await openRestoredBuilder(appAdapters(vi.fn()), user);
+    fireEvent.change(screen.getByPlaceholderText("أدخل اسم متجرك المميز"), { target: { value: "اسم غير محفوظ" } });
+
+    await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
+
+    await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+  });
+
   it("resets a password through the injected auth action", async () => {
     window.history.replaceState({}, "", "/reset-password?token=reset-token&email=merchant%40example.com");
     const resetPassword = vi.fn().mockResolvedValue("تم تحديث كلمة المرور.");

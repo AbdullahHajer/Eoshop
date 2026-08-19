@@ -116,6 +116,8 @@ describe("current interface behavior", () => {
         verificationStatus: "pending",
         provisioningStatus: "not_started",
         publicationStatus: "requested",
+        reviewFeedback: null,
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
         internalDomain: null,
         requestedDomain: "my-shop.eoshop.local",
         plan: { key: "starter", name: "البداية", activationMode: "automatic" },

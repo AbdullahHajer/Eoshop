@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 1 — Identity, authentication and authorization |
 | Work Package | WP 1.1 |
-| Status | Ready for merge; local and GitHub verification passed |
+| Status | Complete and merged |
 | Started | 2026-08-12 |
 | Branch | `codex/wp-1.1-central-identity` |
 | Base | Protected `main` at `4aa02e7` |

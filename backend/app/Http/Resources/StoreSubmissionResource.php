@@ -6,6 +6,7 @@ use App\Enums\DomainKind;
 use App\Models\Domain;
 use App\Models\PublicationRequest;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Support\PublicationReadiness;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -18,6 +19,9 @@ class StoreSubmissionResource extends JsonResource
     public function toArray(Request $request): array
     {
         $createdAt = $this->getAttribute('created_at');
+        $activeAt = $this->getAttribute('active_at');
+        $publishedAt = $this->getAttribute('published_at');
+        $actor = $request->user();
 
         return [
             'id' => $this->getKey(),
@@ -26,6 +30,17 @@ class StoreSubmissionResource extends JsonResource
             'verificationStatus' => $this->getAttribute('verification_status'),
             'provisioningStatus' => $this->getAttribute('provisioning_status'),
             'publicationStatus' => $this->getAttribute('publication_status'),
+            'reviewFeedback' => $this->getAttribute('verification_status') === 'rejected'
+                ? $this->getAttribute('rejection_reason')
+                : null,
+            'capabilities' => [
+                'workspaceManage' => $actor instanceof User && $actor->can('updateStoreWorkspace', $this->resource),
+                'catalogManage' => $actor instanceof User && $actor->can('updateProductCatalog', $this->resource),
+                'inventoryView' => $actor instanceof User && $actor->can('viewInventory', $this->resource),
+                'inventoryManage' => $actor instanceof User && $actor->can('updateInventory', $this->resource),
+                'ordersView' => $actor instanceof User && $actor->can('viewOrders', $this->resource),
+                'ordersManage' => $actor instanceof User && $actor->can('updateOrders', $this->resource),
+            ],
             'internalDomain' => $this->whenLoaded('domains', function (): ?string {
                 $domain = $this->domains->firstWhere('kind', DomainKind::Internal);
 
@@ -38,6 +53,7 @@ class StoreSubmissionResource extends JsonResource
                     ? (string) $publication->reservation?->getAttribute('domain')
                     : null;
             }),
+            'publicDomain' => $this->whenLoaded('publishedDomain', fn (): ?string => $this->publishedDomain?->getAttribute('domain')),
             'plan' => $this->whenLoaded('currentPublicationRequest', function (): ?array {
                 $subscription = $this->currentPublicationRequest?->subscription;
                 $plan = $subscription?->plan;
@@ -51,6 +67,8 @@ class StoreSubmissionResource extends JsonResource
             'subscriptionStatus' => $this->whenLoaded('currentPublicationRequest', fn (): ?string => $this->currentPublicationRequest?->subscription?->getAttribute('status')?->value),
             'publicationBlockers' => PublicationReadiness::blockers($this->resource),
             'createdAt' => $createdAt instanceof CarbonInterface ? $createdAt->toIso8601String() : null,
+            'activeAt' => $activeAt instanceof CarbonInterface ? $activeAt->toIso8601String() : null,
+            'publishedAt' => $publishedAt instanceof CarbonInterface ? $publishedAt->toIso8601String() : null,
         ];
     }
 }

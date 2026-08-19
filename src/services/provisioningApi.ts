@@ -8,8 +8,18 @@ export interface StoreSubmission {
   verificationStatus: "pending" | "approved" | "rejected" | "suspended";
   provisioningStatus: "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
   publicationStatus: "requested" | "published" | "unpublished" | "rejected";
+  reviewFeedback: string | null;
+  capabilities: {
+    workspaceManage: boolean;
+    catalogManage: boolean;
+    inventoryView: boolean;
+    inventoryManage: boolean;
+    ordersView: boolean;
+    ordersManage: boolean;
+  };
   internalDomain: string | null;
   requestedDomain: string | null;
+  publicDomain: string | null;
   plan: {
     key: string;
     name: string;
@@ -18,6 +28,8 @@ export interface StoreSubmission {
   subscriptionStatus: "pending_activation" | "active" | "cancelled" | "expired" | null;
   publicationBlockers: string[];
   createdAt: string | null;
+  activeAt: string | null;
+  publishedAt: string | null;
 }
 
 interface StoreSubmissionResponse {
@@ -36,8 +48,21 @@ export function mapSubmission(value: unknown): StoreSubmission {
     verificationStatus: enumField(dto, "verificationStatus", ["pending", "approved", "rejected", "suspended"] as const, "طلب المتجر"),
     provisioningStatus: enumField(dto, "provisioningStatus", ["not_started", "queued", "provisioning", "retrying", "active", "failed"] as const, "طلب المتجر"),
     publicationStatus: enumField(dto, "publicationStatus", ["requested", "published", "unpublished", "rejected"] as const, "طلب المتجر"),
+    reviewFeedback: nullableStringField(dto, "reviewFeedback", "طلب المتجر"),
+    capabilities: (() => {
+      const capabilities = record(dto.capabilities, "صلاحيات طلب المتجر");
+      return {
+        workspaceManage: booleanField(capabilities, "workspaceManage", "صلاحيات طلب المتجر"),
+        catalogManage: booleanField(capabilities, "catalogManage", "صلاحيات طلب المتجر"),
+        inventoryView: booleanField(capabilities, "inventoryView", "صلاحيات طلب المتجر"),
+        inventoryManage: booleanField(capabilities, "inventoryManage", "صلاحيات طلب المتجر"),
+        ordersView: booleanField(capabilities, "ordersView", "صلاحيات طلب المتجر"),
+        ordersManage: booleanField(capabilities, "ordersManage", "صلاحيات طلب المتجر"),
+      };
+    })(),
     internalDomain: nullableStringField(dto, "internalDomain", "طلب المتجر"),
     requestedDomain: nullableStringField(dto, "requestedDomain", "طلب المتجر"),
+    publicDomain: nullableStringField(dto, "publicDomain", "طلب المتجر"),
     plan: planValue === null ? null : (() => {
       const plan = record(planValue, "باقة طلب المتجر");
       return {
@@ -51,6 +76,8 @@ export function mapSubmission(value: unknown): StoreSubmission {
       : enumField(dto, "subscriptionStatus", ["pending_activation", "active", "cancelled", "expired"] as const, "طلب المتجر"),
     publicationBlockers: stringArrayField(dto, "publicationBlockers", "طلب المتجر"),
     createdAt: nullableStringField(dto, "createdAt", "طلب المتجر"),
+    activeAt: nullableStringField(dto, "activeAt", "طلب المتجر"),
+    publishedAt: nullableStringField(dto, "publishedAt", "طلب المتجر"),
   };
 }
 
