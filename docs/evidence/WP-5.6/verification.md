@@ -29,7 +29,7 @@
 Environment: current WP 5.6 frontend quality/build image.
 
 - TypeScript check: PASS.
-- Vitest: **57 suites / 162 tests passed**.
+- Vitest: **28 files / 162 tests passed**.
 - Vite production build: PASS; **2,122 modules transformed**.
 - Built JavaScript bundle: **871.92 kB / 222.80 kB gzip**.
 - `npm audit --audit-level=high`: **0 vulnerabilities**.

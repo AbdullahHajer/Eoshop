@@ -924,7 +924,10 @@ describe("adapter-backed interface flows", () => {
     };
     const updateStatus = vi.fn()
       .mockImplementationOnce(() => firstAttempt)
-      .mockResolvedValueOnce({ ...order, status: "accepted" });
+      .mockResolvedValueOnce({
+        replayed: false,
+        order: { ...order, status: "accepted" as const, allowedTransitions: ["processing" as const] },
+      });
     const adapters = createFakeUiAdapters({
       orders: {
         list: vi.fn().mockResolvedValue({ items: [order], total: 1 }),
@@ -960,6 +963,7 @@ describe("adapter-backed interface flows", () => {
     fireEvent.click(screen.getByRole("button", { name: "قبول الطلب" }));
     await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(2));
     expect(updateStatus.mock.calls[1][4]).toBe(firstKey);
+    await screen.findByRole("button", { name: "بدء التجهيز" });
   });
 
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {
