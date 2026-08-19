@@ -26,7 +26,7 @@ function store(overrides: Partial<StoreSubmission> = {}): StoreSubmission {
     provisioningStatus: "not_started",
     publicationStatus: "requested",
     reviewFeedback: null,
-    capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+    capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
     internalDomain: "store-tenant-1.eoshop.local",
     requestedDomain: "sanaa.eoshop.local",
     publicDomain: null,
@@ -49,6 +49,9 @@ function props(stores: StoreSubmission[]) {
     onReload: vi.fn(),
     onCreateStore: vi.fn(),
     onOpenBuilder: vi.fn(),
+    onCorrectStore: vi.fn(),
+    onPublish: vi.fn(async () => undefined),
+    onUnpublish: vi.fn(async () => undefined),
     onLogout: vi.fn(),
     onCopyPublicUrl: vi.fn(),
   };
@@ -65,11 +68,14 @@ describe("MerchantPortal", () => {
     expect(callbacks.onCreateStore).toHaveBeenCalledOnce();
   });
 
-  it("shows a safe rejection reason without an editor action", () => {
-    const rejected = store({ verificationStatus: "rejected", reviewFeedback: "أكمل رقم التواصل الصحيح" });
-    render(<MerchantPortal {...props([rejected])} />);
+  it("shows a safe rejection reason with the server-authorized correction action", async () => {
+    const rejected = store({ verificationStatus: "rejected", reviewFeedback: "أكمل رقم التواصل الصحيح", capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: true, resubmit: true, publish: false, unpublish: false } });
+    const callbacks = props([rejected]);
+    render(<MerchantPortal {...callbacks} />);
     expect(screen.getAllByText("أكمل رقم التواصل الصحيح").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "تصحيح الطلب" }));
+    expect(callbacks.onCorrectStore).toHaveBeenCalledWith(rejected);
   });
 
   it("opens the builder for a ready store", async () => {
@@ -88,7 +94,7 @@ describe("MerchantPortal", () => {
     const staffStore = store({
       verificationStatus: "approved",
       provisioningStatus: "active",
-      capabilities: { workspaceManage: false, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+      capabilities: { workspaceManage: false, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
     });
     render(<MerchantPortal {...props([staffStore])} />);
 
@@ -123,5 +129,31 @@ describe("MerchantPortal", () => {
     expect(open.getAttribute("href")).toContain("sanaa.lvh.me");
     await userEvent.click(screen.getByRole("button", { name: "نسخ" }));
     expect(callbacks.onCopyPublicUrl).toHaveBeenCalledWith(expect.stringContaining("sanaa.lvh.me"));
+  });
+
+  it("exposes only the server-authorized merchant publication transition", async () => {
+    const ready = store({
+      verificationStatus: "approved",
+      provisioningStatus: "active",
+      publicationBlockers: [],
+      capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: true, unpublish: false },
+    });
+    const callbacks = props([ready]);
+    const { rerender } = render(<MerchantPortal {...callbacks} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "نشر المتجر" }));
+    expect(callbacks.onPublish).toHaveBeenCalledWith(ready);
+    expect(screen.queryByRole("button", { name: "إلغاء النشر" })).toBeNull();
+
+    const published = store({
+      ...ready,
+      publicationStatus: "published",
+      publicDomain: "sanaa.lvh.me",
+      capabilities: { ...ready.capabilities, publish: false, unpublish: true },
+    });
+    rerender(<MerchantPortal {...callbacks} stores={[published]} />);
+    await userEvent.click(screen.getByRole("button", { name: "إلغاء النشر" }));
+    expect(callbacks.onUnpublish).toHaveBeenCalledWith(published);
+    expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   });
 });

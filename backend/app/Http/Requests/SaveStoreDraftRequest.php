@@ -9,29 +9,25 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use InvalidArgumentException;
 
-class StoreSubmissionRequest extends FormRequest
+class SaveStoreDraftRequest extends FormRequest
 {
-    protected function prepareForValidation(): void
-    {
-        $this->merge([
-            'idempotencyKey' => $this->header('Idempotency-Key'),
-        ]);
-    }
-
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
+        $linkedCorrection = $this->route('tenant') !== null;
+
         return [
-            'idempotencyKey' => ['required', 'uuid'],
-            'draftId' => ['nullable', 'uuid'],
-            'expectedDraftRevision' => ['required_with:draftId', 'nullable', 'integer', 'min:1'],
+            'expectedRevision' => ['required', 'integer', 'min:0'],
             'storeName' => ['required', 'string', 'max:255'],
             'businessType' => ['required', 'string', 'max:100'],
             'themeStyle' => ['required', Rule::in(['elegant', 'tech'])],
             'handle' => [
-                'required',
+                $linkedCorrection ? 'required' : 'nullable',
                 'string',
                 function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
                     try {
                         PublicStoreHandle::normalize((string) $value);
                     } catch (InvalidArgumentException $exception) {
@@ -39,7 +35,7 @@ class StoreSubmissionRequest extends FormRequest
                     }
                 },
             ],
-            'planKey' => ['required', 'string', Rule::exists('plans', 'key')->where('is_active', true)],
+            'planKey' => [$linkedCorrection ? 'required' : 'nullable', 'string', Rule::exists('plans', 'key')->where('is_active', true)],
             'config' => ['required', 'array'],
         ];
     }
@@ -48,17 +44,13 @@ class StoreSubmissionRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $workspaceConfig = $this->input('config');
-            $workspaceValidator = StoreWorkspaceContract::validator(
-                is_array($workspaceConfig) ? $workspaceConfig : [],
-                null,
-            );
-            foreach ($workspaceValidator->errors()->toArray() as $field => $messages) {
+            $config = $this->input('config');
+            $workspace = StoreWorkspaceContract::validator(is_array($config) ? $config : [], null);
+            foreach ($workspace->errors()->toArray() as $field => $messages) {
                 foreach ($messages as $message) {
                     $validator->errors()->add($field, $message);
                 }
             }
-
         }];
     }
 }

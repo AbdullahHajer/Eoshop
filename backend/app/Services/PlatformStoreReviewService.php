@@ -15,6 +15,7 @@ class PlatformStoreReviewService
         private readonly AdminAuditService $audit,
         private readonly ProvisioningCoordinator $provisioning,
         private readonly PublicationService $publications,
+        private readonly StoreDraftService $drafts,
     ) {}
 
     public function changeStatus(
@@ -46,9 +47,8 @@ class PlatformStoreReviewService
 
                 $previousStatus = TenantVerificationStatus::from((string) $lockedTenant->getAttribute('verification_status'));
                 if ($previousStatus === TenantVerificationStatus::Pending && $status === TenantVerificationStatus::Rejected) {
+                    $this->drafts->markCorrectionRequired($lockedTenant);
                     $this->publications->reject($lockedTenant, $actor, $normalizedReason);
-                } elseif ($previousStatus === TenantVerificationStatus::Rejected && $status === TenantVerificationStatus::Pending) {
-                    $this->publications->reopen($lockedTenant, $actor);
                 }
 
                 $oldValues = $oldReviewValues + ['publication_status' => $oldPublicationStatus];

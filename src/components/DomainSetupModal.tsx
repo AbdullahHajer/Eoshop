@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Globe, RefreshCw, ShieldCheck, X, XCircle } from "lucide-react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
-import { isUiError, uiErrorMessage, type StorePlan, type StoreSubmission } from "../adapters/uiAdapters";
+import { isUiError, uiErrorMessage, type StoreDraft, type StorePlan, type StoreSubmission } from "../adapters/uiAdapters";
 
 interface DomainSetupModalProps {
   isOpen: boolean;
@@ -10,6 +10,9 @@ interface DomainSetupModalProps {
   businessType: string;
   themeStyle: "elegant" | "tech";
   config: Record<string, unknown>;
+  draft?: StoreDraft | null;
+  onDraftChanged?: (draft: StoreDraft) => void;
+  onReloadDraft?: () => Promise<void>;
   onSubmitted?: (submission: StoreSubmission) => void;
 }
 
@@ -35,6 +38,9 @@ export default function DomainSetupModal({
   businessType,
   themeStyle,
   config,
+  draft,
+  onDraftChanged,
+  onReloadDraft,
   onSubmitted,
 }: DomainSetupModalProps) {
   const { plans: planActions, provisioning } = useUiAdapters();
@@ -46,6 +52,8 @@ export default function DomainSetupModal({
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [draftConflict, setDraftConflict] = useState(false);
+  const [pendingLifecycleDraft, setPendingLifecycleDraft] = useState<StoreDraft | null>(null);
   const plansRequest = useRef(0);
   const availabilityRequest = useRef(0);
 
@@ -77,6 +85,20 @@ export default function DomainSetupModal({
       if (request === plansRequest.current) plansRequest.current += 1;
     };
   }, [isOpen, planActions]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDraftConflict(false);
+    setPendingLifecycleDraft(null);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || pendingLifecycleDraft) return;
+    if (draft) {
+      setHandle(draft.handle ?? "");
+      if (draft.planKey) setSelectedPlan(draft.planKey);
+    }
+  }, [isOpen, draft?.id, draft?.revision, pendingLifecycleDraft]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -118,7 +140,7 @@ export default function DomainSetupModal({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!plan || !availability?.available) {
+    if (!pendingLifecycleDraft && (!plan || !availability?.available)) {
       setError("اختر باقة وعنوان متجر متاحًا قبل إرسال الطلب.");
       return;
     }
@@ -126,19 +148,51 @@ export default function DomainSetupModal({
     setError("");
     setSubmitting(true);
     try {
-      const response = await provisioning.submit({
-        storeName,
-        businessType,
-        themeStyle,
-        handle: handle.trim().toLowerCase(),
-        planKey: plan.key,
-        config,
-      });
+      const savedDraft = pendingLifecycleDraft ?? (draft?.tenantId
+        ? await provisioning.saveCorrection(draft.tenantId, {
+            expectedRevision: draft.revision,
+            storeName,
+            businessType,
+            themeStyle,
+            handle: handle.trim().toLowerCase(),
+            planKey: plan!.key,
+            config,
+          })
+        : await provisioning.saveDraft({
+            expectedRevision: draft?.revision ?? 0,
+            storeName,
+            businessType,
+            themeStyle,
+            handle: handle.trim().toLowerCase(),
+            planKey: plan!.key,
+            config,
+          }));
+      if (!pendingLifecycleDraft) {
+        onDraftChanged?.(savedDraft);
+        setPendingLifecycleDraft(savedDraft);
+      }
+      const response = savedDraft.tenantId
+        ? await provisioning.resubmit(savedDraft.tenantId, savedDraft.revision)
+        : await provisioning.submit({
+          storeName: savedDraft.storeName,
+          businessType: savedDraft.businessType,
+          themeStyle: savedDraft.themeStyle,
+          handle: savedDraft.handle!,
+          planKey: savedDraft.planKey!,
+          config: savedDraft.config,
+          draftId: savedDraft.id,
+          expectedDraftRevision: savedDraft.revision,
+        });
+      setPendingLifecycleDraft(null);
       onSubmitted?.(response.data);
       onClose();
     } catch (caught) {
       setError(uiErrorMessage(caught, "تعذر إرسال طلب المتجر. حاول مرة أخرى."));
-      if (isUiError(caught, "conflict")) setAvailability(null);
+      if (isUiError(caught, "conflict")) {
+        setAvailability(null);
+        setPendingLifecycleDraft(null);
+        setDraftConflict(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -159,7 +213,8 @@ export default function DomainSetupModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 p-6">
-          {error && <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" /><span>{error}</span></div>}
+          {error && <div className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700"><span className="flex items-start gap-2"><AlertCircle className="h-4 w-4 shrink-0" />{error}</span>{draftConflict && onReloadDraft && <button type="button" onClick={() => void onReloadDraft()} className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5">تحميل نسخة الخادم</button>}</div>}
+          {pendingLifecycleDraft && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">نتيجة الإرسال السابق غير مؤكدة. إعادة المحاولة ستستعيد العملية نفسها بالمفتاح والبيانات المحفوظة، ولن تحفظ المسودة مرة ثانية.</div>}
 
           <section>
             <label htmlFor="store-handle" className="mb-2 block text-sm font-black text-slate-900">عنوان المتجر داخل المنصة</label>
@@ -167,6 +222,7 @@ export default function DomainSetupModal({
               <input
                 id="store-handle"
                 value={handle}
+                disabled={pendingLifecycleDraft !== null}
                 onChange={(event) => setHandle(event.target.value.replace(/[^A-Za-z0-9-]/g, "").toLowerCase())}
                 minLength={3}
                 maxLength={50}
@@ -197,6 +253,7 @@ export default function DomainSetupModal({
                   <button
                     key={item.key}
                     type="button"
+                    disabled={pendingLifecycleDraft !== null}
                     onClick={() => setSelectedPlan(item.key)}
                     className={`rounded-2xl border p-4 text-right transition ${selected ? "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200 bg-white hover:border-indigo-300"}`}
                   >
@@ -222,7 +279,7 @@ export default function DomainSetupModal({
             </div>
           )}
 
-          <button disabled={submitting || loadingPlans || !availability?.available || !plan} type="submit" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-sky-600 to-indigo-700 px-5 py-4 text-sm font-black text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50">
+          <button disabled={submitting || loadingPlans || (!pendingLifecycleDraft && (!availability?.available || !plan))} type="submit" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-sky-600 to-indigo-700 px-5 py-4 text-sm font-black text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50">
             {submitting && <RefreshCw className="h-5 w-5 animate-spin" />}
             {submitting ? "جارٍ إرسال الطلب بأمان…" : "حجز العنوان وإرسال طلب المتجر"}
           </button>

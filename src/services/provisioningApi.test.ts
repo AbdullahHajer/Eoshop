@@ -17,7 +17,7 @@ describe("provisioningApi", () => {
       provisioningStatus: "active",
       publicationStatus: "published",
       reviewFeedback: null,
-      capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+      capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
       internalDomain: null,
       requestedDomain: null,
       publicDomain: "invalid.example.test",
@@ -40,7 +40,7 @@ describe("provisioningApi", () => {
         provisioningStatus: "not_started",
         publicationStatus: "requested",
         reviewFeedback: null,
-        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
         internalDomain: "store-tenant-1.eoshop.local",
         requestedDomain: "store-one.eoshop.local",
         publicDomain: null,
@@ -84,6 +84,49 @@ describe("provisioningApi", () => {
     });
   });
 
+  it("saves and maps the authenticated server draft with its optimistic revision", async () => {
+    const draft = {
+      data: {
+        id: "draft-1",
+        tenantId: null,
+        status: "draft",
+        revision: 1,
+        storeName: "Store Draft",
+        businessType: "retail",
+        themeStyle: "elegant",
+        handle: "store-draft",
+        planKey: "starter",
+        config: { marker: "server" },
+        savedAt: "2026-08-19T12:00:00Z",
+        submittedAt: null,
+      },
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "draft-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(draft), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provisioningApi.saveDraft({
+      expectedRevision: 0,
+      storeName: "Store Draft",
+      businessType: "retail",
+      themeStyle: "elegant",
+      handle: "store-draft",
+      planKey: "starter",
+      config: { marker: "server" },
+    })).resolves.toEqual(draft.data);
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/merchant/store-draft",
+      expect.objectContaining({ method: "PUT" }),
+    );
+    expect(JSON.parse((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string)).toMatchObject({
+      expectedRevision: 0,
+      handle: "store-draft",
+      planKey: "starter",
+    });
+  });
+
   it("reuses the persisted key after an ambiguous network failure", async () => {
     const values = new Map<string, string>();
     const localStorageMock = {
@@ -100,7 +143,7 @@ describe("provisioningApi", () => {
         provisioningStatus: "not_started",
         publicationStatus: "requested",
         reviewFeedback: null,
-        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
         internalDomain: "store-tenant-2.eoshop.local",
         requestedDomain: "store-two.eoshop.local",
         publicDomain: null,

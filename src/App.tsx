@@ -32,6 +32,7 @@ import {
   isUiErrorCode,
   uiErrorMessage,
   type StoreSubmission,
+  type StoreDraft,
   type StoreWorkspace,
   type UserProfile,
   type CreateOrderInput,
@@ -169,7 +170,10 @@ export default function App() {
   const [merchantStoresLoading, setMerchantStoresLoading] = useState(false);
   const [merchantStoresError, setMerchantStoresError] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<StoreWorkspace | null>(null);
+  const [activeDraft, setActiveDraft] = useState<StoreDraft | null>(null);
   const [localDraft, setLocalDraft] = useState<StoreConfig | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [workspaceSaving, setWorkspaceSaving] = useState(false);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [inventoryPending, setInventoryPending] = useState(false);
@@ -181,6 +185,8 @@ export default function App() {
   const inventoryRequestPending = useRef(false);
   const merchantRestoreSequence = useRef(0);
   const workspaceLoads = useRef(new LatestWorkspaceLoad());
+  const draftLoads = useRef(new LatestWorkspaceLoad());
+  const draftOperationSequence = useRef(0);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -195,7 +201,12 @@ export default function App() {
     ),
     [activeWorkspace, config, pendingArchivedProductIds],
   );
-  const workspaceEditorLocked = workspaceLoading || workspaceSaving || inventoryPending || workspaceConflict !== null;
+  const draftDirty = useMemo(
+    () => activeWorkspace === null && authUser !== null && view === "builder"
+      && JSON.stringify(config) !== JSON.stringify(activeDraft?.config ?? ELEGANT_PRESET),
+    [activeWorkspace, activeDraft, authUser, config, view],
+  );
+  const workspaceEditorLocked = workspaceLoading || workspaceSaving || draftLoading || draftSaving || inventoryPending || workspaceConflict !== null;
   const canViewInventory = activeWorkspace?.capabilities.inventoryView ?? activeWorkspace === null;
   const canManageInventory = activeWorkspace?.capabilities.inventoryManage ?? activeWorkspace === null;
 
@@ -203,7 +214,7 @@ export default function App() {
     if (activeWorkspace && !canViewInventory && activeTab === "inventory") setActiveTab("products");
   }, [activeWorkspace, activeTab, canViewInventory]);
   const recoverableWorkspaceChanges = hasRecoverableWorkspaceChanges(
-    workspaceDirty,
+    workspaceDirty || draftDirty,
     workspaceConflict !== null,
     workspaceConflictReview !== null,
   );
@@ -260,7 +271,7 @@ export default function App() {
         setAuthUser(profile);
         if (!isCentralFrontendHost(window.location.hostname)) return;
         if (!profile) {
-          if (["merchant", "merchant-new", "merchant-design"].includes(initialRoute.name)) replaceCentralPath("/");
+          if (["merchant", "merchant-new", "merchant-design", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
           return;
         }
 
@@ -284,8 +295,14 @@ export default function App() {
           return;
         }
         if (initialRoute.name === "merchant-new") {
-          setView("templates");
+          const restoredDraft = await loadCurrentServerDraft(profile);
+          if (restoredDraft === null) return;
+          setView(restoredDraft ? "builder" : "templates");
           replaceCentralPath("/app/new");
+          return;
+        }
+        if (initialRoute.name === "merchant-correction") {
+          await openMerchantCorrectionById(initialRoute.tenantId, profile);
           return;
         }
         if (requestedTenantId && outcome.loadedTenantId === requestedTenantId) {
@@ -299,7 +316,7 @@ export default function App() {
       .catch(() => {
         setAuthUser(null);
         resetTenantOwnedState();
-        if (["merchant", "merchant-new", "merchant-design"].includes(initialRoute.name)) replaceCentralPath("/");
+        if (["merchant", "merchant-new", "merchant-design", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
       });
 
     // Dedicated Admin Route Check (/admin or #admin)
@@ -344,7 +361,9 @@ export default function App() {
   const resetTenantOwnedState = () => {
     workspaceOperationSequence.current += 1;
     merchantRestoreSequence.current += 1;
+    draftOperationSequence.current += 1;
     workspaceLoads.current.invalidate();
+    draftLoads.current.invalidate();
     setWorkspaceLoading(false);
     setWorkspaceSaving(false);
     inventoryRequestPending.current = false;
@@ -353,6 +372,9 @@ export default function App() {
     setWorkspaceConflictReview(null);
     setPendingArchivedProductIds([]);
     setActiveWorkspace(null);
+    setActiveDraft(null);
+    setDraftLoading(false);
+    setDraftSaving(false);
     setMerchantStores([]);
     setMerchantStoresLoading(false);
     setMerchantStoresError(null);
@@ -364,11 +386,80 @@ export default function App() {
     setHasOrdered(false);
   };
 
+  const invalidateDraftContext = () => {
+    draftOperationSequence.current += 1;
+    draftLoads.current.invalidate();
+    setDraftLoading(false);
+    setDraftSaving(false);
+  };
+
+  const enterDraftContext = (draft: StoreDraft | null, user: UserProfile | null = authUser) => {
+    invalidateDraftContext();
+    workspaceOperationSequence.current += 1;
+    workspaceLoads.current.invalidate();
+    setWorkspaceLoading(false);
+    setWorkspaceSaving(false);
+    setWorkspaceConflict(null);
+    setWorkspaceConflictReview(null);
+    setPendingArchivedProductIds([]);
+    setActiveWorkspace(null);
+    setActiveDraft(draft);
+    setConfig(draft ? draft.config as unknown as StoreConfig : ELEGANT_PRESET);
+    setCart([]);
+    if (user && draft) {
+      setRegisteredUser({
+        fullName: user.fullName,
+        email: user.email,
+        businessName: draft.storeName,
+        businessType: draft.businessType,
+      });
+    }
+  };
+
+  const applyServerDraft = (draft: StoreDraft, user: UserProfile | null = authUser) => {
+    enterDraftContext(draft, user);
+  };
+
+  const loadCurrentServerDraft = async (user: UserProfile | null = authUser): Promise<boolean | null> => {
+    if (!user || draftLoading) return null;
+    const request = draftLoads.current.begin();
+    setDraftLoading(true);
+    try {
+      const draft = await provisioning.currentDraft(request.signal);
+      if (!draftLoads.current.isCurrent(request.sequence)) return null;
+      if (!draft) {
+        enterDraftContext(null, user);
+        return false;
+      }
+      applyServerDraft(draft, user);
+      return true;
+    } catch (error) {
+      if (!draftLoads.current.isCurrent(request.sequence) || isUiError(error, "aborted")) return null;
+      triggerToast(uiErrorMessage(error, "تعذر استعادة مسودة المتجر من الخادم."), "error");
+      return null;
+    } finally {
+      if (draftLoads.current.isCurrent(request.sequence)) {
+        setDraftLoading(false);
+        draftLoads.current.finish(request.sequence);
+      }
+    }
+  };
+
+  const reloadActiveDraft = async (allowDuringFailedSave = false): Promise<void> => {
+    if (!authUser || draftLoading || (draftSaving && !allowDuringFailedSave)) return;
+    if (activeDraft?.tenantId) {
+      await openMerchantCorrectionById(activeDraft.tenantId, authUser);
+      return;
+    }
+    await loadCurrentServerDraft(authUser);
+  };
+
   const loadMerchantWorkspace = async (
     store: StoreSubmission,
     user: UserProfile,
     preserveConflict = false,
   ): Promise<boolean> => {
+    invalidateDraftContext();
     const request = workspaceLoads.current.begin();
     const startingEditGeneration = workspaceEditGeneration.current;
     workspaceOperationSequence.current += 1;
@@ -526,10 +617,53 @@ export default function App() {
   const saveStore = async (customConfig?: StoreConfig, importingDraft = false): Promise<boolean> => {
     const configToSave = customConfig || config;
     if (!activeWorkspace) {
-      localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
-      setLocalDraft(configToSave);
-      triggerToast("تم حفظ مسودة غير منشورة في هذا المتصفح حتى يصبح المتجر جاهزاً على الخادم. 💾", "info");
-      return true;
+      if (!authUser) {
+        localStorage.setItem("mobtaker_custom_store", JSON.stringify(configToSave));
+        setLocalDraft(configToSave);
+        triggerToast("تم حفظ نسخة استعادة محلية. سجّل الدخول لحفظ المسودة على الخادم.", "info");
+        return true;
+      }
+      if (draftLoading || draftSaving) return false;
+      const operation = ++draftOperationSequence.current;
+      setDraftSaving(true);
+      try {
+        const input = {
+          expectedRevision: activeDraft?.revision ?? 0,
+          storeName: configToSave.storeName,
+          businessType: registeredUser?.businessType || activeDraft?.businessType || "تجزئة",
+          themeStyle: configToSave.themeStyle,
+          handle: activeDraft?.handle ?? null,
+          planKey: activeDraft?.planKey ?? null,
+          config: configToSave as unknown as Record<string, unknown>,
+        };
+        const saved = activeDraft?.tenantId
+          ? await provisioning.saveCorrection(activeDraft.tenantId, input)
+          : await provisioning.saveDraft(input);
+        if (operation !== draftOperationSequence.current) return false;
+        setActiveDraft(saved);
+        setConfig(saved.config as unknown as StoreConfig);
+        if (importingDraft) {
+          localStorage.removeItem("mobtaker_custom_store");
+          setLocalDraft(null);
+        }
+        triggerToast(activeDraft?.tenantId ? "تم حفظ تصحيح الطلب على الخادم." : "تم حفظ مسودة المتجر على الخادم.", "success");
+        return true;
+      } catch (error) {
+        if (operation !== draftOperationSequence.current) return false;
+        const revisionConflict = isUiErrorCode(error, "conflict", "draft_revision_conflict");
+        triggerToast(
+          revisionConflict
+            ? "تغيرت المسودة على الخادم. يمكنك الآن تحميل النسخة الأحدث مع بقاء قرار الاستبدال بيدك."
+            : uiErrorMessage(error, "تعذر حفظ مسودة المتجر على الخادم."),
+          "error",
+        );
+        if (revisionConflict && window.confirm("توجد نسخة أحدث للمسودة على الخادم. تحميلها الآن سيتجاهل تعديلاتك الحالية. هل تريد المتابعة؟")) {
+          await reloadActiveDraft(true);
+        }
+        return false;
+      } finally {
+        if (operation === draftOperationSequence.current) setDraftSaving(false);
+      }
     }
 
     if (workspaceLoading || workspaceSaving || inventoryRequestPending.current || workspaceConflict) return false;
@@ -773,7 +907,6 @@ export default function App() {
     }
     const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
     if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
-    workspaceOperationSequence.current += 1;
     try {
       await auth.logout();
     } catch {
@@ -1163,25 +1296,68 @@ export default function App() {
       if (!mayDiscardDirtyWorkspace(true, confirmed)) return;
       workspaceEditGeneration.current += 1;
       if (activeWorkspace) setConfig(activeWorkspace.config);
+      else if (activeDraft) setConfig(activeDraft.config as unknown as StoreConfig);
       setPendingArchivedProductIds([]);
       setWorkspaceConflict(null);
       setWorkspaceConflictReview(null);
     }
+    invalidateDraftContext();
     setView("merchant_dashboard");
     pushCentralPath("/app");
   };
 
   const openMerchantBuilder = async (store: StoreSubmission) => {
     if (!authUser || store.verificationStatus !== "approved" || store.provisioningStatus !== "active" || !store.capabilities.workspaceManage) return;
+    invalidateDraftContext();
     try {
       const loaded = activeWorkspace?.tenantId === store.id || await loadMerchantWorkspace(store, authUser);
       if (!loaded) return;
+      setActiveDraft(null);
       setView("builder");
       pushCentralPath(`/app/stores/${encodeURIComponent(store.id)}/design`);
     } catch (requestError) {
       if (isUiError(requestError, "aborted")) return;
       triggerToast(uiErrorMessage(requestError, "تعذر فتح مساحة عمل المتجر."), "error");
     }
+  };
+
+  const openMerchantCorrectionById = async (tenantId: string, user: UserProfile) => {
+    const request = draftLoads.current.begin();
+    setDraftLoading(true);
+    try {
+      const draft = await provisioning.correctionDraft(tenantId, request.signal);
+      if (!draftLoads.current.isCurrent(request.sequence)) return;
+      applyServerDraft(draft, user);
+      setView("builder");
+      pushCentralPath(`/app/stores/${encodeURIComponent(tenantId)}/correction`);
+    } catch (error) {
+      if (!draftLoads.current.isCurrent(request.sequence) || isUiError(error, "aborted")) return;
+      triggerToast(uiErrorMessage(error, "تعذر فتح طلب المتجر للتصحيح."), "error");
+    } finally {
+      if (draftLoads.current.isCurrent(request.sequence)) {
+        setDraftLoading(false);
+        draftLoads.current.finish(request.sequence);
+      }
+    }
+  };
+
+  const openMerchantCorrection = async (store: StoreSubmission) => {
+    if (!authUser || !store.capabilities.draftEdit) return;
+    await openMerchantCorrectionById(store.id, authUser);
+  };
+
+  const replaceMerchantStore = (updated: StoreSubmission) => {
+    setMerchantStores((stores) => stores.map((store) => store.id === updated.id ? updated : store));
+  };
+
+  const publishMerchantStore = async (store: StoreSubmission) => {
+    replaceMerchantStore(await provisioning.publish(store.id));
+    triggerToast("تم نشر المتجر وأصبح رابطه العام متاحًا.", "success");
+  };
+
+  const unpublishMerchantStore = async (store: StoreSubmission) => {
+    replaceMerchantStore(await provisioning.unpublish(store.id));
+    triggerToast("تم إيقاف العرض العام للمتجر مع الاحتفاظ ببياناته.", "info");
   };
 
   const reloadMerchantPortal = () => {
@@ -1217,13 +1393,18 @@ export default function App() {
         }
         setView("merchant_dashboard");
       } else if (route.name === "merchant-new" && authUser) {
-        setView("templates");
+        void loadCurrentServerDraft().then((restored) => {
+          if (restored !== null) setView(restored ? "builder" : "templates");
+        });
       } else if (route.name === "landing") {
         setView(authUser ? "merchant_dashboard" : "landing");
         if (authUser) replaceCentralPath("/app");
       } else if (route.name === "merchant-design" && authUser) {
         const store = merchantStores.find((candidate) => candidate.id === route.tenantId);
         if (store) void openMerchantBuilder(store);
+      } else if (route.name === "merchant-correction" && authUser) {
+        const store = merchantStores.find((candidate) => candidate.id === route.tenantId);
+        if (store) void openMerchantCorrection(store);
       }
     };
     window.addEventListener("popstate", handlePopState);
@@ -1259,10 +1440,15 @@ export default function App() {
           error={merchantStoresError}
           onReload={reloadMerchantPortal}
           onCreateStore={() => {
-            setView("templates");
             pushCentralPath("/app/new");
+            void loadCurrentServerDraft().then((restored) => {
+              if (restored !== null) setView(restored ? "builder" : "templates");
+            });
           }}
           onOpenBuilder={(store) => void openMerchantBuilder(store)}
+          onCorrectStore={(store) => void openMerchantCorrection(store)}
+          onPublish={(store) => publishMerchantStore(store)}
+          onUnpublish={(store) => unpublishMerchantStore(store)}
           onLogout={handleLogout}
           onCopyPublicUrl={(url) => void copyPublicStoreUrl(url)}
         />
@@ -1847,9 +2033,9 @@ export default function App() {
           <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm">
             <div className="flex items-center gap-3">
               <button 
-                onClick={activeWorkspace ? openMerchantPortal : () => setView("templates")}
+                onClick={activeWorkspace || activeDraft?.tenantId ? openMerchantPortal : () => setView("templates")}
                 className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500"
-                title={activeWorkspace ? "الرجوع إلى بوابة التاجر" : "الرجوع للقوالب"}
+                title={activeWorkspace || activeDraft?.tenantId ? "الرجوع إلى بوابة التاجر" : "الرجوع للقوالب"}
               >
                 <ArrowRight className="w-5 h-5" />
               </button>
@@ -1940,7 +2126,7 @@ export default function App() {
                 disabled={workspaceSaving || workspaceLoading || inventoryPending || workspaceConflict !== null}
                 onClick={() => void saveStore()}
                 className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
-                title={activeWorkspace ? "حفظ الإعدادات والمنتجات في الخادم" : "حفظ مسودة غير منشورة في المتصفح"}
+                title={activeWorkspace ? "حفظ الإعدادات والمنتجات في الخادم" : "حفظ مسودة غير منشورة في الخادم"}
               >
                 <Save className="w-4 h-4 text-emerald-600" />
                 <span>حفظ التعديلات</span>
@@ -2474,10 +2660,14 @@ export default function App() {
         businessType={registeredUser?.businessType || "retail"}
         themeStyle={config.themeStyle}
         config={config as unknown as Record<string, unknown>}
+        draft={activeDraft}
+        onDraftChanged={setActiveDraft}
+        onReloadDraft={reloadActiveDraft}
         onSubmitted={(submission) => {
           const domain = submission.requestedDomain ?? "العنوان المحجوز";
           triggerToast(`تم إرسال متجر ${submission.storeName} للمراجعة على العنوان ${domain}. سيبدأ التجهيز بعد الموافقة.`, "success");
           setIsDomainModalOpen(false);
+          setActiveDraft(null);
           if (authUser) {
             void restoreMerchantState(authUser).then((outcome) => {
               if (outcome.status === "error" && !outcome.sessionActive) return;
@@ -2521,8 +2711,12 @@ export default function App() {
           }
           const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
           if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
-          workspaceOperationSequence.current += 1;
-          await auth.logout();
+          try {
+            await auth.logout();
+          } catch {
+            triggerToast("تعذر إنهاء الجلسة على الخادم. تحقق من الاتصال ثم حاول مجددًا.", "error");
+            return;
+          }
           setAuthUser(null);
           resetTenantOwnedState();
           setView("landing");

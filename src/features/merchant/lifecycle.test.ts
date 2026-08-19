@@ -11,7 +11,7 @@ function store(overrides: Partial<StoreSubmission> = {}): StoreSubmission {
     provisioningStatus: "not_started",
     publicationStatus: "requested",
     reviewFeedback: null,
-    capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+    capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
     internalDomain: "store-tenant-1.eoshop.local",
     requestedDomain: "sanaa.eoshop.local",
     publicDomain: null,
@@ -70,7 +70,7 @@ describe("deriveMerchantLifecycle", () => {
       verificationStatus: "approved",
       provisioningStatus: "active",
       publicationBlockers: [],
-      capabilities: { workspaceManage: false, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+      capabilities: { workspaceManage: false, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
     }))).toMatchObject({ canOpenBuilder: false });
   });
 

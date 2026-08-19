@@ -29,6 +29,7 @@
 - [WP 5.2 — Control panel workflow panels](work-packages/WP-5.2-control-panel-workflow-panels.md)
 - [WP 5.3 — Pilot QA readiness](work-packages/WP-5.3-pilot-qa-readiness.md)
 - [WP 5.4 — Merchant portal and store lifecycle](work-packages/WP-5.4-merchant-portal-lifecycle.md)
+- [WP 5.5 — Server-owned draft, resubmission and merchant publication](work-packages/WP-5.5-store-draft-resubmission-publication.md)
 
 ## Architecture decisions
 
@@ -49,6 +50,7 @@
 - [ADR 0014 — Server-authoritative orders](decisions/ADR-0014-server-authoritative-orders.md)
 - [ADR 0015 — Incremental frontend feature boundaries](decisions/ADR-0015-incremental-frontend-feature-boundaries.md)
 - [ADR 0016 — Merchant and platform product shells](decisions/ADR-0016-merchant-and-platform-product-shells.md)
+- [ADR 0017 — Server-owned draft, resubmission and merchant publication](decisions/ADR-0017-server-owned-draft-resubmission-merchant-publication.md)
 
 ## Evidence
 

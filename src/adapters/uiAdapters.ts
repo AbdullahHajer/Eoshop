@@ -16,7 +16,7 @@ export type {
 } from "../services/adminApi";
 export type { GeneratedStoreIdeas, GeneratedStoreProduct } from "../services/assistantApi";
 export type { StorePlan } from "../services/plansApi";
-export type { StoreSubmission, StoreSubmissionInput } from "../services/provisioningApi";
+export type { StoreDraft, StoreDraftInput, StoreSubmission, StoreSubmissionInput } from "../services/provisioningApi";
 export type { StoreWorkspace } from "../services/workspaceApi";
 export type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../services/orderApi";
 export {

@@ -34,8 +34,15 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
       domainAvailability: async () => unexpected("plans.domainAvailability"),
     },
     provisioning: {
+      currentDraft: async () => unexpected("provisioning.currentDraft"),
+      correctionDraft: async () => unexpected("provisioning.correctionDraft"),
+      saveDraft: async () => unexpected("provisioning.saveDraft"),
+      saveCorrection: async () => unexpected("provisioning.saveCorrection"),
       listStores: async () => unexpected("provisioning.listStores"),
       submit: async () => unexpected("provisioning.submit"),
+      resubmit: async () => unexpected("provisioning.resubmit"),
+      publish: async () => unexpected("provisioning.publish"),
+      unpublish: async () => unexpected("provisioning.unpublish"),
     },
     workspace: {
       load: async () => unexpected("workspace.load"),

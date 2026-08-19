@@ -4,18 +4,23 @@ namespace App\Services;
 
 use App\Enums\DomainKind;
 use App\Enums\ProvisioningState;
+use App\Enums\StoreDraftStatus;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
+use App\Enums\UserStatus;
+use App\Exceptions\StoreDraftConflict;
 use App\Exceptions\StoreSubmissionConflict;
 use App\Models\Plan;
 use App\Models\Role;
+use App\Models\StoreDraft;
 use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\CanonicalDomain;
 use App\Support\CanonicalPayload;
 use App\Support\StoreWorkspaceContract;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,16 +48,44 @@ class StoreSubmissionService
         $requestPayload = collect($input)->except('idempotencyKey')->all();
         $fingerprint = CanonicalPayload::fingerprint($requestPayload);
 
-        $existing = $this->existingSubmission($actor, $idempotencyKey);
-        if ($existing !== null) {
-            return $this->replay($existing, $fingerprint);
-        }
-
         $central = DB::connection((string) config('tenancy.database.central_connection'));
 
         try {
             return $central->transaction(function () use ($input, $actor, $request, $idempotencyKey, $fingerprint): array {
-                User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+                $actor = $this->lockActiveActor($actor);
+
+                $existing = $this->existingSubmission($actor, $idempotencyKey, true);
+                if ($existing !== null) {
+                    return $this->replay($existing, $fingerprint);
+                }
+                $draft = null;
+                if (isset($input['draftId'])) {
+                    $draft = StoreDraft::query()->whereKey($input['draftId'])->lockForUpdate()->firstOrFail();
+                    if ($draft->getAttribute('owner_user_id') !== $actor->getKey()
+                        || $draft->getAttribute('tenant_id') !== null
+                        || $draft->getAttribute('status') !== StoreDraftStatus::Draft
+                    ) {
+                        throw StoreDraftConflict::state();
+                    }
+                    if ((int) $draft->getAttribute('revision') !== (int) $input['expectedDraftRevision']) {
+                        throw StoreDraftConflict::revision();
+                    }
+                    $draftPayload = [
+                        'storeName' => $draft->getAttribute('store_name'),
+                        'businessType' => $draft->getAttribute('business_type'),
+                        'themeStyle' => $draft->getAttribute('theme_style'),
+                        'handle' => $draft->getAttribute('handle'),
+                        'planKey' => $draft->getAttribute('plan_key'),
+                        'config' => $draft->getAttribute('config'),
+                    ];
+                    $submittedPayload = collect($input)->only(array_keys($draftPayload))->all();
+                    if (! hash_equals(
+                        CanonicalPayload::fingerprint($draftPayload),
+                        CanonicalPayload::fingerprint($submittedPayload),
+                    )) {
+                        throw StoreDraftConflict::revision();
+                    }
+                }
                 $this->subscriptions->assertStoreQuota($actor);
                 $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
                 $workspaceValidator = StoreWorkspaceContract::validator(
@@ -80,11 +113,38 @@ class StoreSubmissionService
                 $subscription = $this->subscriptions->createForSubmission($tenant, $plan, $actor);
                 $publication = $this->publications->createRequest($tenant, $reservation, $subscription, $actor);
 
+                if ($draft === null) {
+                    $draft = StoreDraft::query()->create([
+                        'owner_user_id' => $actor->getKey(),
+                        'tenant_id' => $tenant->getKey(),
+                        'status' => StoreDraftStatus::Submitted,
+                        'revision' => 1,
+                        'store_name' => $tenant->getAttribute('store_name'),
+                        'business_type' => $tenant->getAttribute('business_type'),
+                        'theme_style' => $tenant->getAttribute('theme_style'),
+                        'handle' => $reservation->getAttribute('handle'),
+                        'plan_key' => $plan->getKey(),
+                        'config' => $input['config'],
+                        'saved_at' => now(),
+                        'submitted_at' => now(),
+                    ]);
+                } else {
+                    $draft->forceFill([
+                        'tenant_id' => $tenant->getKey(),
+                        'status' => StoreDraftStatus::Submitted,
+                        'revision' => ((int) $draft->getAttribute('revision')) + 1,
+                        'saved_at' => now(),
+                        'submitted_at' => now(),
+                    ])->save();
+                }
+
                 StoreSubmission::query()->create([
                     'tenant_id' => $tenant->getKey(),
+                    'store_draft_id' => $draft->getKey(),
                     'submitted_by_user_id' => $actor->getKey(),
                     'idempotency_key' => $idempotencyKey,
                     'request_fingerprint' => $fingerprint,
+                    'revision' => 1,
                     'payload_snapshot' => [
                         'storeName' => $tenant->getAttribute('store_name'),
                         'businessType' => $tenant->getAttribute('business_type'),
@@ -102,6 +162,7 @@ class StoreSubmissionService
                     ],
                     'initial_config_id' => (string) Str::uuid(),
                     'submitted_at' => now(),
+                    'revised_at' => null,
                 ]);
 
                 $ownerRole = Role::query()->where('key', SystemRole::MerchantOwner->value)->firstOrFail();
@@ -136,9 +197,14 @@ class StoreSubmissionService
         } catch (DomainOccupiedByOtherTenantException) {
             throw StoreSubmissionConflict::domainUnavailable();
         } catch (QueryException $exception) {
-            $existing = $this->existingSubmission($actor, $idempotencyKey);
-            if ($existing !== null) {
-                return $this->replay($existing, $fingerprint);
+            $replay = $central->transaction(function () use ($actor, $idempotencyKey, $fingerprint): ?array {
+                $actor = $this->lockActiveActor($actor);
+                $existing = $this->existingSubmission($actor, $idempotencyKey, true);
+
+                return $existing === null ? null : $this->replay($existing, $fingerprint);
+            });
+            if ($replay !== null) {
+                return $replay;
             }
 
             $detail = (string) ($exception->errorInfo[2] ?? '');
@@ -152,17 +218,32 @@ class StoreSubmissionService
         }
     }
 
-    private function existingSubmission(User $actor, string $idempotencyKey): ?StoreSubmission
+    private function lockActiveActor(User $actor): User
     {
-        return StoreSubmission::query()
+        $locked = User::withTrashed()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+        if ($locked->trashed() || $locked->getAttribute('status') !== UserStatus::Active) {
+            throw new AuthorizationException('The merchant account is not active.');
+        }
+
+        return $locked;
+    }
+
+    private function existingSubmission(User $actor, string $idempotencyKey, bool $lock = false): ?StoreSubmission
+    {
+        $query = StoreSubmission::query()
             ->with([
                 'tenant.domains',
                 'tenant.currentPublicationRequest.reservation',
                 'tenant.currentPublicationRequest.subscription.plan',
             ])
             ->where('submitted_by_user_id', $actor->getKey())
-            ->where('idempotency_key', $idempotencyKey)
-            ->first();
+            ->where('idempotency_key', $idempotencyKey);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
     }
 
     /** @return array{tenant: Tenant, replayed: true} */

@@ -10,6 +10,7 @@ enum PermissionKey: string
     case PlatformUsersManage = 'platform.users.manage';
     case PlatformAuditView = 'platform.audit.view';
     case TenantStoreManage = 'tenant.store.manage';
+    case TenantPublicationManage = 'tenant.publication.manage';
     case TenantMembersManage = 'tenant.members.manage';
     case TenantProductsManage = 'tenant.products.manage';
     case TenantInventoryView = 'tenant.inventory.view';
@@ -34,6 +35,7 @@ enum PermissionKey: string
             self::PlatformUsersManage => 'Manage platform users',
             self::PlatformAuditView => 'View platform audit log',
             self::TenantStoreManage => 'Manage store settings',
+            self::TenantPublicationManage => 'Publish and unpublish store',
             self::TenantMembersManage => 'Manage store members',
             self::TenantProductsManage => 'Manage products',
             self::TenantInventoryView => 'View inventory',

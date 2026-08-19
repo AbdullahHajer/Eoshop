@@ -33,7 +33,7 @@ class MerchantStoreController extends Controller
     }
 
     /** @return list<string> */
-    private static function relations(): array
+    public static function relations(): array
     {
         return [
             'domains',

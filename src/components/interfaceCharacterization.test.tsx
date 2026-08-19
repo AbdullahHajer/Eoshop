@@ -9,7 +9,7 @@ import AuthGateway from "./AuthGateway";
 import DomainSetupModal from "./DomainSetupModal";
 import ServerPricingPlans from "./ServerPricingPlans";
 import { UiAdaptersProvider } from "../adapters/UiAdaptersContext";
-import type { StorePlan, UiAdapters, UserProfile } from "../adapters/uiAdapters";
+import { UiAdapterError, type StorePlan, type UiAdapters, type UserProfile } from "../adapters/uiAdapters";
 import { createFakeUiAdapters } from "../adapters/testing/fakeUiAdapters";
 
 const merchant: UserProfile = {
@@ -117,7 +117,7 @@ describe("current interface behavior", () => {
         provisioningStatus: "not_started",
         publicationStatus: "requested",
         reviewFeedback: null,
-        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true },
+        capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
         internalDomain: null,
         requestedDomain: "my-shop.eoshop.local",
         plan: { key: "starter", name: "البداية", activationMode: "automatic" },
@@ -126,6 +126,20 @@ describe("current interface behavior", () => {
         createdAt: null,
       },
       meta: { replayed: false },
+    });
+    const saveDraft = vi.fn().mockResolvedValue({
+      id: "draft-1",
+      tenantId: null,
+      status: "draft",
+      revision: 1,
+      storeName: "متجري",
+      businessType: "تجزئة",
+      themeStyle: "elegant",
+      handle: "my-shop",
+      planKey: "starter",
+      config: { storeName: "متجري" },
+      savedAt: "2026-08-19T12:00:00Z",
+      submittedAt: null,
     });
     const onSubmitted = vi.fn();
     const user = userEvent.setup();
@@ -142,7 +156,7 @@ describe("current interface behavior", () => {
       />,
       createFakeUiAdapters({
         plans: { list: listPlans, domainAvailability: availability },
-        provisioning: { submit },
+        provisioning: { submit, saveDraft },
       }),
     );
 
@@ -153,12 +167,128 @@ describe("current interface behavior", () => {
     await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
 
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
-    expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      expectedRevision: 0,
       storeName: "متجري",
       handle: "my-shop",
       planKey: "starter",
     }));
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+      storeName: "متجري",
+      handle: "my-shop",
+      planKey: "starter",
+      draftId: "draft-1",
+      expectedDraftRevision: 1,
+    }));
     expect(onSubmitted).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays an ambiguous first submission without saving the linked draft again", async () => {
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
+    const availability = vi.fn().mockResolvedValue({ handle: "replay-shop", domain: "replay-shop.eoshop.local", available: true });
+    const savedDraft = {
+      id: "draft-replay", tenantId: null, status: "draft" as const, revision: 1,
+      storeName: "متجر الاستعادة", businessType: "تجزئة", themeStyle: "elegant" as const,
+      handle: "replay-shop", planKey: "starter", config: { storeName: "متجر الاستعادة" },
+      savedAt: "2026-08-19T12:00:00Z", submittedAt: null,
+    };
+    const submission = {
+      id: "01REPLAY", storeName: savedDraft.storeName, businessType: savedDraft.businessType,
+      verificationStatus: "pending" as const, provisioningStatus: "not_started" as const,
+      publicationStatus: "requested" as const, reviewFeedback: null,
+      capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false },
+      internalDomain: null, requestedDomain: "replay-shop.eoshop.local", publicDomain: null,
+      plan: { key: "starter", name: "البداية", activationMode: "automatic" as const },
+      subscriptionStatus: "active" as const, publicationBlockers: ["review_not_approved"],
+      createdAt: null, activeAt: null, publishedAt: null,
+    };
+    const saveDraft = vi.fn().mockResolvedValue(savedDraft);
+    const submit = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("ambiguous", "network"))
+      .mockResolvedValueOnce({ data: submission, meta: { replayed: true } });
+    const user = userEvent.setup();
+
+    const Harness = () => {
+      const [draft, setDraft] = React.useState<Awaited<ReturnType<UiAdapters["provisioning"]["saveDraft"]>> | null>(null);
+      return <DomainSetupModal isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={savedDraft.storeName} businessType={savedDraft.businessType} themeStyle="elegant" config={savedDraft.config} />;
+    };
+    renderInterface(
+      <Harness />,
+      createFakeUiAdapters({ plans: { list: listPlans, domainAvailability: availability }, provisioning: { saveDraft, submit } }),
+    );
+
+    await screen.findByText("البداية");
+    await user.type(screen.getByLabelText("عنوان المتجر داخل المنصة"), "replay-shop");
+    await screen.findByText(/replay-shop\.eoshop\.local متاح/, {}, { timeout: 1500 });
+    await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
+    expect(await screen.findByText(/نتيجة الإرسال السابق غير مؤكدة/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenNthCalledWith(2, submit.mock.calls[0][0]);
+  });
+
+  it("offers an explicit server reload after a draft revision conflict", async () => {
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
+    const availability = vi.fn().mockResolvedValue({ handle: "conflict-shop", domain: "conflict-shop.eoshop.local", available: true });
+    const reloadDraft = vi.fn().mockResolvedValue(undefined);
+    const saveDraft = vi.fn().mockRejectedValue(new UiAdapterError("stale", "conflict", "draft_revision_conflict"));
+    const user = userEvent.setup();
+
+    renderInterface(
+      <DomainSetupModal isOpen onClose={vi.fn()} onReloadDraft={reloadDraft} storeName="متجر متعارض" businessType="تجزئة" themeStyle="elegant" config={{ storeName: "متجر متعارض" }} />,
+      createFakeUiAdapters({ plans: { list: listPlans, domainAvailability: availability }, provisioning: { saveDraft } }),
+    );
+
+    await screen.findByText("البداية");
+    await user.type(screen.getByLabelText("عنوان المتجر داخل المنصة"), "conflict-shop");
+    await screen.findByText(/conflict-shop\.eoshop\.local متاح/, {}, { timeout: 1500 });
+    await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
+    await user.click(await screen.findByRole("button", { name: "تحميل نسخة الخادم" }));
+    expect(reloadDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays an ambiguous resubmission without saving the correction twice", async () => {
+    const listPlans = vi.fn().mockResolvedValue([starterPlan]);
+    const availability = vi.fn().mockResolvedValue({ handle: "corrected-shop", domain: "corrected-shop.eoshop.local", available: true });
+    const correction = {
+      id: "draft-correction", tenantId: "tenant-correction", status: "correction_required" as const, revision: 4,
+      storeName: "متجر مصحح", businessType: "تجزئة", themeStyle: "elegant" as const,
+      handle: "corrected-shop", planKey: "starter", config: { storeName: "متجر مصحح" },
+      savedAt: "2026-08-19T12:00:00Z", submittedAt: "2026-08-18T12:00:00Z",
+    };
+    const saveCorrection = vi.fn().mockResolvedValue(correction);
+    const resubmit = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("ambiguous", "network"))
+      .mockResolvedValueOnce({ data: {
+        id: "tenant-correction", storeName: correction.storeName, businessType: correction.businessType,
+        verificationStatus: "pending", provisioningStatus: "not_started", publicationStatus: "requested", reviewFeedback: null,
+        capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false },
+        internalDomain: null, requestedDomain: "corrected-shop.eoshop.local", publicDomain: null,
+        plan: { key: "starter", name: "البداية", activationMode: "automatic" }, subscriptionStatus: "active",
+        publicationBlockers: ["review_not_approved"], createdAt: null, activeAt: null, publishedAt: null,
+      }, meta: { replayed: true } });
+    const user = userEvent.setup();
+
+    const Harness = () => {
+      const [draft, setDraft] = React.useState({ ...correction, revision: 3 });
+      return <DomainSetupModal isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={correction.storeName} businessType={correction.businessType} themeStyle="elegant" config={correction.config} />;
+    };
+    renderInterface(
+      <Harness />,
+      createFakeUiAdapters({ plans: { list: listPlans, domainAvailability: availability }, provisioning: { saveCorrection, resubmit } }),
+    );
+
+    await screen.findByText(/corrected-shop\.eoshop\.local متاح/, {}, { timeout: 1500 });
+    await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
+    expect(await screen.findByText(/نتيجة الإرسال السابق غير مؤكدة/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "حجز العنوان وإرسال طلب المتجر" }));
+
+    await waitFor(() => expect(resubmit).toHaveBeenCalledTimes(2));
+    expect(saveCorrection).toHaveBeenCalledTimes(1);
+    expect(resubmit).toHaveBeenNthCalledWith(1, correction.tenantId, correction.revision);
+    expect(resubmit).toHaveBeenNthCalledWith(2, correction.tenantId, correction.revision);
   });
 
   it("retains the current server-pricing headings without a screen redesign", async () => {
