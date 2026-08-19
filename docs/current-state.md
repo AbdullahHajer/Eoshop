@@ -14,18 +14,18 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - Phase 3: unified frontend transport, server-owned workspaces and UI adapter boundary.
 - Phase 4.1–4.3: catalog/pricing/media, inventory ledger/reservations and server-authoritative orders.
 - Phase 5.1–5.3: initial frontend boundaries and repeatable local QA Pilot.
+- WP 5.4–5.5: merchant portal, server-owned drafts, rejected-store correction/resubmission and merchant publication controls.
 
 ## Active
 
-- WP 5.5: server-owned drafts, rejected-store correction/resubmission and merchant publication controls.
+- Select and contract the next merchant operational work package without reopening the delivered lifecycle core.
 
 ## Approved next sequence
 
-1. WP 5.5 — Server-owned store draft, correction/resubmission and merchant publication.
-2. Merchant operational modules and continued builder decomposition.
-3. Platform administration console with users, audit, platform settings and operational queues.
-4. UX/browser acceptance, accessibility and responsive hardening.
-5. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
+1. Merchant operational modules and continued builder decomposition.
+2. Platform administration console with users, audit, platform settings and operational queues.
+3. UX/browser acceptance, accessibility and responsive hardening.
+4. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 

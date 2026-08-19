@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.5 |
-| Status | Implementation verified; delivery in progress |
+| Status | Complete and merged |
 | Started | 2026-08-19 |
 | Branch | `codex/wp-5.5-store-draft-publication` |
 | Base | Protected `main` at `7fffc5d` |
@@ -90,7 +90,7 @@ Complete the merchant-controlled store lifecycle: save a new store draft on the 
 
 - [x] Record exact verification evidence and remaining product handoff.
 - [x] Obtain final independent read-only approval with no blocking findings.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Required acceptance gates
 

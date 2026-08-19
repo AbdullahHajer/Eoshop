@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.5 — Server-owned draft, resubmission and merchant publication |
-| Status | Implementation verified; delivery in progress |
+| Status | Complete and merged |
 | Verified | 2026-08-19 |
 | Branch | `codex/wp-5.5-store-draft-publication` |
 | Base | `7fffc5d01714561eeca6e3ee36d8119bcf2065e9` |
@@ -61,5 +61,8 @@ Environment: `eoshop/backend-quality:wp55-r6`, built from the final implementati
 ## Delivery status
 
 - Implementation is recorded separately in `6df5080f25cbc8d9eaf5c1699192705e3fbf81c9`.
-- Evidence is recorded in the following documentation-only commit.
-- PR, required CI, merge and protected-main CI facts will be added only after GitHub confirms them.
+- Evidence is recorded separately in `14164ff00e89a690d131822fdffb631e6efff19e`.
+- Pull request [#34](https://github.com/sas-prog1/Eoshop/pull/34) was merged from head `14164ff00e89a690d131822fdffb631e6efff19e`.
+- Pull-request CI run [32270535028](https://github.com/sas-prog1/Eoshop/actions/runs/32270535028) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `6f35c6a5bd3dbe50e6d3d5c04d984adec6af552d`.
+- Protected-main CI run [32271141702](https://github.com/sas-prog1/Eoshop/actions/runs/32271141702) passed the same four required jobs after merge.
