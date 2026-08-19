@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.6 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-19 |
 | Branch | `codex/wp-5.6-merchant-operations-hub` |
 | Base | Protected `main` at `7e05ec5` |
@@ -100,7 +100,7 @@ Turn each eligible store into a clear operational workspace. A merchant should e
 
 - [x] Record exact evidence and remaining extraction debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 
