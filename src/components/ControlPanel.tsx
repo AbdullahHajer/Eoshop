@@ -7,11 +7,11 @@ import {
 } from "lucide-react";
 import { StoreConfig, Product, Coupon, EWallet } from "../types";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
-import type { OrderReceipt } from "../adapters/uiAdapters";
 import AiCopywriterPanel from "../features/store-builder/AiCopywriterPanel";
 import { CustomizationCompletionBar, PreviewDeviceSelector } from "../features/store-builder/ControlPanelChrome";
 import type { ControlPanelProps, CopywriterOutput } from "../features/store-builder/controlPanelTypes";
 import MerchantOrdersPanel from "../features/orders/MerchantOrdersPanel";
+import { useMerchantOrders } from "../hooks/useMerchantOrders";
 import StoreSubmissionPanel from "../features/tenancy/StoreSubmissionPanel";
 import { merchantOrderActions } from "../workflows/orderState";
 
@@ -34,7 +34,7 @@ export default function ControlPanel({
   onOpenCheckoutPreview,
   onOpenDomainModal
 }: ControlPanelProps) {
-  const { assistant, catalog, orders } = useUiAdapters();
+  const { assistant, catalog } = useUiAdapters();
 
   // AI assistant states inside control panel
   const [assistantPrompt, setAssistantPrompt] = useState("");
@@ -59,44 +59,7 @@ export default function ControlPanel({
   const [inventorySearch, setInventorySearch] = useState<string>("");
   const [inventoryFilter, setInventoryFilter] = useState<"all" | "inStock" | "lowStock" | "outOfStock" | "unlimited">("all");
   const [bulkStockQuantity, setBulkStockQuantity] = useState<number>(50);
-  const [merchantOrders, setMerchantOrders] = useState<OrderReceipt[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
-  const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(() => new Set());
-  const pendingOrderIdsRef = useRef(new Set<string>());
-  const orderTransitionKeysRef = useRef(new Map<string, string>());
-
-  useEffect(() => {
-    if (activeTab !== "orders" || !activeTenantId) return;
-    let current = true;
-    setOrdersLoading(true);
-    setOrdersError(null);
-    orders.list(activeTenantId)
-      .then((result) => { if (current) setMerchantOrders(result.items); })
-      .catch((error) => { if (current) setOrdersError(error instanceof Error ? error.message : "تعذر تحميل الطلبات."); })
-      .finally(() => { if (current) setOrdersLoading(false); });
-    return () => { current = false; };
-  }, [activeTab, activeTenantId, orders]);
-
-  const advanceOrder = async (order: OrderReceipt, status: OrderReceipt["status"]) => {
-    if (!activeTenantId || pendingOrderIdsRef.current.has(order.id)) return;
-    const operation = `${order.id}:${status}`;
-    const idempotencyKey = orderTransitionKeysRef.current.get(operation) ?? crypto.randomUUID();
-    orderTransitionKeysRef.current.set(operation, idempotencyKey);
-    pendingOrderIdsRef.current.add(order.id);
-    setPendingOrderIds(new Set(pendingOrderIdsRef.current));
-    setOrdersError(null);
-    try {
-      const updated = await orders.updateStatus(activeTenantId, order.id, status, `merchant_${status}`, idempotencyKey);
-      orderTransitionKeysRef.current.delete(operation);
-      setMerchantOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
-    } catch (error) {
-      setOrdersError(error instanceof Error ? error.message : "تعذر تحديث الطلب.");
-    } finally {
-      pendingOrderIdsRef.current.delete(order.id);
-      setPendingOrderIds(new Set(pendingOrderIdsRef.current));
-    }
-  };
+  const merchantOrders = useMerchantOrders(activeTenantId ?? "", Boolean(activeTenantId && activeTab === "orders"));
 
   // Checkout coupon state
   const [newCouponCode, setNewCouponCode] = useState("");
@@ -2447,12 +2410,12 @@ export default function ControlPanel({
         {/* --- CHECKOUT & PAYMENT CUSTOMIZATION TAB (تعديل إتمام الطلب والدفع) --- */}
         {activeTab === "orders" && (
           <MerchantOrdersPanel
-            orders={merchantOrders}
-            loading={ordersLoading}
-            error={ordersError}
-            pendingOrderIds={pendingOrderIds}
+            orders={merchantOrders.items}
+            loading={merchantOrders.loading}
+            error={merchantOrders.error}
+            pendingOrderIds={merchantOrders.pendingOrderIds}
             actionsFor={merchantOrderActions}
-            onAdvance={(order, status) => void advanceOrder(order, status)}
+            onAdvance={(order, status) => void merchantOrders.advance(order, status)}
           />
         )}
 

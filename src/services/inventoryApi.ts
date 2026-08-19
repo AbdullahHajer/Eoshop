@@ -27,6 +27,13 @@ export interface InventoryMutationResult {
   items: InventoryItem[];
 }
 
+export interface InventoryPolicyMutationResult {
+  tenantId: string;
+  operationId: string;
+  replayed: boolean;
+  item: InventoryItem;
+}
+
 function invalid(): never {
   throw new ApiError("استجابة الخادم لا تطابق عقد المخزون.", "unexpected", 200);
 }
@@ -66,9 +73,15 @@ function mapMutation(value: unknown): InventoryMutationResult {
   };
 }
 
-function mapPolicy(value: unknown): InventoryItem {
+function mapPolicy(value: unknown): InventoryPolicyMutationResult {
   const envelope = record(value, "استجابة سياسة المخزون");
-  return mapItem(record(envelope.data, "سياسة المخزون").item);
+  const dto = record(envelope.data, "سياسة المخزون");
+  return {
+    tenantId: stringField(dto, "tenantId", "سياسة المخزون"),
+    operationId: stringField(dto, "operationId", "سياسة المخزون"),
+    replayed: booleanField(dto, "replayed", "سياسة المخزون"),
+    item: mapItem(dto.item),
+  };
 }
 
 export const inventoryApi = {
@@ -85,8 +98,9 @@ export const inventoryApi = {
     lines: InventoryAdjustmentLine[],
     reasonCode: string,
     note?: string,
+    idempotencyKey = crypto.randomUUID(),
+    signal?: AbortSignal,
   ): Promise<InventoryMutationResult> {
-    const idempotencyKey = crypto.randomUUID();
     return mapMutation(await apiClient.request(
       `/api/merchant/stores/${encodeURIComponent(tenantId)}/inventory/adjustments`,
       {
@@ -94,6 +108,7 @@ export const inventoryApi = {
         headers: { "Idempotency-Key": idempotencyKey },
         retrySafety: "idempotent",
         body: { lines, reasonCode, note },
+        signal,
       },
     ));
   },
@@ -104,8 +119,9 @@ export const inventoryApi = {
     expectedInventoryRevision: number,
     manageStock: boolean,
     lowStockThreshold: number,
-  ): Promise<InventoryItem> {
-    const idempotencyKey = crypto.randomUUID();
+    idempotencyKey = crypto.randomUUID(),
+    signal?: AbortSignal,
+  ): Promise<InventoryPolicyMutationResult> {
     return mapPolicy(await apiClient.request(
       `/api/merchant/stores/${encodeURIComponent(tenantId)}/inventory/products/${encodeURIComponent(productId)}/policy`,
       {
@@ -113,6 +129,7 @@ export const inventoryApi = {
         headers: { "Idempotency-Key": idempotencyKey },
         retrySafety: "idempotent",
         body: { expectedInventoryRevision, manageStock, lowStockThreshold },
+        signal,
       },
     ));
   },

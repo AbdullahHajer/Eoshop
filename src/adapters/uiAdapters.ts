@@ -18,6 +18,7 @@ export type { GeneratedStoreIdeas, GeneratedStoreProduct } from "../services/ass
 export type { StorePlan } from "../services/plansApi";
 export type { StoreDraft, StoreDraftInput, StoreSubmission, StoreSubmissionInput } from "../services/provisioningApi";
 export type { StoreWorkspace } from "../services/workspaceApi";
+export type { CatalogSnapshot } from "../services/catalogApi";
 export type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../services/orderApi";
 export {
   UiAdapterError,

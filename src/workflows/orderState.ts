@@ -16,11 +16,17 @@ export interface MerchantOrderAction {
 }
 
 export function merchantOrderActions(order: OrderReceipt): MerchantOrderAction[] {
-  const actions: MerchantOrderAction[] = [];
-  if (order.status === "submitted") actions.push({ status: "cancelled", label: "إلغاء", tone: "danger" });
-  const next = order.status === "submitted" ? "accepted" : order.status === "accepted" ? "processing" : order.status === "processing" ? "completed" : null;
-  if (next) actions.push({ status: next, label: `نقل إلى ${next}`, tone: "primary" });
-  return actions;
+  const labels: Record<NonNullable<OrderReceipt["allowedTransitions"]>[number], string> = {
+    accepted: "قبول الطلب",
+    processing: "بدء التجهيز",
+    completed: "إكمال الطلب",
+    cancelled: "إلغاء الطلب",
+  };
+  return (order.allowedTransitions ?? []).map((status) => ({
+    status,
+    label: labels[status],
+    tone: status === "cancelled" ? "danger" : "primary",
+  }));
 }
 
 export function reconcileCartWithStorefront(cart: CartLine[], products: Product[]): CartReconciliation {

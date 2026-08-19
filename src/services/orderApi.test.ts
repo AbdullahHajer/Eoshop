@@ -27,6 +27,7 @@ const receipt = {
   id: "22222222-2222-4222-8222-222222222222",
   number: "EO-222222222222",
   status: "submitted",
+  allowedTransitions: ["cancelled", "accepted"],
   paymentState: "due_on_delivery",
   currencyCode: "YER",
   totals: {
@@ -112,5 +113,14 @@ describe("orderApi", () => {
       category: "unexpected",
       status: 200,
     });
+  });
+
+  it("maps only server-projected order transitions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { items: [receipt], pagination: { total: 1 } },
+    }), { status: 200 })));
+
+    const result = await orderApi.list("tenant-one");
+    expect(result.items[0].allowedTransitions).toEqual(["cancelled", "accepted"]);
   });
 });

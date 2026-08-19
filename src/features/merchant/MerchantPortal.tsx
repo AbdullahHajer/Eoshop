@@ -32,7 +32,7 @@ interface MerchantPortalProps {
   error: string | null;
   onReload: () => void;
   onCreateStore: () => void;
-  onOpenBuilder: (store: StoreSubmission) => void;
+  onOpenStore: (store: StoreSubmission) => void;
   onCorrectStore: (store: StoreSubmission) => void;
   onPublish: (store: StoreSubmission) => Promise<void>;
   onUnpublish: (store: StoreSubmission) => Promise<void>;
@@ -65,7 +65,7 @@ export default function MerchantPortal({
   error,
   onReload,
   onCreateStore,
-  onOpenBuilder,
+  onOpenStore,
   onCorrectStore,
   onPublish,
   onUnpublish,
@@ -278,11 +278,9 @@ export default function MerchantPortal({
                           <Settings2 className="h-4 w-4" /> تصحيح الطلب
                         </button>
                       )}
-                      {selectedLifecycle.canOpenBuilder && (
-                        <button type="button" disabled={Boolean(busyAction)} onClick={() => onOpenBuilder(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-50">
-                          <Settings2 className="h-4 w-4" /> إدارة المتجر
-                        </button>
-                      )}
+                      <button type="button" disabled={Boolean(busyAction)} onClick={() => onOpenStore(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-50">
+                        <Settings2 className="h-4 w-4" /> فتح مركز المتجر
+                      </button>
                       {selectedStore.capabilities.publish && (
                         <button type="button" disabled={Boolean(busyAction)} onClick={() => void runAction(`publish:${selectedStore.id}`, () => onPublish(selectedStore))} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">
                           <Send className="h-4 w-4" /> {busyAction === `publish:${selectedStore.id}` ? "جارٍ النشر…" : "نشر المتجر"}

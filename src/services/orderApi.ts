@@ -24,6 +24,7 @@ export interface OrderReceipt {
     grandTotalMinor: number;
   };
   createdAt: string;
+  allowedTransitions?: Array<"accepted" | "processing" | "completed" | "cancelled">;
   items?: Array<{
     productId: string;
     name: string;
@@ -43,6 +44,11 @@ export interface CreateOrderInput {
   payment: { method: "cod" | "bank_transfer" | "wallet"; channelId?: string; reference?: string };
   customer: { name: string; phone: string; email?: string; notes?: string };
   address: { city: string; area: string; street?: string; details?: string };
+}
+
+export interface OrderMutationResult {
+  replayed: boolean;
+  order: OrderReceipt;
 }
 
 function invalid(contract: string): never {
@@ -74,6 +80,17 @@ function mapReceipt(value: unknown): OrderReceipt {
     },
     createdAt: stringField(dto, "createdAt", "إيصال الطلب"),
   };
+  if (dto.allowedTransitions !== undefined) {
+    const transitions = arrayField(dto, "allowedTransitions", "انتقالات الطلب");
+    receipt.allowedTransitions = transitions.map((value) => (
+      enumField(
+        { value },
+        "value",
+        ["accepted", "processing", "completed", "cancelled"] as const,
+        "انتقالات الطلب",
+      )
+    ));
+  }
   if (dto.items !== undefined) {
     receipt.items = arrayField(dto, "items", "بنود الطلب").map((value) => {
       const item = record(value, "بند الطلب");
@@ -134,18 +151,20 @@ export const orderApi = {
     }));
   },
 
-  async list(tenantId: string): Promise<{ items: OrderReceipt[]; total: number }> {
-    return mapList(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/orders`));
+  async list(tenantId: string, signal?: AbortSignal): Promise<{ items: OrderReceipt[]; total: number }> {
+    return mapList(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/orders`, { signal }));
   },
 
-  async updateStatus(tenantId: string, orderId: string, status: OrderReceipt["status"], reasonCode: string, idempotencyKey: string): Promise<OrderReceipt> {
+  async updateStatus(tenantId: string, orderId: string, status: OrderReceipt["status"], reasonCode: string, idempotencyKey: string, signal?: AbortSignal): Promise<OrderMutationResult> {
     const envelope = record(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/orders/${encodeURIComponent(orderId)}/status`, {
       method: "PATCH",
       body: { status, reasonCode },
       headers: { "Idempotency-Key": idempotencyKey },
       retrySafety: "idempotent",
+      signal,
     }), "تحديث الطلب");
     const data = record(envelope.data, "تحديث الطلب");
-    return mapReceipt(data.order);
+    if (typeof data.replayed !== "boolean") return invalid("تحديث الطلب");
+    return { replayed: data.replayed, order: mapReceipt(data.order) };
   },
 };

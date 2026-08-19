@@ -42,7 +42,7 @@ function optionalBoolean(source: Record<string, unknown>, key: string, contract:
   return value;
 }
 
-function mapProduct(value: unknown): Product {
+export function mapProduct(value: unknown): Product {
   const dto = record(value, "منتج مساحة العمل");
   const rawPrice = dto.price;
   const price = typeof rawPrice === "string" ? Number(rawPrice) : rawPrice;
