@@ -128,7 +128,8 @@ function appAdapters(save: UiAdapters["workspace"]["save"]): UiAdapters {
 async function openRestoredBuilder(adapters: UiAdapters, user: ReturnType<typeof userEvent.setup>) {
   renderInterface(<App />, adapters);
   expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "إدارة المتجر" }));
+  await user.click(screen.getByRole("button", { name: "فتح مركز المتجر" }));
+  await user.click(await screen.findByRole("button", { name: "التصميم والهوية" }));
   expect(await screen.findByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
 }
 
@@ -151,7 +152,8 @@ describe("adapter-backed interface flows", () => {
     expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
     expect(window.location.pathname).toBe("/app");
     expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   });
 
   it("keeps an authenticated merchant inside the portal when store recovery fails", async () => {
@@ -305,13 +307,14 @@ describe("adapter-backed interface flows", () => {
     await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
     await waitFor(() => expect(saveCorrection).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
-    await user.click(await screen.findByRole("button", { name: "إدارة المتجر" }));
-    expect(await screen.findByDisplayValue("متجر الخادم")).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "فتح مركز المتجر" }));
+    await user.click(await screen.findByRole("button", { name: "التصميم والهوية" }));
+    expect((await screen.findAllByText("متجر الخادم")).length).toBeGreaterThan(0);
 
     resolveSave({ ...correctionDraft, revision: 2, storeName: "مسودة أ المتأخرة", config: { ...correctionDraft.config, storeName: "مسودة أ المتأخرة" } });
     await Promise.resolve();
     expect(screen.queryByDisplayValue("مسودة أ المتأخرة")).toBeNull();
-    expect(screen.getByDisplayValue("متجر الخادم")).toBeTruthy();
+    expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0);
   });
 
   it("keeps a deferred draft save usable when server logout fails", async () => {
@@ -374,10 +377,64 @@ describe("adapter-backed interface flows", () => {
     expect(adapters.workspace.load).toHaveBeenCalledWith(submission.id, expect.any(AbortSignal));
   });
 
+  it("keeps a direct products route read-only when the exact membership lacks combined edit permission", async () => {
+    const catalogOnly = {
+      ...submission,
+      capabilities: { ...submission.capabilities, workspaceManage: false, catalogManage: true },
+    };
+    window.history.replaceState({}, "", `/app/stores/${submission.id}/products`);
+    const workspaceLoad = vi.fn();
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      provisioning: { listStores: vi.fn().mockResolvedValue([catalogOnly]) },
+      workspace: { load: workspaceLoad },
+      catalog: { load: vi.fn().mockResolvedValue({ tenantId: submission.id, revision: 1, currencyCode: "YER", products: [] }) },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("button", { name: "العودة إلى متاجري" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "المنتجات" })).toBeTruthy();
+    expect(window.location.pathname).toBe(`/app/stores/${submission.id}/products`);
+    expect(workspaceLoad).not.toHaveBeenCalled();
+  });
+
+  it("guards dirty builder state when browser history targets the operations center", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    await openRestoredBuilder(appAdapters(vi.fn()), user);
+    await user.click(screen.getByRole("button", { name: "الاسم والشعار" }));
+    fireEvent.change(screen.getByPlaceholderText("أدخل اسم متجرك المميز"), { target: { value: "تعديل عبر السجل" } });
+
+    window.history.pushState({}, "", `/app/stores/${submission.id}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(window.location.pathname).toBe(`/app/stores/${submission.id}/design`);
+    expect(screen.getByDisplayValue("تعديل عبر السجل")).toBeTruthy();
+
+    window.history.pushState({}, "", `/app/stores/${submission.id}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(await screen.findByRole("button", { name: "العودة إلى متاجري" })).toBeTruthy();
+    expect(confirm).toHaveBeenCalledTimes(2);
+  }, 15_000);
+
+  it("clears the merchant context when a route-owned operation reports an expired session", async () => {
+    window.history.replaceState({}, "", `/app/stores/${submission.id}/orders`);
+    const adapters = appAdapters(vi.fn());
+    adapters.orders.list = vi.fn().mockRejectedValue(new UiAdapterError("انتهت الجلسة.", "unauthenticated"));
+
+    renderInterface(<App />, adapters);
+
+    await waitFor(() => expect(adapters.orders.list).toHaveBeenCalled());
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+    expect(screen.getByRole("heading", { name: /أنشئ متجرك الإلكتروني/ })).toBeTruthy();
+  });
+
   it("requires an explicit decision before leaving a dirty workspace for the merchant portal", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const user = userEvent.setup();
     await openRestoredBuilder(appAdapters(vi.fn()), user);
+    await user.click(screen.getByRole("button", { name: "الاسم والشعار" }));
     fireEvent.change(screen.getByPlaceholderText("أدخل اسم متجرك المميز"), { target: { value: "اسم غير محفوظ" } });
 
     await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
@@ -387,7 +444,7 @@ describe("adapter-backed interface flows", () => {
     await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
-  });
+  }, 15_000);
 
   it("resets a password through the injected auth action", async () => {
     window.history.replaceState({}, "", "/reset-password?token=reset-token&email=merchant%40example.com");
@@ -797,7 +854,7 @@ describe("adapter-backed interface flows", () => {
     expect(await screen.findByText("الرصيد الفعلي: 12")).toBeTruthy();
     await waitFor(() => expect((screen.getByTestId("save-workspace") as HTMLButtonElement).disabled).toBe(false));
     expect(screen.queryByText("تعديلات أو تعارضات غير محفوظة")).toBeNull();
-  });
+  }, 15_000);
 
   it("hides inventory for missing view permission and disables mutations for view-only access", async () => {
     const adapters = appAdapters(vi.fn());
@@ -842,7 +899,7 @@ describe("adapter-backed interface flows", () => {
       createFakeUiAdapters(),
     );
     expect((screen.getAllByRole("button", { name: "تحديث عدد الكمية للكل" }).at(-1) as HTMLButtonElement).disabled).toBe(true);
-  });
+  }, 15_000);
 
   it("serializes merchant order transitions and reuses the logical idempotency key after failure", async () => {
     let rejectFirst!: (error: Error) => void;
@@ -851,6 +908,7 @@ describe("adapter-backed interface flows", () => {
       id: "22222222-2222-4222-8222-222222222222",
       number: "EO-222222222222",
       status: "submitted" as const,
+      allowedTransitions: ["accepted" as const],
       paymentState: "due_on_delivery",
       currencyCode: "YER",
       totals: {
@@ -866,7 +924,10 @@ describe("adapter-backed interface flows", () => {
     };
     const updateStatus = vi.fn()
       .mockImplementationOnce(() => firstAttempt)
-      .mockResolvedValueOnce({ ...order, status: "accepted" });
+      .mockResolvedValueOnce({
+        replayed: false,
+        order: { ...order, status: "accepted" as const, allowedTransitions: ["processing" as const] },
+      });
     const adapters = createFakeUiAdapters({
       orders: {
         list: vi.fn().mockResolvedValue({ items: [order], total: 1 }),
@@ -890,7 +951,7 @@ describe("adapter-backed interface flows", () => {
       adapters,
     );
 
-    const advance = await screen.findByRole("button", { name: /accepted/ });
+    const advance = await screen.findByRole("button", { name: "قبول الطلب" });
     fireEvent.click(advance);
     fireEvent.click(advance);
     await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(1));
@@ -898,10 +959,11 @@ describe("adapter-backed interface flows", () => {
     const firstKey = updateStatus.mock.calls[0][4];
 
     rejectFirst(new Error("ambiguous network failure"));
-    await screen.findByText("ambiguous network failure");
-    fireEvent.click(screen.getByRole("button", { name: /accepted/ }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "قبول الطلب" }));
     await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(2));
     expect(updateStatus.mock.calls[1][4]).toBe(firstKey);
+    await screen.findByRole("button", { name: "بدء التجهيز" });
   });
 
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {

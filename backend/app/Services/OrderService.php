@@ -210,14 +210,17 @@ class OrderService
     /** @return array<string, mixed> */
     public function list(Tenant $tenant, User $actor, int $page, int $perPage): array
     {
-        return $this->withLockedMembership($tenant, $actor, PermissionKey::TenantOrdersView, function (Tenant $lockedTenant) use ($page, $perPage): array {
+        return $this->withLockedMembership($tenant, $actor, PermissionKey::TenantOrdersView, function (Tenant $lockedTenant) use ($actor, $page, $perPage): array {
             $this->assertOperationalReady($lockedTenant);
+            $canManage = $actor->hasTenantPermission($lockedTenant, PermissionKey::TenantOrdersManage);
 
-            return $this->inTenant($lockedTenant, fn (): array => DB::connection('tenant')->transaction(function () use ($page, $perPage): array {
+            return $this->inTenant($lockedTenant, fn (): array => DB::connection('tenant')->transaction(function () use ($canManage, $page, $perPage): array {
                 DB::connection('tenant')->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
                 $query = DB::table('orders')->orderByDesc('created_at')->orderByDesc('id');
                 $total = $query->count();
-                $items = $query->forPage($page, $perPage)->get()->map(fn (object $order): array => $this->resource($order, false))->all();
+                $items = $query->forPage($page, $perPage)->get()->map(
+                    fn (object $order): array => $this->resource($order, false, $canManage),
+                )->all();
 
                 return ['items' => $items, 'pagination' => ['page' => $page, 'perPage' => $perPage, 'total' => $total]];
             }));
@@ -289,7 +292,7 @@ class OrderService
 
                 return $this->operations->storeResult((string) $claim['operation']->id, [
                     'replayed' => false,
-                    'order' => $this->resource(DB::table('orders')->where('id', $orderId)->firstOrFail(), false),
+                    'order' => $this->resource(DB::table('orders')->where('id', $orderId)->firstOrFail(), false, true),
                 ]);
             }));
         });
@@ -380,11 +383,17 @@ class OrderService
 
     private function transitionAllowed(OrderStatus $from, OrderStatus $to): bool
     {
+        return in_array($to, $this->allowedTransitions($from), true);
+    }
+
+    /** @return list<OrderStatus> */
+    private function allowedTransitions(OrderStatus $from): array
+    {
         return match ($from) {
-            OrderStatus::Submitted => in_array($to, [OrderStatus::Accepted, OrderStatus::Cancelled], true),
-            OrderStatus::Accepted => in_array($to, [OrderStatus::Processing, OrderStatus::Completed], true),
-            OrderStatus::Processing => $to === OrderStatus::Completed,
-            default => false,
+            OrderStatus::Submitted => [OrderStatus::Accepted, OrderStatus::Cancelled],
+            OrderStatus::Accepted => [OrderStatus::Processing, OrderStatus::Completed],
+            OrderStatus::Processing => [OrderStatus::Completed],
+            default => [],
         };
     }
 
@@ -402,7 +411,7 @@ class OrderService
     }
 
     /** @return array<string, mixed> */
-    private function resource(object $order, bool $includePrivate): array
+    private function resource(object $order, bool $includePrivate, bool $includeAllowedTransitions = false): array
     {
         $resource = [
             'id' => (string) $order->id,
@@ -423,6 +432,9 @@ class OrderService
             'couponCode' => $order->coupon_code,
             'paymentMethod' => (string) $order->payment_method,
             'createdAt' => (string) $order->created_at,
+            'allowedTransitions' => $includeAllowedTransitions
+                ? array_map(static fn (OrderStatus $status): string => $status->value, $this->allowedTransitions(OrderStatus::from((string) $order->status)))
+                : [],
         ];
         if (! $includePrivate) {
             return $resource;

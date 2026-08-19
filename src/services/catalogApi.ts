@@ -1,11 +1,31 @@
 import { apiClient, ApiError } from "./apiClient";
-import { numberField, record, stringField } from "./apiContract";
+import type { Product } from "../types";
+import { arrayField, numberField, record, stringField } from "./apiContract";
+import { mapProduct } from "./workspaceApi";
 
 export interface CatalogMediaUpload {
   id: string;
   url: string;
   mimeType: string;
   byteSize: number;
+}
+
+export interface CatalogSnapshot {
+  tenantId: string;
+  revision: number;
+  currencyCode: string;
+  products: Product[];
+}
+
+function mapCatalog(value: unknown): CatalogSnapshot {
+  const envelope = record(value, "استجابة كتالوج المتجر");
+  const dto = record(envelope.data, "كتالوج المتجر");
+  return {
+    tenantId: stringField(dto, "tenantId", "كتالوج المتجر"),
+    revision: numberField(dto, "revision", "كتالوج المتجر"),
+    currencyCode: stringField(dto, "currencyCode", "كتالوج المتجر"),
+    products: arrayField(dto, "products", "كتالوج المتجر").map(mapProduct),
+  };
 }
 
 function mapUpload(value: unknown): CatalogMediaUpload {
@@ -25,6 +45,13 @@ function mapUpload(value: unknown): CatalogMediaUpload {
 }
 
 export const catalogApi = {
+  async load(tenantId: string, signal?: AbortSignal): Promise<CatalogSnapshot> {
+    return mapCatalog(await apiClient.request(
+      `/api/merchant/stores/${encodeURIComponent(tenantId)}/catalog`,
+      { signal },
+    ));
+  },
+
   async uploadMedia(tenantId: string, file: File, signal?: AbortSignal): Promise<CatalogMediaUpload> {
     const idempotencyKey = crypto.randomUUID();
     const body = new FormData();

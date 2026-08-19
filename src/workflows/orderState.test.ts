@@ -42,15 +42,15 @@ describe("reconcileCartWithStorefront", () => {
 });
 
 describe("merchantOrderActions", () => {
-  const order = { status: "submitted" } as OrderReceipt;
+  it("renders only transitions projected by the server", () => {
+    const order = {
+      status: "submitted",
+      allowedTransitions: ["cancelled", "accepted"],
+    } as OrderReceipt;
+    expect(merchantOrderActions(order).map((action) => action.status)).toEqual(["cancelled", "accepted"]);
+  });
 
-  it.each([
-    ["submitted", ["cancelled", "accepted"]],
-    ["accepted", ["processing"]],
-    ["processing", ["completed"]],
-    ["completed", []],
-    ["cancelled", []],
-  ] as const)("returns only coordinator-approved actions for %s", (status, expected) => {
-    expect(merchantOrderActions({ ...order, status }).map((action) => action.status)).toEqual(expected);
+  it("fails closed when the response projects no transitions", () => {
+    expect(merchantOrderActions({ status: "submitted" } as OrderReceipt)).toEqual([]);
   });
 });

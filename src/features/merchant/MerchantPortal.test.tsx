@@ -48,7 +48,7 @@ function props(stores: StoreSubmission[]) {
     error: null,
     onReload: vi.fn(),
     onCreateStore: vi.fn(),
-    onOpenBuilder: vi.fn(),
+    onOpenStore: vi.fn(),
     onCorrectStore: vi.fn(),
     onPublish: vi.fn(async () => undefined),
     onUnpublish: vi.fn(async () => undefined),
@@ -73,12 +73,12 @@ describe("MerchantPortal", () => {
     const callbacks = props([rejected]);
     render(<MerchantPortal {...callbacks} />);
     expect(screen.getAllByText("أكمل رقم التواصل الصحيح").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "تصحيح الطلب" }));
     expect(callbacks.onCorrectStore).toHaveBeenCalledWith(rejected);
   });
 
-  it("opens the builder for a ready store", async () => {
+  it("opens the operations center for a ready store", async () => {
     const ready = store({
       verificationStatus: "approved",
       provisioningStatus: "active",
@@ -86,8 +86,8 @@ describe("MerchantPortal", () => {
     });
     const callbacks = props([ready]);
     render(<MerchantPortal {...callbacks} />);
-    await userEvent.click(screen.getByRole("button", { name: "إدارة المتجر" }));
-    expect(callbacks.onOpenBuilder).toHaveBeenCalledWith(ready);
+    await userEvent.click(screen.getByRole("button", { name: "فتح مركز المتجر" }));
+    expect(callbacks.onOpenStore).toHaveBeenCalledWith(ready);
   });
 
   it("shows staff module capabilities without exposing the full workspace editor", () => {
@@ -100,7 +100,7 @@ describe("MerchantPortal", () => {
 
     expect(screen.getByText("غير متاح: إعدادات وتصميم المتجر")).toBeTruthy();
     expect(screen.getByText("متاح: المنتجات")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
   });
 
   it("switches between stores without inventing lifecycle actions", async () => {
@@ -111,7 +111,8 @@ describe("MerchantPortal", () => {
     await userEvent.click(screen.getByRole("button", { name: /متجر تعز/ }));
 
     expect(screen.getByRole("heading", { name: "توقف تجهيز المتجر بأمان" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "إدارة المتجر" })).toBeNull();
+    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   });
 
   it("shows copy and open actions only for a server-confirmed public domain", async () => {

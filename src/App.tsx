@@ -25,8 +25,9 @@ import { isCentralFrontendHost } from "./app/hostRouting";
 import PublicStorefrontScreen from "./features/storefront/PublicStorefrontScreen";
 import WorkspaceRecoveryOverlays from "./features/store-builder/WorkspaceRecoveryOverlays";
 import MerchantPortal from "./features/merchant/MerchantPortal";
+import MerchantStoreOperations from "./components/MerchantStoreOperations";
 import { useUiAdapters } from "./adapters/UiAdaptersContext";
-import { parseCentralRoute, pushCentralPath, replaceCentralPath } from "./app/centralNavigation";
+import { merchantStorePath, parseCentralRoute, pushCentralPath, replaceCentralPath, type MerchantStoreSection } from "./app/centralNavigation";
 import {
   isUiError,
   isUiErrorCode,
@@ -169,6 +170,7 @@ export default function App() {
   const [merchantStores, setMerchantStores] = useState<StoreSubmission[]>([]);
   const [merchantStoresLoading, setMerchantStoresLoading] = useState(false);
   const [merchantStoresError, setMerchantStoresError] = useState<string | null>(null);
+  const [merchantStoreRoute, setMerchantStoreRoute] = useState<{ tenantId: string; section: MerchantStoreSection } | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<StoreWorkspace | null>(null);
   const [activeDraft, setActiveDraft] = useState<StoreDraft | null>(null);
   const [localDraft, setLocalDraft] = useState<StoreConfig | null>(null);
@@ -271,7 +273,7 @@ export default function App() {
         setAuthUser(profile);
         if (!isCentralFrontendHost(window.location.hostname)) return;
         if (!profile) {
-          if (["merchant", "merchant-new", "merchant-design", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
+          if (["merchant", "merchant-new", "merchant-store", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
           return;
         }
 
@@ -285,7 +287,10 @@ export default function App() {
 
         if (initialRoute.name === "admin" || initialRoute.name === "auth-flow") return;
 
-        const requestedTenantId = initialRoute.name === "merchant-design" ? initialRoute.tenantId : undefined;
+        const builderSections: MerchantStoreSection[] = ["design", "checkout", "pages"];
+        const requestedTenantId = initialRoute.name === "merchant-store" && builderSections.includes(initialRoute.section)
+          ? initialRoute.tenantId
+          : undefined;
         const outcome = await restoreMerchantState(profile, requestedTenantId);
         if (outcome.status === "error") {
           if (outcome.sessionActive) {
@@ -305,9 +310,19 @@ export default function App() {
           await openMerchantCorrectionById(initialRoute.tenantId, profile);
           return;
         }
-        if (requestedTenantId && outcome.loadedTenantId === requestedTenantId) {
-          setView("builder");
-          replaceCentralPath(`/app/stores/${encodeURIComponent(requestedTenantId)}/design`);
+        if (initialRoute.name === "merchant-store") {
+          const requestedStore = outcome.stores.find((store) => store.id === initialRoute.tenantId) ?? null;
+          const requiredCapabilities = requestedStore?.capabilities.workspaceManage;
+          if (builderSections.includes(initialRoute.section) && outcome.loadedTenantId === initialRoute.tenantId && requiredCapabilities) {
+            setActiveTab(initialRoute.section === "products" ? "products" : initialRoute.section);
+            setView("builder");
+            replaceCentralPath(merchantStorePath(initialRoute.tenantId, initialRoute.section));
+            return;
+          }
+          const safeSection = builderSections.includes(initialRoute.section) ? "overview" : initialRoute.section;
+          setMerchantStoreRoute({ tenantId: initialRoute.tenantId, section: safeSection });
+          setView("merchant_store");
+          replaceCentralPath(merchantStorePath(initialRoute.tenantId, safeSection));
           return;
         }
         setView("merchant_dashboard");
@@ -316,7 +331,7 @@ export default function App() {
       .catch(() => {
         setAuthUser(null);
         resetTenantOwnedState();
-        if (["merchant", "merchant-new", "merchant-design", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
+        if (["merchant", "merchant-new", "merchant-store", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
       });
 
     // Dedicated Admin Route Check (/admin or #admin)
@@ -378,6 +393,7 @@ export default function App() {
     setMerchantStores([]);
     setMerchantStoresLoading(false);
     setMerchantStoresError(null);
+    setMerchantStoreRoute(null);
     setRegisteredUser(null);
     setConfig(tenantSafeConfig(localDraft));
     setCart([]);
@@ -502,15 +518,15 @@ export default function App() {
   const restoreMerchantState = async (
     user: UserProfile,
     requestedTenantId?: string,
-  ): Promise<{ status: MerchantRestoreResult; loadedTenantId: string | null; sessionActive: boolean }> => {
+  ): Promise<{ status: MerchantRestoreResult; loadedTenantId: string | null; sessionActive: boolean; stores: StoreSubmission[] }> => {
     const restoreSequence = ++merchantRestoreSequence.current;
     setMerchantStoresLoading(true);
     setMerchantStoresError(null);
     try {
       const stores = await provisioning.listStores();
-      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
+      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true, stores: [] };
       setMerchantStores(stores);
-      if (stores.length === 0) return { status: classifyMerchantRestore(0), loadedTenantId: null, sessionActive: true };
+      if (stores.length === 0) return { status: classifyMerchantRestore(0), loadedTenantId: null, sessionActive: true, stores };
 
       const fallback = stores[0];
       setRegisteredUser(merchantProfile(user, fallback));
@@ -524,12 +540,12 @@ export default function App() {
       let loadedTenantId: string | null = null;
       if (selected) {
         if (await loadMerchantWorkspace(selected, user)) loadedTenantId = selected.id;
-        if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
+        if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true, stores: [] };
       }
 
-      return { status: classifyMerchantRestore(stores.length), loadedTenantId, sessionActive: true };
+      return { status: classifyMerchantRestore(stores.length), loadedTenantId, sessionActive: true, stores };
     } catch (requestError) {
-      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true };
+      if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true, stores: [] };
       const sessionActive = !isUiError(requestError, "unauthenticated");
       if (!sessionActive) {
         setAuthUser(null);
@@ -538,7 +554,7 @@ export default function App() {
       const message = uiErrorMessage(requestError, "تعذر استعادة متاجر الحساب من الخادم.");
       setMerchantStoresError(message);
       triggerToast(message, "error");
-      return { status: classifyMerchantRestore(0, true), loadedTenantId: null, sessionActive };
+      return { status: classifyMerchantRestore(0, true), loadedTenantId: null, sessionActive, stores: [] };
     } finally {
       if (restoreSequence === merchantRestoreSequence.current) setMerchantStoresLoading(false);
     }
@@ -922,6 +938,15 @@ export default function App() {
     triggerToast("تم تسجيل الخروج وإنهاء جلسة الحساب بنجاح 🛡️", "info");
   };
 
+  const handleMerchantSessionExpired = () => {
+    setAuthUser(null);
+    resetTenantOwnedState();
+    setView("landing");
+    replaceCentralPath("/");
+    setIsLogoutConfirmOpen(false);
+    triggerToast("انتهت الجلسة. سجّل الدخول مجددًا لمتابعة إدارة متجرك.", "error");
+  };
+
   // Actual backend AI Generation call
   const runAiGenerationDirectly = async (promptText: string) => {
     if (workspaceEditorLocked || workspaceConflictReview) {
@@ -1159,14 +1184,15 @@ export default function App() {
     inventoryRequestPending.current = true;
     setInventoryPending(true);
     try {
-      const item = await inventoryActions.updatePolicy(
+      const result = await inventoryActions.updatePolicy(
         tenantId,
         productId,
         product.inventoryRevision,
         manageStock,
         lowStockThreshold,
       );
-      if (!mergeInventoryItems(tenantId, operation, [item])) return false;
+      const items = result.replayed ? await inventoryActions.load(tenantId) : [result.item];
+      if (!mergeInventoryItems(tenantId, operation, items)) return false;
       triggerToast("تم حفظ سياسة تتبع المخزون.", "success");
       return true;
     } catch (error) {
@@ -1290,31 +1316,51 @@ export default function App() {
     triggerToast("تم فتح نافذة المعاينة المباشرة لصفحة الشراء والدفع! 💳", "success");
   };
 
+  const discardRecoverableWorkspace = () => {
+    workspaceEditGeneration.current += 1;
+    if (activeWorkspace) setConfig(activeWorkspace.config);
+    else if (activeDraft) setConfig(activeDraft.config as unknown as StoreConfig);
+    setPendingArchivedProductIds([]);
+    setWorkspaceConflict(null);
+    setWorkspaceConflictReview(null);
+  };
+
   const openMerchantPortal = () => {
     if (recoverableWorkspaceChanges) {
       const confirmed = window.confirm("توجد تعديلات غير محفوظة في المحرر. الرجوع إلى بوابة التاجر سيتجاهلها. هل تريد المتابعة؟");
       if (!mayDiscardDirtyWorkspace(true, confirmed)) return;
-      workspaceEditGeneration.current += 1;
-      if (activeWorkspace) setConfig(activeWorkspace.config);
-      else if (activeDraft) setConfig(activeDraft.config as unknown as StoreConfig);
-      setPendingArchivedProductIds([]);
-      setWorkspaceConflict(null);
-      setWorkspaceConflictReview(null);
+      discardRecoverableWorkspace();
     }
     invalidateDraftContext();
+    setMerchantStoreRoute(null);
     setView("merchant_dashboard");
     pushCentralPath("/app");
   };
 
-  const openMerchantBuilder = async (store: StoreSubmission) => {
-    if (!authUser || store.verificationStatus !== "approved" || store.provisioningStatus !== "active" || !store.capabilities.workspaceManage) return;
+  const openMerchantStore = (store: StoreSubmission, section: MerchantStoreSection = "overview") => {
+    invalidateDraftContext();
+    setMerchantStoreRoute({ tenantId: store.id, section });
+    setView("merchant_store");
+    pushCentralPath(merchantStorePath(store.id, section));
+  };
+
+  const openMerchantBuilder = async (
+    store: StoreSubmission,
+    section: Extract<MerchantStoreSection, "products" | "design" | "checkout" | "pages"> = "design",
+  ) => {
+    const canOpen = section === "products"
+      ? store.capabilities.workspaceManage && store.capabilities.catalogManage
+      : store.capabilities.workspaceManage;
+    if (!authUser || store.verificationStatus !== "approved" || store.provisioningStatus !== "active" || !canOpen) return;
     invalidateDraftContext();
     try {
       const loaded = activeWorkspace?.tenantId === store.id || await loadMerchantWorkspace(store, authUser);
       if (!loaded) return;
       setActiveDraft(null);
+      setActiveTab(section === "products" ? "products" : section);
+      setMerchantStoreRoute({ tenantId: store.id, section });
       setView("builder");
-      pushCentralPath(`/app/stores/${encodeURIComponent(store.id)}/design`);
+      pushCentralPath(merchantStorePath(store.id, section));
     } catch (requestError) {
       if (isUiError(requestError, "aborted")) return;
       triggerToast(uiErrorMessage(requestError, "تعذر فتح مساحة عمل المتجر."), "error");
@@ -1385,11 +1431,7 @@ export default function App() {
             if (activeWorkspace) pushCentralPath(`/app/stores/${encodeURIComponent(activeWorkspace.tenantId)}/design`);
             return;
           }
-          workspaceEditGeneration.current += 1;
-          if (activeWorkspace) setConfig(activeWorkspace.config);
-          setPendingArchivedProductIds([]);
-          setWorkspaceConflict(null);
-          setWorkspaceConflictReview(null);
+          discardRecoverableWorkspace();
         }
         setView("merchant_dashboard");
       } else if (route.name === "merchant-new" && authUser) {
@@ -1399,9 +1441,32 @@ export default function App() {
       } else if (route.name === "landing") {
         setView(authUser ? "merchant_dashboard" : "landing");
         if (authUser) replaceCentralPath("/app");
-      } else if (route.name === "merchant-design" && authUser) {
+      } else if (route.name === "merchant-store" && authUser) {
         const store = merchantStores.find((candidate) => candidate.id === route.tenantId);
-        if (store) void openMerchantBuilder(store);
+        const builderRoute = ["design", "checkout", "pages"].includes(route.section);
+        const canOpenBuilder = Boolean(store?.capabilities.workspaceManage);
+        if (view === "builder" && recoverableWorkspaceChanges
+          && (route.tenantId !== activeWorkspace?.tenantId || !builderRoute)) {
+          const confirmed = window.confirm("توجد تعديلات غير محفوظة في المحرر. الانتقال سيهملها. هل تريد المتابعة؟");
+          if (!mayDiscardDirtyWorkspace(true, confirmed)) {
+            const currentSection = merchantStoreRoute?.section ?? "design";
+            pushCentralPath(merchantStorePath(activeWorkspace?.tenantId ?? route.tenantId, currentSection));
+            return;
+          }
+          discardRecoverableWorkspace();
+        }
+        if (!store) {
+          setMerchantStoreRoute({ tenantId: route.tenantId, section: route.section });
+          setView("merchant_store");
+        } else if (builderRoute && canOpenBuilder
+          && store.verificationStatus === "approved" && store.provisioningStatus === "active") {
+          void openMerchantBuilder(store, route.section as "products" | "design" | "checkout" | "pages");
+        } else {
+          const safeSection = builderRoute ? "overview" : route.section;
+          setMerchantStoreRoute({ tenantId: store.id, section: safeSection });
+          setView("merchant_store");
+          if (safeSection !== route.section) replaceCentralPath(merchantStorePath(store.id, safeSection));
+        }
       } else if (route.name === "merchant-correction" && authUser) {
         const store = merchantStores.find((candidate) => candidate.id === route.tenantId);
         if (store) void openMerchantCorrection(store);
@@ -1409,7 +1474,7 @@ export default function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [authUser, merchantStores, activeWorkspace, recoverableWorkspaceChanges]);
+  }, [authUser, merchantStores, activeWorkspace, merchantStoreRoute, recoverableWorkspaceChanges, view]);
 
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
@@ -1445,13 +1510,37 @@ export default function App() {
               if (restored !== null) setView(restored ? "builder" : "templates");
             });
           }}
-          onOpenBuilder={(store) => void openMerchantBuilder(store)}
+          onOpenStore={openMerchantStore}
           onCorrectStore={(store) => void openMerchantCorrection(store)}
           onPublish={(store) => publishMerchantStore(store)}
           onUnpublish={(store) => unpublishMerchantStore(store)}
           onLogout={handleLogout}
           onCopyPublicUrl={(url) => void copyPublicStoreUrl(url)}
         />
+      )}
+
+      {view === "merchant_store" && authUser && merchantStoreRoute && (
+        <React.Fragment key={merchantStoreRoute.tenantId}>
+          <MerchantStoreOperations
+            user={authUser}
+            store={merchantStores.find((store) => store.id === merchantStoreRoute.tenantId) ?? null}
+            section={merchantStoreRoute.section}
+            onBack={openMerchantPortal}
+            onNavigate={(section) => {
+              setMerchantStoreRoute((current) => current ? { ...current, section } : current);
+              pushCentralPath(merchantStorePath(merchantStoreRoute.tenantId, section));
+            }}
+            onOpenBuilder={(section) => {
+              const store = merchantStores.find((candidate) => candidate.id === merchantStoreRoute.tenantId);
+              if (store) void openMerchantBuilder(store, section);
+            }}
+            onPublish={(store) => publishMerchantStore(store)}
+            onUnpublish={(store) => unpublishMerchantStore(store)}
+            onCopyPublicUrl={(url) => void copyPublicStoreUrl(url)}
+            onLogout={handleLogout}
+            onSessionExpired={handleMerchantSessionExpired}
+          />
+        </React.Fragment>
       )}
 
       <WorkspaceRecoveryOverlays

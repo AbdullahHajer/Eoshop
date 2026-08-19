@@ -12,17 +12,17 @@ interface MerchantOrdersPanelProps {
 }
 
 export default function MerchantOrdersPanel({ orders, loading, error, pendingOrderIds, actionsFor, onAdvance }: MerchantOrdersPanelProps) {
+  const mutationPending = pendingOrderIds.size > 0;
   return (
     <div className="space-y-4 p-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="font-black text-slate-900">الطلبات المسجلة على الخادم</h3>
         <p className="mt-1 text-xs text-slate-500">الأسعار والحالات وحركات المخزون المعروضة هنا مصدرها الخادم.</p>
       </div>
-      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{error}</div>}
+      {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{error}</div>}
       {loading && <div className="p-4 text-center text-xs font-bold text-slate-500">جارٍ تحميل الطلبات...</div>}
       {!loading && orders.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">لا توجد طلبات مسجلة بعد.</div>}
       {orders.map((order) => {
-        const transitionPending = pendingOrderIds.has(order.id);
         return (
           <div key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -38,7 +38,7 @@ export default function MerchantOrdersPanel({ orders, loading, error, pendingOrd
                 {actionsFor(order).map((action) => (
                   <button
                     key={action.status}
-                    disabled={transitionPending}
+                    disabled={loading || mutationPending}
                     onClick={() => onAdvance(order, action.status)}
                     className={action.tone === "danger"
                       ? "rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"

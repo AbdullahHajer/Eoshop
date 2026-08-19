@@ -7,6 +7,7 @@ use App\Enums\DomainReservationOrigin;
 use App\Enums\DomainReservationStatus;
 use App\Enums\InventoryActorType;
 use App\Enums\OrderStatus;
+use App\Enums\PermissionKey;
 use App\Enums\ProvisioningSchemaOrigin;
 use App\Enums\ProvisioningState;
 use App\Enums\PublicationRequestOrigin;
@@ -22,6 +23,7 @@ use App\Enums\UserStatus;
 use App\Exceptions\InventoryConflict;
 use App\Exceptions\OrderConflict;
 use App\Models\DomainReservation;
+use App\Models\Permission;
 use App\Models\ProvisioningRun;
 use App\Models\PublicationRequest;
 use App\Models\Role;
@@ -282,9 +284,43 @@ class StoreWorkspaceTest extends TestCase
             ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders")
             ->assertOk()
             ->assertJsonPath('data.items.0.id', $orderId)
+            ->assertJsonPath('data.items.0.allowedTransitions.0', OrderStatus::Accepted->value)
+            ->assertJsonPath('data.items.0.allowedTransitions.1', OrderStatus::Cancelled->value)
             ->json('data.items.0');
         $this->assertArrayNotHasKey('customer', $list);
         $this->assertArrayNotHasKey('address', $list);
+
+        $viewer = $this->user('order-viewer@example.test');
+        $viewerRole = Role::query()->create([
+            'key' => 'tenant_order_viewer_'.Str::lower(Str::random(8)),
+            'name' => 'Tenant order viewer',
+            'scope' => RoleScope::Tenant,
+            'system' => false,
+        ]);
+        $this->roleIds[] = (int) $viewerRole->id;
+        $viewerRole->permissions()->attach(
+            Permission::query()->where('key', PermissionKey::TenantOrdersView->value)->firstOrFail(),
+            ['scope' => RoleScope::Tenant->value],
+        );
+        app(RoleAssignmentService::class)->assignTenantRole($tenant, $viewer, $viewerRole, $owner);
+        Auth::forgetGuards();
+        $this->flushSession();
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($viewer)
+            ->getJson($centralOrdersUrl)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.allowedTransitions', []);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($viewer)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->patchJson("{$centralOrdersUrl}/{$orderId}/status", [
+                'status' => OrderStatus::Accepted->value,
+                'reasonCode' => 'viewer_must_not_transition',
+            ])
+            ->assertForbidden();
+        Auth::forgetGuards();
+        $this->flushSession();
+
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}")
@@ -301,7 +337,9 @@ class StoreWorkspaceTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.replayed', false)
-            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value);
+            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value)
+            ->assertJsonPath('data.order.allowedTransitions.0', OrderStatus::Processing->value)
+            ->assertJsonPath('data.order.allowedTransitions.1', OrderStatus::Completed->value);
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->withHeaders(['Idempotency-Key' => $transitionKey])
@@ -311,7 +349,9 @@ class StoreWorkspaceTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.replayed', true)
-            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value);
+            ->assertJsonPath('data.order.status', OrderStatus::Accepted->value)
+            ->assertJsonPath('data.order.allowedTransitions.0', OrderStatus::Processing->value)
+            ->assertJsonPath('data.order.allowedTransitions.1', OrderStatus::Completed->value);
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->withHeaders(['Idempotency-Key' => $transitionKey])
