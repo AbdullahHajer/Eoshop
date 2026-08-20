@@ -110,7 +110,7 @@ Replace the remaining checkout and content prototype panels with focused, truthf
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact evidence and retained gateway/contact/legal-page debt.
+- [x] Record exact evidence and retained gateway/contact/legal-page debt.
 - [x] Obtain final independent read-only approval.
 - [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
