@@ -1,6 +1,7 @@
 import type { Coupon, EWallet, Product, StoreConfig } from "../types";
 import { apiClient, ApiError } from "./apiClient";
 import { arrayField, enumField, numberField, record, stringField } from "./apiContract";
+import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
 
 export interface StoreWorkspace {
   tenantId: string;
@@ -155,7 +156,7 @@ export function mapStoreConfig(value: unknown): StoreConfig {
     if (/^(?:data|blob):/i.test(config[key] ?? "")) config[key] = "";
   }
 
-  return config;
+  return sanitizeCheckoutConfig(config);
 }
 
 function mapWorkspace(value: unknown): StoreWorkspace {

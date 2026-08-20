@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Support\CheckoutPolicyContract;
+use App\Support\StoreContactTarget;
 use App\Support\TenantWorkspaceReadiness;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -248,19 +249,50 @@ class StoreWorkspaceService
         $config['currency'] = $catalog['currencyCode'];
         if ($public) {
             unset($config['customCoupons']);
+            $config['enableOnlineCard'] = false;
+            $config['enableApplePay'] = false;
+            $config['enableStcPay'] = false;
             if (! CheckoutPolicyContract::bankIsUsable($config)) {
                 $config['enableBankTransfer'] = false;
                 unset($config['bankName'], $config['bankAccountName'], $config['bankIban'], $config['bankAccountNumber']);
             }
+            $seenWalletIds = [];
             $wallets = array_values(array_filter(
                 is_array($config['customWallets'] ?? null) ? $config['customWallets'] : [],
-                static fn (mixed $wallet): bool => is_array($wallet) && CheckoutPolicyContract::walletIsUsable($wallet),
+                static function (mixed $wallet) use (&$seenWalletIds): bool {
+                    if (! is_array($wallet) || ! CheckoutPolicyContract::walletIsUsable($wallet)) {
+                        return false;
+                    }
+                    $id = mb_strtolower(trim((string) $wallet['id']));
+                    if (isset($seenWalletIds[$id])) {
+                        return false;
+                    }
+                    $seenWalletIds[$id] = true;
+
+                    return true;
+                },
             ));
             if (($config['enableEWallets'] ?? false) !== true || $wallets === []) {
                 $config['enableEWallets'] = false;
                 unset($config['customWallets']);
             } else {
                 $config['customWallets'] = $wallets;
+            }
+            foreach (['phone', 'whatsapp'] as $field) {
+                $normalized = StoreContactTarget::normalize($config[$field] ?? null);
+                if ($normalized === null) {
+                    unset($config[$field]);
+                } else {
+                    $config[$field] = $normalized;
+                }
+            }
+            if (filter_var($config['email'] ?? null, FILTER_VALIDATE_EMAIL) === false) {
+                unset($config['email']);
+            }
+            foreach (['address', 'workingHours'] as $field) {
+                if (trim((string) ($config[$field] ?? '')) === '') {
+                    unset($config[$field]);
+                }
             }
         }
 

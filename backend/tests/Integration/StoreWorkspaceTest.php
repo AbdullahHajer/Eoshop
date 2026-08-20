@@ -152,6 +152,15 @@ class StoreWorkspaceTest extends TestCase
             $this->assertSame(1, DB::table('products')->count());
             $config = json_decode((string) DB::table('store_configs')->where('is_current', true)->value('config_json'), true, 512, JSON_THROW_ON_ERROR);
             $this->assertArrayNotHasKey('products', $config);
+            $config['enableOnlineCard'] = true;
+            $config['enableApplePay'] = true;
+            $config['enableStcPay'] = true;
+            $config['phone'] = '0500000000';
+            $config['whatsapp'] = '770000000';
+            $config['email'] = 'not-an-email';
+            DB::table('store_configs')->where('is_current', true)->update([
+                'config_json' => json_encode($config, JSON_THROW_ON_ERROR),
+            ]);
         });
 
         $public = $this->getJson("http://{$domain}/api/store/config")
@@ -161,6 +170,12 @@ class StoreWorkspaceTest extends TestCase
             ->json('data.config');
         $this->assertArrayNotHasKey('customCoupons', $public);
         $this->assertFalse($public['enableBankTransfer']);
+        $this->assertFalse($public['enableOnlineCard']);
+        $this->assertFalse($public['enableApplePay']);
+        $this->assertFalse($public['enableStcPay']);
+        $this->assertArrayNotHasKey('phone', $public);
+        $this->assertArrayNotHasKey('whatsapp', $public);
+        $this->assertArrayNotHasKey('email', $public);
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
         $this->assertFalse(tenancy()->initialized);
     }
@@ -192,6 +207,59 @@ class StoreWorkspaceTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('config.bankAccountNumber');
         $tenant->run(fn () => $this->assertSame(1, (int) DB::table('store_configs')->where('is_current', true)->value('revision')));
+    }
+
+    public function test_workspace_rejects_overprecise_coupons_and_a_saved_precise_coupon_prices_checkout(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('coupon-precision');
+        $initial = $this->actingAs($owner)
+            ->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->json('data');
+        $product = [
+            ...$this->product('COUPON-PRECISION'),
+            'id' => $initial['config']['products'][0]['id'],
+            'revision' => $initial['config']['products'][0]['revision'],
+        ];
+        $invalid = $this->config('Coupon precision', [$product]);
+        $invalid['customCoupons'][0]['discountPercent'] = 10.123;
+
+        $this->actingAs($owner)
+            ->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+                'revision' => $initial['revision'],
+                'catalogRevision' => $initial['catalogRevision'],
+                'config' => $invalid,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('config.customCoupons.0.discountPercent');
+
+        $valid = $invalid;
+        $valid['customCoupons'][0]['discountPercent'] = 10.12;
+        $saved = $this->actingAs($owner)
+            ->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+                'revision' => $initial['revision'],
+                'catalogRevision' => $initial['catalogRevision'],
+                'config' => $valid,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.revision', 2)
+            ->assertJsonPath('data.catalogRevision', 2)
+            ->json('data');
+
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                'workspaceRevision' => $saved['revision'],
+                'catalogRevision' => $saved['catalogRevision'],
+                'lines' => [['productId' => $saved['config']['products'][0]['id'], 'quantity' => 1]],
+                'couponCode' => 'SAVE10',
+                'payment' => ['method' => 'cod'],
+                'customer' => ['name' => 'Coupon Customer', 'phone' => '+967700000002'],
+                'address' => ['city' => 'Sanaa', 'area' => 'Old City', 'details' => 'Gate 2'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.order.totals.itemsSubtotalMinor', 1250)
+            ->assertJsonPath('data.order.totals.discountMinor', 127)
+            ->assertJsonPath('data.order.totals.grandTotalMinor', 1891);
     }
 
     public function test_inventory_adjustment_is_atomic_revisioned_and_idempotent(): void
@@ -262,6 +330,9 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('data.order.totals.taxMinor', 338)
             ->assertJsonPath('data.order.totals.paymentFeeMinor', 100)
             ->assertJsonPath('data.order.totals.grandTotalMinor', 3188)
+            ->assertJsonPath('data.order.checkoutPresentation.title', 'Original receipt title')
+            ->assertJsonPath('data.order.checkoutPresentation.message', 'Original receipt message')
+            ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', '+967700000000')
             ->json('data');
         $orderId = (string) $created['order']['id'];
         $additionalProductId = $this->addInventoryProduct($tenant, 'ORDER-APPEND-GUARD', 5);
@@ -273,11 +344,26 @@ class StoreWorkspaceTest extends TestCase
         Auth::forgetGuards();
         $this->flushSession();
 
+        $tenant->run(function (): void {
+            $row = DB::table('store_configs')->where('is_current', true)->firstOrFail();
+            $config = json_decode((string) $row->config_json, true, 512, JSON_THROW_ON_ERROR);
+            $config['thankYouTitle'] = 'Changed after checkout';
+            $config['thankYouMessage'] = 'Changed message';
+            $config['enableWhatsAppNotification'] = false;
+            DB::table('store_configs')->where('id', $row->id)->update([
+                'config_json' => json_encode($config, JSON_THROW_ON_ERROR),
+                'revision' => 2,
+            ]);
+        });
+
         $this->withHeaders(['Idempotency-Key' => $key])
             ->postJson("http://{$domain}/api/store/orders", $payload)
             ->assertCreated()
             ->assertJsonPath('data.replayed', true)
-            ->assertJsonPath('data.order.id', $orderId);
+            ->assertJsonPath('data.order.id', $orderId)
+            ->assertJsonPath('data.order.checkoutPresentation.title', 'Original receipt title')
+            ->assertJsonPath('data.order.checkoutPresentation.message', 'Original receipt message')
+            ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', '+967700000000');
 
         $tenant->run(function () use ($orderId, $productId): void {
             $this->assertSame(1, DB::table('orders')->where('id', $orderId)->count());
@@ -461,12 +547,62 @@ class StoreWorkspaceTest extends TestCase
             ->postJson("http://{$domain}/api/store/orders", [
                 ...$base,
                 'workspaceRevision' => 1,
+                'payment' => ['method' => 'bank_transfer'],
+            ])->assertUnprocessable()->assertJsonValidationErrors('payment.reference');
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                ...$base,
+                'workspaceRevision' => 1,
                 'lines' => [['productId' => $productId, 'quantity' => 11]],
             ])->assertConflict()->assertJsonPath('code', 'order_stock_conflict');
         $tenant->run(function (): void {
             $this->assertSame(0, DB::table('orders')->count());
             $this->assertSame(0, DB::table('inventory_reservations')->where('reference_type', 'order')->count());
         });
+    }
+
+    public function test_legacy_order_result_without_checkout_presentation_replays_neutral_fallback(): void
+    {
+        [$tenant, , $domain] = $this->readyTenant('order-legacy-presentation');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $key = (string) Str::uuid();
+        $payload = [
+            'workspaceRevision' => 1,
+            'catalogRevision' => 1,
+            'lines' => [['productId' => $bootstrap['config']['products'][0]['id'], 'quantity' => 1]],
+            'payment' => ['method' => 'cod'],
+            'customer' => ['name' => 'Legacy Result Customer', 'phone' => '+967700000011'],
+            'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Legacy result gate'],
+        ];
+
+        $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("http://{$domain}/api/store/orders", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.replayed', false);
+
+        $tenant->run(function () use ($key): void {
+            $operationId = (string) DB::table('order_operations')->where('idempotency_key', $key)->value('id');
+            $stored = DB::table('order_operation_results')->where('operation_id', $operationId)->value('response_json');
+            $result = is_array($stored) ? $stored : json_decode((string) $stored, true, 512, JSON_THROW_ON_ERROR);
+            unset($result['order']['checkoutPresentation']);
+
+            DB::unprepared('ALTER TABLE order_operation_results DISABLE TRIGGER order_operation_results_immutable');
+            try {
+                DB::table('order_operation_results')->where('operation_id', $operationId)->update([
+                    'response_json' => json_encode($result, JSON_THROW_ON_ERROR),
+                ]);
+            } finally {
+                DB::unprepared('ALTER TABLE order_operation_results ENABLE TRIGGER order_operation_results_immutable');
+            }
+        });
+
+        $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("http://{$domain}/api/store/orders", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.replayed', true)
+            ->assertJsonPath('data.order.checkoutPresentation.title', 'تم استلام طلبك')
+            ->assertJsonPath('data.order.checkoutPresentation.message', 'احتفظ برقم الطلب للمتابعة مع المتجر.')
+            ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', null);
     }
 
     public function test_checkout_flag_does_not_take_storefront_browsing_offline(): void
@@ -1209,6 +1345,20 @@ class StoreWorkspaceTest extends TestCase
             ])
             ->assertUnprocessable();
 
+        Auth::forgetGuards();
+        $this->flushSession();
+        $invalidContact = $this->config('Invalid contact', []);
+        $invalidContact['phone'] = '+()-----';
+        $invalidContact['whatsapp'] = '+()-----';
+        $this->actingAs($owner)
+            ->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+                'revision' => 1,
+                'catalogRevision' => 1,
+                'config' => $invalidContact,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['config.phone', 'config.whatsapp']);
+
         DB::connection((string) config('tenancy.database.central_connection'))
             ->table('tenant_user')
             ->where('tenant_id', $tenant->id)
@@ -1557,12 +1707,14 @@ class StoreWorkspaceTest extends TestCase
             ->assertOk()->json('data');
         $workspace['config']['logoType'] = 'image';
         $workspace['config']['logoUrl'] = $first['url'];
+        $workspace['config']['aboutImage'] = $first['url'];
         $bound = $this->actingAs($owner)
             ->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
                 'revision' => $workspace['revision'],
                 'catalogRevision' => $workspace['catalogRevision'],
                 'config' => $workspace['config'],
             ])->assertOk()->json('data');
+        $this->assertSame($first['url'], $bound['config']['aboutImage']);
 
         Auth::forgetGuards();
         $this->flushSession();
@@ -1578,6 +1730,7 @@ class StoreWorkspaceTest extends TestCase
 
         $bound['config']['logoType'] = 'icon';
         $bound['config']['logoUrl'] = '';
+        $bound['config']['aboutImage'] = '';
         $this->actingAs($owner)
             ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/workspace", [
                 'revision' => $bound['revision'],
@@ -2621,6 +2774,10 @@ class StoreWorkspaceTest extends TestCase
             'enableEWallets' => false,
             'enableCoupons' => true,
             'customCoupons' => [['code' => 'SAVE10', 'discountPercent' => 10, 'active' => true]],
+            'thankYouTitle' => 'Original receipt title',
+            'thankYouMessage' => 'Original receipt message',
+            'enableWhatsAppNotification' => true,
+            'whatsapp' => '+967700000000',
         ];
     }
 

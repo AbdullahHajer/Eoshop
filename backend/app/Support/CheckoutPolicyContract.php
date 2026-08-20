@@ -29,9 +29,10 @@ final class CheckoutPolicyContract
     public static function walletIsUsable(array $wallet): bool
     {
         $account = trim((string) ($wallet['accountNumber'] ?? ''));
+        $id = trim((string) ($wallet['id'] ?? ''));
 
         return ($wallet['active'] ?? false) === true
-            && trim((string) ($wallet['id'] ?? '')) !== ''
+            && preg_match('/^[a-z0-9][a-z0-9_-]{0,99}$/', $id) === 1
             && trim((string) ($wallet['name'] ?? '')) !== ''
             && $account !== ''
             && trim((string) ($wallet['accountName'] ?? '')) !== ''
@@ -61,6 +62,13 @@ final class CheckoutPolicyContract
             $valid = array_filter($active, self::walletIsUsable(...));
             if (count($valid) !== count($active) || $valid === []) {
                 $validator->errors()->add('config.customWallets', 'Enabled wallets require at least one complete active wallet account.');
+            }
+            $ids = array_map(
+                static fn (array $wallet): string => mb_strtolower(trim((string) ($wallet['id'] ?? ''))),
+                $active,
+            );
+            if (count($ids) !== count(array_unique($ids))) {
+                $validator->errors()->add('config.customWallets', 'Enabled wallet identifiers must be unique.');
             }
         }
     }

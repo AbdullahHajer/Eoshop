@@ -2,6 +2,7 @@ import type { StoreConfig } from "../types";
 import { apiClient, ApiError } from "./apiClient";
 import { arrayField, enumField, numberField, record, stringField } from "./apiContract";
 import { mapStoreConfig } from "./workspaceApi";
+import { canonicalContactTarget, neutralCheckoutPresentation } from "../contracts/checkoutPolicy";
 
 export interface StorefrontBootstrap {
   workspaceRevision: number;
@@ -24,6 +25,11 @@ export interface OrderReceipt {
     grandTotalMinor: number;
   };
   createdAt: string;
+  checkoutPresentation: {
+    title: string;
+    message: string;
+    whatsappTarget: string | null;
+  };
   allowedTransitions?: Array<"accepted" | "processing" | "completed" | "cancelled">;
   items?: Array<{
     productId: string;
@@ -64,6 +70,19 @@ function nonNegativeIntegerField(source: Record<string, unknown>, key: string, c
 function mapReceipt(value: unknown): OrderReceipt {
   const dto = record(value, "إيصال الطلب");
   const totals = record(dto.totals, "إجماليات الطلب");
+  const presentation = dto.checkoutPresentation === undefined
+    ? { ...neutralCheckoutPresentation }
+    : (() => {
+      const item = record(dto.checkoutPresentation, "عرض إيصال الطلب");
+      const target = item.whatsappTarget;
+      if (target !== null && typeof target !== "string") return invalid("عرض إيصال الطلب");
+      if (typeof target === "string" && canonicalContactTarget(target) !== target) return invalid("عرض إيصال الطلب");
+      return {
+        title: stringField(item, "title", "عرض إيصال الطلب"),
+        message: stringField(item, "message", "عرض إيصال الطلب"),
+        whatsappTarget: target as string | null,
+      };
+    })();
   const receipt: OrderReceipt = {
     id: stringField(dto, "id", "إيصال الطلب"),
     number: stringField(dto, "number", "إيصال الطلب"),
@@ -79,6 +98,7 @@ function mapReceipt(value: unknown): OrderReceipt {
       grandTotalMinor: nonNegativeIntegerField(totals, "grandTotalMinor", "إجماليات الطلب"),
     },
     createdAt: stringField(dto, "createdAt", "إيصال الطلب"),
+    checkoutPresentation: presentation,
   };
   if (dto.allowedTransitions !== undefined) {
     const transitions = arrayField(dto, "allowedTransitions", "انتقالات الطلب");
