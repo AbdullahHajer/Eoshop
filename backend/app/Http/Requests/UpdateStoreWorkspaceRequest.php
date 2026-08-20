@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Support\CheckoutPolicyContract;
 use App\Support\ProductCatalogContract;
 use App\Support\StoreAssetPath;
+use App\Support\StoreContactTarget;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -40,7 +41,6 @@ class UpdateStoreWorkspaceRequest extends FormRequest
         $longText = ['nullable', 'string', 'max:5000'];
         $money = ['nullable', 'numeric', 'min:0', 'max:999999999.99'];
         $boolean = ['nullable', 'boolean'];
-        $httpUrl = self::appearanceUrlRules(null);
         $managedAppearanceUrl = self::appearanceUrlRules($managedTenantId);
 
         return [
@@ -64,16 +64,16 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             'config.themeStyle' => ['required', Rule::in(['elegant', 'tech'])],
             'config.bannerText' => ['required', 'string', 'max:1000'],
             'config.fontFamily' => ['required', 'string', 'max:100'],
-            'config.phone' => ['required', 'string', 'max:50'],
+            'config.phone' => ['nullable', 'string', 'max:50', 'regex:/^\+[0-9() \-]{7,30}$/'],
             'config.currency' => ['required', 'string', 'max:20'],
             'config.aboutTitle' => $shortText,
             'config.aboutText' => $longText,
             'config.aboutVision' => $longText,
-            'config.aboutImage' => $httpUrl,
+            'config.aboutImage' => $managedAppearanceUrl,
             'config.email' => ['nullable', 'email', 'max:255'],
             'config.address' => ['nullable', 'string', 'max:1000'],
             'config.workingHours' => $shortText,
-            'config.whatsapp' => $shortText,
+            'config.whatsapp' => ['nullable', 'string', 'max:50', 'regex:/^\+[0-9() \-]{7,30}$/'],
             'config.instagram' => $shortText,
             'config.twitter' => $shortText,
             'config.tiktok' => $shortText,
@@ -113,7 +113,7 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             'config.enableEWallets' => $boolean,
             'config.customWallets' => ['nullable', 'array', 'max:25'],
             'config.customWallets.*' => ['array:id,name,accountNumber,accountName,icon,badge,active,bgColor'],
-            'config.customWallets.*.id' => ['required', 'string', 'max:100'],
+            'config.customWallets.*.id' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9_-]{0,99}$/', 'distinct:ignore_case'],
             'config.customWallets.*.name' => ['required', 'string', 'max:255'],
             'config.customWallets.*.accountNumber' => ['required', 'string', 'max:255'],
             'config.customWallets.*.accountName' => $shortText,
@@ -165,7 +165,7 @@ class UpdateStoreWorkspaceRequest extends FormRequest
 
     protected function failedValidation(ValidatorContract $validator): void
     {
-        $assetFields = ['config.logoUrl', 'config.heroBannerImage'];
+        $assetFields = ['config.logoUrl', 'config.heroBannerImage', 'config.aboutImage'];
         $assetError = collect($assetFields)->contains(fn (string $field): bool => $validator->errors()->has($field));
 
         throw new HttpResponseException(response()->json([
@@ -203,10 +203,23 @@ class UpdateStoreWorkspaceRequest extends FormRequest
                 $validator->errors()->add('config', 'The store workspace may not exceed 256 KiB.');
             }
 
+            foreach (['phone', 'whatsapp'] as $field) {
+                $value = $this->input('config.'.$field);
+                if (is_string($value) && trim($value) !== '' && StoreContactTarget::normalize($value) === null) {
+                    $validator->errors()->add('config.'.$field, 'The contact number must contain a valid international phone number.');
+                }
+            }
+
             foreach (['minOrderAmount', 'freeShippingThreshold', 'shippingFee', 'cashOnDeliveryFee', 'taxRate'] as $field) {
                 $value = $this->input('config.'.$field);
                 if ($value !== null && preg_match('/^(0|[1-9][0-9]{0,8})(?:\.[0-9]{1,2})?$/', (string) $value) !== 1) {
                     $validator->errors()->add('config.'.$field, 'Checkout money and percentage values may have at most two decimal places.');
+                }
+            }
+            foreach ((array) $this->input('config.customCoupons', []) as $index => $coupon) {
+                $value = is_array($coupon) ? ($coupon['discountPercent'] ?? null) : null;
+                if ($value !== null && preg_match('/^(0|[1-9][0-9]{0,2})(?:\.[0-9]{1,2})?$/', (string) $value) !== 1) {
+                    $validator->errors()->add("config.customCoupons.{$index}.discountPercent", 'Coupon percentages may have at most two decimal places.');
                 }
             }
             $codes = collect($this->input('config.customCoupons', []))

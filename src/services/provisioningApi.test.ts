@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mapSubmission, provisioningApi } from "./provisioningApi";
 import { apiClient } from "./apiClient";
+import { ELEGANT_PRESET } from "../types";
 
 afterEach(() => {
   apiClient.clearCsrfToken();
@@ -85,6 +86,20 @@ describe("provisioningApi", () => {
   });
 
   it("saves and maps the authenticated server draft with its optimistic revision", async () => {
+    const legacyConfig = {
+      ...ELEGANT_PRESET,
+      enableBankTransfer: true,
+      bankName: "Demo Bank",
+      bankAccountName: "Demo Owner",
+      bankAccountNumber: "123456789012",
+      enableOnlineCard: true,
+      enableApplePay: true,
+      enableStcPay: true,
+      enableEWallets: true,
+      customWallets: [{ id: "Wallet-One", name: "Demo", accountNumber: "0501234567", accountName: "Demo", active: true }],
+      enableCoupons: true,
+      customCoupons: [{ code: "WELCOME10", discountPercent: 10, active: true }],
+    };
     const draft = {
       data: {
         id: "draft-1",
@@ -96,7 +111,7 @@ describe("provisioningApi", () => {
         themeStyle: "elegant",
         handle: "store-draft",
         planKey: "starter",
-        config: { marker: "server" },
+        config: legacyConfig,
         savedAt: "2026-08-19T12:00:00Z",
         submittedAt: null,
       },
@@ -106,7 +121,7 @@ describe("provisioningApi", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(draft), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(provisioningApi.saveDraft({
+    const result = await provisioningApi.saveDraft({
       expectedRevision: 0,
       storeName: "Store Draft",
       businessType: "retail",
@@ -114,7 +129,18 @@ describe("provisioningApi", () => {
       handle: "store-draft",
       planKey: "starter",
       config: { marker: "server" },
-    })).resolves.toEqual(draft.data);
+    });
+
+    expect(result.config).toMatchObject({
+      enableBankTransfer: false,
+      enableOnlineCard: false,
+      enableApplePay: false,
+      enableStcPay: false,
+      enableEWallets: false,
+      enableCoupons: false,
+    });
+    expect((result.config.customWallets as Array<{ active: boolean }>)[0].active).toBe(false);
+    expect((result.config.customCoupons as Array<{ active: boolean }>)[0].active).toBe(false);
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/merchant/store-draft",

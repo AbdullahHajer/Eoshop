@@ -1,6 +1,6 @@
 # Eoshop current delivery state
 
-Updated: 2026-08-20
+Updated: 2026-08-21
 
 ## Product position
 
@@ -21,7 +21,7 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 
 ## Active
 
-- No implementation WP is active while the next focused merchant boundary is defined from retained checkout/page and platform-console debt.
+- WP 5.9: focused checkout policy and About/contact content tasks with truthful payment/contact behavior and no second workspace writer.
 
 ## Approved next sequence
 

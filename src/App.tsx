@@ -1362,6 +1362,14 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [authUser, merchantStores, activeWorkspace, merchantStoreRoute, recoverableWorkspaceChanges, view]);
 
+  const focusedBuilderTask = activeWorkspace && merchantStoreRoute
+    ? ({
+      design: ["ملف المتجر والهوية", "عدّل البيانات والمظهر ثم احفظ التغييرات من الأعلى."],
+      checkout: ["الدفع وسياسة الطلب", "اضبط الشحن والضرائب ووسائل الدفع الحقيقية ثم اختبر المعاينة."],
+      pages: ["المحتوى والتواصل", "حرر نبذة المتجر ووجهات التواصل المحفوظة دون وعود أو نماذج وهمية."],
+    } as const)[merchantStoreRoute.section as "design" | "checkout" | "pages"] ?? null
+    : null;
+
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
       <AppToast toast={toast} />
@@ -2157,11 +2165,11 @@ export default function App() {
               <aside className="w-full lg:w-[460px] h-[50vh] lg:h-full flex flex-col border-l border-slate-200 bg-white shrink-0 animate-fadeIn min-h-0 overflow-hidden shadow-xs">
                 {/* Tab navigation headers with mobile touch scroll */}
                 <div className="flex items-center overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50/80 text-xs divide-x divide-x-reverse divide-slate-200/80 scrollbar-none touch-pan-x">
-                  {activeWorkspace && merchantStoreRoute?.section === "design" ? (
+                  {focusedBuilderTask ? (
                     <div className="flex min-h-[48px] w-full items-center justify-between gap-3 bg-white px-4 py-3">
                       <div>
-                        <p className="text-sm font-black text-slate-900">ملف المتجر والهوية</p>
-                        <p className="mt-0.5 text-[10px] font-bold text-slate-500">عدّل البيانات والمظهر ثم احفظ التغييرات من الأعلى.</p>
+                        <p className="text-sm font-black text-slate-900">{focusedBuilderTask[0]}</p>
+                        <p className="mt-0.5 text-[10px] font-bold text-slate-500">{focusedBuilderTask[1]}</p>
                       </div>
                       <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">متصل بالخادم</span>
                     </div>

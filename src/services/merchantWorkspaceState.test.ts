@@ -73,6 +73,30 @@ describe("merchant workspace account and request isolation", () => {
     expect(unsafe.logoUrl).toContain("private-logo");
   });
 
+  it("normalizes a restored local legacy checkout draft fail closed", () => {
+    const legacy = {
+      ...ELEGANT_PRESET,
+      enableBankTransfer: true,
+      bankName: "Demo Bank",
+      bankAccountName: "Demo Owner",
+      bankAccountNumber: "123456789012",
+      enableOnlineCard: true,
+      enableEWallets: true,
+      customWallets: [{ id: "Wallet-One", name: "Demo", accountNumber: "0501234567", accountName: "Demo", active: true }],
+      enableCoupons: true,
+      customCoupons: [{ code: "WELCOME10", discountPercent: 10, active: true }],
+    } as StoreConfig;
+
+    const safe = tenantSafeConfig(legacy);
+    expect(safe.enableBankTransfer).toBe(false);
+    expect(safe.enableOnlineCard).toBe(false);
+    expect(safe.enableEWallets).toBe(false);
+    expect(safe.customWallets?.[0].active).toBe(false);
+    expect(safe.enableCoupons).toBe(false);
+    expect(safe.customCoupons?.[0].active).toBe(false);
+    expect(legacy.enableBankTransfer).toBe(true);
+  });
+
   it("classifies restore, dirty switching, logout, and AI save outcomes fail closed", () => {
     expect(classifyMerchantRestore(1)).toBe("loaded");
     expect(classifyMerchantRestore(0)).toBe("none");

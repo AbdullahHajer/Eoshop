@@ -1,5 +1,7 @@
 import { apiClient, ApiError } from "./apiClient";
 import { booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
+import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
+import type { StoreConfig } from "../types";
 
 export interface StoreSubmission {
   id: string;
@@ -110,7 +112,7 @@ export interface StoreDraft {
   themeStyle: "elegant" | "tech";
   handle: string | null;
   planKey: string | null;
-  config: Record<string, unknown>;
+  config: StoreConfig;
   savedAt: string | null;
   submittedAt: string | null;
 }
@@ -145,7 +147,7 @@ function mapDraft(value: unknown): StoreDraft {
     themeStyle: enumField(dto, "themeStyle", ["elegant", "tech"] as const, "مسودة المتجر"),
     handle: nullableStringField(dto, "handle", "مسودة المتجر"),
     planKey: nullableStringField(dto, "planKey", "مسودة المتجر"),
-    config: record(dto.config, "إعدادات مسودة المتجر"),
+    config: sanitizeCheckoutConfig(record(dto.config, "إعدادات مسودة المتجر") as unknown as StoreConfig),
     savedAt: nullableStringField(dto, "savedAt", "مسودة المتجر"),
     submittedAt: nullableStringField(dto, "submittedAt", "مسودة المتجر"),
   };

@@ -1,6 +1,7 @@
 import type { StoreConfig } from "../types";
 import { ELEGANT_PRESET } from "../types";
 import { isUiErrorCode, type UiErrorShape } from "../contracts/uiError";
+import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
 
 export type MerchantRestoreResult = "loaded" | "none" | "error";
 
@@ -53,7 +54,7 @@ export class LatestWorkspaceLoad {
 }
 
 export function tenantSafeConfig(localDraft: StoreConfig | null): StoreConfig {
-  return scrubUnsafeVisualUrls(localDraft ?? ELEGANT_PRESET);
+  return sanitizeCheckoutConfig(scrubUnsafeVisualUrls(localDraft ?? ELEGANT_PRESET));
 }
 
 export function scrubUnsafeVisualUrls(config: StoreConfig): StoreConfig {

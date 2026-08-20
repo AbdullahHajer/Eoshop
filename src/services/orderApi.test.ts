@@ -89,6 +89,11 @@ describe("orderApi", () => {
     const result = await orderApi.create(input, "44444444-4444-4444-8444-444444444444");
 
     expect(result.order.totals.grandTotalMinor).toBe(3188);
+    expect(result.order.checkoutPresentation).toEqual({
+      title: "تم استلام طلبك",
+      message: "احتفظ برقم الطلب للمتابعة مع المتجر.",
+      whatsappTarget: null,
+    });
     expect(result.order).not.toHaveProperty("internalCost");
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     const body = JSON.parse(request.body as string);
@@ -122,5 +127,19 @@ describe("orderApi", () => {
 
     const result = await orderApi.list("tenant-one");
     expect(result.items[0].allowedTransitions).toEqual(["cancelled", "accepted"]);
+  });
+
+  it("rejects a malformed receipt contact target", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        items: [{
+          ...receipt,
+          checkoutPresentation: { title: "Title", message: "Message", whatsappTarget: "javascript:alert(1)" },
+        }],
+        pagination: { total: 1 },
+      },
+    }), { status: 200 })));
+
+    await expect(orderApi.list("tenant-one")).rejects.toMatchObject({ category: "unexpected", status: 200 });
   });
 });

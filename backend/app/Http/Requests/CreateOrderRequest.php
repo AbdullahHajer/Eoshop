@@ -10,9 +10,14 @@ class CreateOrderRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
+        $payment = $this->input('payment');
+        if (is_array($payment) && array_key_exists('reference', $payment) && is_string($payment['reference'])) {
+            $payment['reference'] = trim($payment['reference']);
+        }
         $this->merge([
             'idempotencyKey' => $this->header('Idempotency-Key'),
             'requestId' => $this->header('X-Request-ID'),
+            'payment' => $payment,
         ]);
     }
 
@@ -34,11 +39,12 @@ class CreateOrderRequest extends FormRequest
             'payment.channelId' => [
                 Rule::prohibitedIf(fn (): bool => $this->input('payment.method') !== 'wallet'),
                 Rule::requiredIf(fn (): bool => $this->input('payment.method') === 'wallet'),
-                'nullable', 'string', 'max:100',
+                'nullable', 'string', 'max:100', 'regex:/^[a-z0-9][a-z0-9_-]{0,99}$/',
             ],
             'payment.reference' => [
                 Rule::prohibitedIf(fn (): bool => $this->input('payment.method') === 'cod'),
-                'nullable', 'string', 'max:200',
+                Rule::requiredIf(fn (): bool => in_array($this->input('payment.method'), ['bank_transfer', 'wallet'], true)),
+                'nullable', 'string', 'max:200', 'regex:/\S/u',
             ],
             'customer' => ['required', 'array:name,phone,email,notes'],
             'customer.name' => ['required', 'string', 'max:120'],

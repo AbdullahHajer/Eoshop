@@ -10,6 +10,7 @@ import {
 import { StoreConfig, Product } from "../types";
 import type { CreateOrderInput, OrderReceipt } from "../adapters/uiAdapters";
 import ProductArt from "./ProductArt";
+import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -84,10 +85,6 @@ export default function StorePreview({
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Contact Form State
-  const [contactForm, setContactForm] = useState({ name: "", contactInfo: "", subject: "", message: "" });
-  const [formSent, setFormSent] = useState(false);
-
   // Checkout & Payment States
   const [checkoutForm, setCheckoutForm] = useState({
     fullName: "",
@@ -98,7 +95,7 @@ export default function StorePreview({
     notes: ""
   });
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "wallet">("cod");
-  const [selectedWallet, setSelectedWallet] = useState<string>("w-kuraimi");
+  const [selectedWallet, setSelectedWallet] = useState<string>("");
   const [transferRefNumber, setTransferRefNumber] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -109,6 +106,10 @@ export default function StorePreview({
   const [copiedWalletNum, setCopiedWalletNum] = useState<string | null>(null);
   const [formValidationErr, setFormValidationErr] = useState("");
   const [orderSubmitting, setOrderSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (config.enableCashOnDelivery !== true) setPaymentMethod("wallet");
+  }, [config.enableCashOnDelivery]);
 
   useEffect(() => {
     setActiveImageIndex(0);
@@ -140,6 +141,7 @@ export default function StorePreview({
   const cardBgColor = config.cardBgColor || "#ffffff";
   const borderColor = config.borderColor || (config.themeStyle === "elegant" ? "#f2eae1" : "#e2e8f0");
   const isElegant = config.themeStyle === "elegant";
+  const canonicalPhone = canonicalContactTarget(config.phone);
 
   // Calculate cart total locally
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -161,16 +163,6 @@ export default function StorePreview({
       p.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
-
-  const handleContactSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contactForm.name.trim() || !contactForm.message.trim()) return;
-    setFormSent(true);
-    setTimeout(() => {
-      setFormSent(false);
-      setContactForm({ name: "", contactInfo: "", subject: "", message: "" });
-    }, 4000);
-  };
 
   return (
     <div 
@@ -213,12 +205,12 @@ export default function StorePreview({
               >
                 🔥 {config.bannerText}
               </motion.p>
-              <div className="hidden lg:flex items-center gap-3 text-slate-300">
-                <a href={`tel:${config.phone}`} className="hover:text-sky-300 transition flex items-center gap-1">
+              {canonicalPhone && <div className="hidden lg:flex items-center gap-3 text-slate-300">
+                <a href={`tel:${canonicalPhone}`} className="hover:text-sky-300 transition flex items-center gap-1">
                   <Phone className="w-3 h-3 text-sky-400" />
                   <span>دعم العملاء المباشر</span>
                 </a>
-              </div>
+              </div>}
             </div>
           ) : (
             <motion.p
@@ -357,14 +349,14 @@ export default function StorePreview({
 
             {/* Desktop Actions Section: Contact hotline & Cart Trigger Pill */}
             <div className="hidden md:flex items-center gap-2.5">
-              {config.phone && (
+              {canonicalPhone && (
                 <a 
-                  href={`tel:${config.phone}`}
+                  href={`tel:${canonicalPhone}`}
                   className="p-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200/80 transition flex items-center gap-1.5 text-xs font-extrabold"
                   title="تواصل هاتفياً"
                 >
                   <Phone className="w-3.5 h-3.5 text-sky-600" />
-                  <span className="hidden lg:inline">{config.phone}</span>
+                  <span className="hidden lg:inline">{canonicalPhone}</span>
                 </a>
               )}
 
@@ -487,9 +479,9 @@ export default function StorePreview({
 
           {/* Desktop Header Actions */}
           <div className="hidden md:flex items-center gap-3">
-            {config.phone && (
+            {canonicalPhone && (
               <a 
-                href={`tel:${config.phone}`}
+                href={`tel:${canonicalPhone}`}
                 className="p-2 px-3 rounded-xl transition flex items-center gap-1.5 text-xs font-bold"
                 style={{ 
                   backgroundColor: "#f5efe6",
@@ -497,7 +489,7 @@ export default function StorePreview({
                 }}
               >
                 <Phone className="w-3.5 h-3.5" />
-                <span>{config.phone}</span>
+                <span>{canonicalPhone}</span>
               </a>
             )}
 
@@ -1402,239 +1394,35 @@ export default function StorePreview({
         )}
 
         {/* 4. CONTACT US PAGE (تواصل معنا) */}
-        {storePage === "contact" && (
-          <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fadeIn pb-12 text-right">
-            {/* Header Title */}
-            <div className="text-center space-y-2 border-b pb-6" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider inline-block ${
-                !isElegant ? "bg-sky-100 text-sky-800 border border-sky-300/80 font-mono" : ""
-              }`}
-                    style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                {!isElegant ? "COMMAND // مركز الاستجابة والدعم 📡" : "تواصل معنا 📞"}
-              </span>
-              <h2 className={`text-2xl md:text-3xl font-black ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
-                {!isElegant ? "مركز الدعم والعمليات التقنية المباشر" : "يسعدنا دائماً استقبال استفساراتكم"}
-              </h2>
-              <p className="text-xs text-slate-500 max-w-lg mx-auto">
-                {!isElegant ? "🟢 AVERAGE RESPONSE LATENCY: < 8 MINUTES | فريق التقنية متواجد لمساعدتكم." : "فريق خدمة العملاء متواجد لمساعدتكم والإجابة على كافة الأسئلة في أسرع وقت."}
-              </p>
-            </div>
-
-            {/* Info Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Phone / WhatsApp */}
-              <div className={`p-5 rounded-2xl border space-y-2 flex items-start gap-4 ${
-                !isElegant ? "bg-white border-slate-200 hover:border-sky-300 hover:shadow-xs" : ""
-              }`}
-                   style={{ backgroundColor: isElegant ? "#ffffff" : undefined, borderColor: isElegant ? "#f2eae1" : undefined }}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  !isElegant ? "bg-sky-50 text-sky-600 border border-sky-200" : ""
-                }`}
-                     style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                  <Phone className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className={`font-bold text-xs ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
-                    {!isElegant ? "قناة الاتصال والواتساب // CALL & CHAT" : "الهاتف المباشر والواتساب"}
-                  </h4>
-                  <p className="text-xs font-mono font-bold text-slate-700">{config.phone || "+966 50 000 0000"}</p>
-                  {config.whatsapp && (
-                    <a 
-                      href={`https://wa.me/${config.whatsapp.replace(/[^0-9]/g, "")}`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[10px] bg-emerald-600 text-white font-bold px-3 py-1 rounded-md mt-1 hover:bg-emerald-700 transition shadow-xs"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                      <span>مراسلة فورية عبر الواتساب 💬</span>
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className={`p-5 rounded-2xl border space-y-2 flex items-start gap-4 ${
-                !isElegant ? "bg-white border-slate-200 hover:border-sky-300 hover:shadow-xs" : ""
-              }`}
-                   style={{ backgroundColor: isElegant ? "#ffffff" : undefined, borderColor: isElegant ? "#f2eae1" : undefined }}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  !isElegant ? "bg-sky-50 text-sky-600 border border-sky-200" : ""
-                }`}
-                     style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                  <Mail className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className={`font-bold text-xs ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>البريد الإلكتروني الرسمي</h4>
-                  <p className="text-xs font-mono text-slate-700">{config.email || "support@store.com"}</p>
-                  <span className="text-[10px] text-slate-500 block">نرد على الرسائل خلال أقل من 24 ساعة</span>
-                </div>
-              </div>
-
-              {/* Address */}
-              <div className={`p-5 rounded-2xl border space-y-2 flex items-start gap-4 ${
-                !isElegant ? "bg-white border-slate-200 hover:border-sky-300 hover:shadow-xs" : ""
-              }`}
-                   style={{ backgroundColor: isElegant ? "#ffffff" : undefined, borderColor: isElegant ? "#f2eae1" : undefined }}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  !isElegant ? "bg-sky-50 text-sky-600 border border-sky-200" : ""
-                }`}
-                     style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className={`font-bold text-xs ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>العنوان والمقر الرئيسي</h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">{config.address || "الرياض - المملكة العربية السعودية"}</p>
-                </div>
-              </div>
-
-              {/* Working Hours */}
-              <div className={`p-5 rounded-2xl border space-y-2 flex items-start gap-4 ${
-                !isElegant ? "bg-white border-slate-200 hover:border-sky-300 hover:shadow-xs" : ""
-              }`}
-                   style={{ backgroundColor: isElegant ? "#ffffff" : undefined, borderColor: isElegant ? "#f2eae1" : undefined }}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  !isElegant ? "bg-sky-50 text-sky-600 border border-sky-200" : ""
-                }`}
-                     style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className={`font-bold text-xs ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>أوقات العمل وساعات الدعم</h4>
-                  <p className="text-xs text-slate-600">{config.workingHours || "السبت - الخميس: 9:00 ص - 11:00 م"}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Direct Contact Form */}
-            <div className={`p-6 md:p-8 rounded-3xl border space-y-4 ${
-              !isElegant ? "bg-white border-slate-200 shadow-lg" : ""
-            }`}
-                 style={{ backgroundColor: isElegant ? "#ffffff" : undefined, borderColor: isElegant ? "#f2eae1" : undefined }}>
-              <h3 className={`font-extrabold text-base text-right flex items-center gap-2 ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
-                <MessageSquare className="w-4 h-4 text-sky-600" />
-                <span>{!isElegant ? "ارسال نداء / استفسار مباشر إلى الإدارة" : "أرسل رسالة مباشرة لإدارة المتجر"}</span>
-              </h3>
-
-              {formSent ? (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-xs font-bold text-center space-y-1 animate-fadeIn font-mono">
-                  <p>✨ TRANSMISSION_SUCCESSFUL // تم استلام رسالتك بنجاح!</p>
-                  <p className="text-[10px] font-normal text-emerald-700">شكراً لتواصلك معنا وسنقوم بالرد عليك في أقرب فرصة.</p>
+        {storePage === "contact" && (() => {
+          const phone = canonicalContactTarget(config.phone);
+          const whatsapp = canonicalContactTarget(config.whatsapp);
+          const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.email?.trim() ?? "") ? config.email?.trim() : null;
+          const address = config.address?.trim() || null;
+          const hours = config.workingHours?.trim() || null;
+          const hasDirectContact = Boolean(phone || whatsapp || email || address || hours);
+          return (
+            <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 text-right animate-fadeIn">
+              <header className="space-y-2 text-center">
+                <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black text-sky-800">التواصل مع المتجر</span>
+                <h2 className="text-2xl font-black text-slate-900">اختر وسيلة التواصل المتاحة</h2>
+                <p className="text-xs text-slate-500">تعرض هذه الصفحة البيانات التي حفظها المتجر فقط، ولا تستقبل رسائل داخل المنصة.</p>
+              </header>
+              {hasDirectContact ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {phone && <a href={`tel:${phone}`} className="rounded-2xl border border-slate-200 bg-white p-5"><Phone className="mb-3 h-5 w-5 text-sky-600" /><h3 className="text-xs font-black">اتصال هاتفي</h3><p dir="ltr" className="mt-1 text-sm font-bold text-slate-700">{phone}</p></a>}
+                  {whatsapp && <a href={`https://wa.me/${whatsapp.slice(1)}`} target="_blank" rel="noreferrer" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><MessageSquare className="mb-3 h-5 w-5 text-emerald-600" /><h3 className="text-xs font-black">بدء محادثة WhatsApp</h3><p dir="ltr" className="mt-1 text-sm font-bold text-emerald-800">{whatsapp}</p></a>}
+                  {email && <a href={`mailto:${email}`} className="rounded-2xl border border-slate-200 bg-white p-5"><Mail className="mb-3 h-5 w-5 text-indigo-600" /><h3 className="text-xs font-black">البريد الإلكتروني</h3><p dir="ltr" className="mt-1 break-all text-sm text-slate-700">{email}</p></a>}
+                  {address && <div className="rounded-2xl border border-slate-200 bg-white p-5"><MapPin className="mb-3 h-5 w-5 text-rose-600" /><h3 className="text-xs font-black">العنوان</h3><p className="mt-1 text-sm text-slate-700">{address}</p></div>}
+                  {hours && <div className="rounded-2xl border border-slate-200 bg-white p-5"><Clock className="mb-3 h-5 w-5 text-amber-600" /><h3 className="text-xs font-black">ساعات العمل</h3><p className="mt-1 text-sm text-slate-700">{hours}</p></div>}
                 </div>
               ) : (
-                <form onSubmit={handleContactSubmit} className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-slate-600">{!isElegant ? "// USER_FULLNAME" : "الاسم الكامل"}</label>
-                      <input 
-                        type="text"
-                        required
-                        value={contactForm.name}
-                        onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                        placeholder="أدخل اسمك"
-                        className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none ${
-                          !isElegant ? "bg-slate-50 border-slate-300 text-slate-900 focus:border-sky-500 font-mono" : "bg-slate-400/5"
-                        }`}
-                        style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-slate-600">{!isElegant ? "// CONTACT_PHONE_EMAIL" : "رقم الجوال أو البريد الإلكتروني"}</label>
-                      <input 
-                        type="text"
-                        required
-                        value={contactForm.contactInfo}
-                        onChange={(e) => setContactForm({ ...contactForm, contactInfo: e.target.value })}
-                        placeholder="0500000000 أو email@example.com"
-                        className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none ${
-                          !isElegant ? "bg-slate-50 border-slate-300 text-slate-900 focus:border-sky-500 font-mono" : "bg-slate-400/5"
-                        }`}
-                        style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-slate-600">{!isElegant ? "// SUBJECT" : "موضوع الرسالة"}</label>
-                    <input 
-                      type="text"
-                      value={contactForm.subject}
-                      onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                      placeholder="استفسار عن طلب / دعم تقني..."
-                      className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none ${
-                        !isElegant ? "bg-slate-50 border-slate-300 text-slate-900 focus:border-sky-500 font-mono" : "bg-slate-400/5"
-                      }`}
-                      style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-slate-600">{!isElegant ? "// MESSAGE_BODY" : "نص الرسالة والاستفسار"}</label>
-                    <textarea 
-                      rows={3}
-                      required
-                      value={contactForm.message}
-                      onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                      placeholder="اكتب هنا تفاصيل استفسارك..."
-                      className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none leading-relaxed ${
-                        !isElegant ? "bg-slate-50 border-slate-300 text-slate-900 focus:border-sky-500 font-mono" : "bg-slate-400/5"
-                      }`}
-                      style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className={`w-full py-3 rounded-xl font-bold text-xs text-white shadow-md transition flex items-center justify-center gap-2 ${
-                      !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 font-mono shadow-sm" : "hover:opacity-90"
-                    }`}
-                    style={{ backgroundColor: isElegant ? primaryColor : undefined }}
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>{!isElegant ? "TRANSMIT MESSAGE // أرسل الرسالة 📡" : "إرسال الرسالة 📩"}</span>
-                  </button>
-                </form>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم يضف المتجر وسيلة تواصل مباشرة بعد.</div>
               )}
+              {(config.instagram || config.twitter || config.tiktok || config.snapchat) && <div className="flex flex-wrap justify-center gap-2">{([["Instagram", config.instagram], ["X", config.twitter], ["TikTok", config.tiktok], ["Snapchat", config.snapchat]] as const).filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => <span key={label} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold">{label}: @{value}</span>)}</div>}
             </div>
-
-            {/* Social Links Row */}
-            {(config.instagram || config.twitter || config.tiktok || config.snapchat) && (
-              <div className="space-y-3 pt-2 text-center">
-                <span className="text-xs font-bold text-slate-400 block">تابعنا عبر منصات التواصل الاجتماعي:</span>
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  {config.instagram && (
-                    <span className="px-3 py-1.5 rounded-xl border bg-slate-400/5 text-xs font-bold flex items-center gap-1.5"
-                          style={{ borderColor: isElegant ? "#e5d5c5" : "#334155" }}>
-                      <span>📷</span>
-                      <span>@{config.instagram}</span>
-                    </span>
-                  )}
-                  {config.twitter && (
-                    <span className="px-3 py-1.5 rounded-xl border bg-slate-400/5 text-xs font-bold flex items-center gap-1.5"
-                          style={{ borderColor: isElegant ? "#e5d5c5" : "#334155" }}>
-                      <span>🐦</span>
-                      <span>@{config.twitter}</span>
-                    </span>
-                  )}
-                  {config.tiktok && (
-                    <span className="px-3 py-1.5 rounded-xl border bg-slate-400/5 text-xs font-bold flex items-center gap-1.5"
-                          style={{ borderColor: isElegant ? "#e5d5c5" : "#334155" }}>
-                      <span>🎵</span>
-                      <span>@{config.tiktok}</span>
-                    </span>
-                  )}
-                  {config.snapchat && (
-                    <span className="px-3 py-1.5 rounded-xl border bg-slate-400/5 text-xs font-bold flex items-center gap-1.5"
-                          style={{ borderColor: isElegant ? "#e5d5c5" : "#334155" }}>
-                      <span>👻</span>
-                      <span>@{config.snapchat}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* 5. PRODUCT PROFILE PAGE (بروفايل المنتَج الشامل) */}
         {storePage === "product" && (() => {
@@ -2068,84 +1856,31 @@ export default function StorePreview({
 
         {/* 6. CHECKOUT PAGE (صفحة إتمام الطلب وتعبئة البيانات والدفع) */}
         {storePage === "checkout" && (() => {
-          const customWalletsList = (config.customWallets && config.customWallets.length > 0)
-            ? config.customWallets
-            : [
-                {
-                  id: "w-stc",
-                  name: "محفظة STC Pay / urpay",
-                  accountNumber: "0501234567",
-                  accountName: config.storeName || "المتجر الرسمي",
-                  icon: "📱",
-                  badge: "دفع فوري ⚡",
-                  active: true,
-                  bgColor: "bg-purple-50/80 border-purple-200/90 text-purple-900"
-                },
-                {
-                  id: "w-kuraimi",
-                  name: "محفظة الكريمي إكسبرس (Kuraimi)",
-                  accountNumber: "30678912",
-                  accountName: config.storeName || "المتجر الرسمي",
-                  icon: "🏦",
-                  badge: "الأكثر شيوعاً واستخداماً 🔥",
-                  active: true,
-                  bgColor: "bg-blue-50/80 border-blue-200/90 text-blue-900"
-                },
-                {
-                  id: "w-jawali",
-                  name: "محفظة جوالي (Jawali Wallet)",
-                  accountNumber: "770123456",
-                  accountName: config.storeName || "المتجر الرسمي",
-                  icon: "📱",
-                  badge: "إيداع فوري ⚡",
-                  active: true,
-                  bgColor: "bg-emerald-50/80 border-emerald-200/90 text-emerald-900"
-                },
-                {
-                  id: "w-onecash",
-                  name: "محفظة ون كاش (OneCash)",
-                  accountNumber: "779876543",
-                  accountName: config.storeName || "المتجر الرسمي",
-                  icon: "💸",
-                  badge: "تحويل مباشر وآمن 🔒",
-                  active: true,
-                  bgColor: "bg-purple-50/80 border-purple-200/90 text-purple-900"
-                },
-                {
-                  id: "w-floos",
-                  name: "محفظة فلوس / جيب (Floos / Pocket)",
-                  accountNumber: "771122334",
-                  accountName: config.storeName || "المتجر الرسمي",
-                  icon: "👛",
-                  badge: "سريع ومباشر 🚀",
-                  active: true,
-                  bgColor: "bg-amber-50/80 border-amber-200/90 text-amber-900"
-                }
-              ];
+          const customWalletsList = config.customWallets ?? [];
 
-          const activeWallets = (mode === "preview" || config.enableEWallets === true ? customWalletsList : [])
-            .filter(w => w.active === true && w.id.trim() && w.name.trim() && w.accountNumber.trim() && w.accountName.trim());
+          const activeWallets = (config.enableEWallets === true ? customWalletsList : [])
+            .filter((wallet) => wallet.active === true && Boolean(wallet.id.trim() && wallet.name.trim() && wallet.accountNumber.trim() && wallet.accountName?.trim()));
 
-          const bankWallet = (mode === "preview" || (config.enableBankTransfer === true
+          const bankWallet = config.enableBankTransfer === true
             && Boolean(config.bankName?.trim())
             && Boolean(config.bankAccountName?.trim())
-            && Boolean(config.bankIban?.trim() || config.bankAccountNumber?.trim()))) ? {
-            id: "bank-transfer",
-            name: `${config.bankName || "تحويل بنكي"} / آيبان`,
-            accountNumber: config.bankIban ? `IBAN: ${config.bankIban}` : (config.bankAccountNumber || "PREVIEW-ACCOUNT"),
-            accountName: config.bankAccountName || config.storeName || "المتجر الرسمي",
-            icon: "💳",
-            badge: "إيداع رسمي معتمد 🏛️",
-            bgColor: "bg-slate-100 border-slate-300 text-slate-900"
-          } : null;
+            && Boolean(config.bankIban?.trim() || config.bankAccountNumber?.trim()) ? {
+              id: "bank-transfer",
+              name: config.bankName!.trim(),
+              accountNumber: config.bankIban?.trim() ? `IBAN: ${config.bankIban.trim()}` : config.bankAccountNumber!.trim(),
+              accountName: config.bankAccountName!.trim(),
+              icon: "💳",
+              badge: "تحويل بنكي",
+              bgColor: "bg-slate-100 border-slate-300 text-slate-900",
+            } : null;
 
           const WALLETS = [
-            ...activeWallets,
-            ...(bankWallet ? [bankWallet] : [])
+            ...activeWallets.map((wallet) => ({ ...wallet, selectionKey: `wallet:${wallet.id}`, kind: "wallet" as const })),
+            ...(bankWallet ? [{ ...bankWallet, selectionKey: "bank", kind: "bank" as const }] : [])
           ];
-          const codAvailable = mode === "preview" || config.enableCashOnDelivery === true;
+          const codAvailable = config.enableCashOnDelivery === true;
           const transferAvailable = WALLETS.length > 0;
-          const effectiveWalletId = WALLETS.some((wallet) => wallet.id === selectedWallet) ? selectedWallet : WALLETS[0]?.id;
+          const effectiveWalletId = WALLETS.some((wallet) => wallet.selectionKey === selectedWallet) ? selectedWallet : WALLETS[0]?.selectionKey;
 
           const handleApplyCoupon = () => {
             const code = couponCode.trim().toUpperCase();
@@ -2163,7 +1898,7 @@ export default function StorePreview({
             const matched = allCoupons.find(c => (c.active !== false) && c.code.trim().toUpperCase() === code);
 
             if (matched) {
-              const disc = Math.round(cartTotal * (matched.discountPercent / 100));
+              const disc = previewPercentageDiscount(cartTotal, matched.discountPercent);
               setCouponDiscount(disc);
               setCouponApplied(true);
               setCouponMessage(`✓ تم تطبيق كود الخصم (${matched.code} - خصم ${matched.discountPercent}%) بنجاح! 🎉`);
@@ -2174,9 +1909,19 @@ export default function StorePreview({
             }
           };
 
-          const shippingCost = (config.shippingFee && cartTotal < (config.freeShippingThreshold || 250)) ? config.shippingFee : 0;
-          const codFee = (paymentMethod === "cod" && config.cashOnDeliveryFee) ? config.cashOnDeliveryFee : 0;
-          const finalCheckoutTotal = Math.max(0, cartTotal - couponDiscount + shippingCost + codFee);
+          const previewTotals = calculatePreviewCheckout({
+            subtotal: cartTotal,
+            discount: couponDiscount,
+            shippingFee: Number(config.shippingFee ?? 0),
+            freeShippingThreshold: Number(config.freeShippingThreshold ?? 0),
+            taxRate: Number(config.taxRate ?? 0),
+            paymentFee: paymentMethod === "cod" ? Number(config.cashOnDeliveryFee ?? 0) : 0,
+            minimum: Number(config.minOrderAmount ?? 0),
+          });
+          const shippingCost = previewTotals.shipping;
+          const codFee = previewTotals.paymentFee;
+          const tax = previewTotals.tax;
+          const finalCheckoutTotal = previewTotals.total;
 
           const handlePlaceOrderSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
@@ -2186,7 +1931,23 @@ export default function StorePreview({
             }
             setFormValidationErr("");
 
-            const currentWallet = WALLETS.find(w => w.id === effectiveWalletId);
+            const currentWallet = WALLETS.find(w => w.selectionKey === effectiveWalletId);
+            if (!codAvailable && !transferAvailable) {
+              setFormValidationErr("لا توجد وسيلة دفع مفعلة لهذا المتجر حالياً.");
+              return;
+            }
+            if (paymentMethod === "wallet" && (!currentWallet || !transferRefNumber.trim())) {
+              setFormValidationErr("أدخل رقم مرجع التحويل بعد تنفيذ العملية؛ سيبقى بانتظار تحقق المتجر.");
+              return;
+            }
+            if (paymentMethod === "cod" && !codAvailable) {
+              setFormValidationErr("الدفع عند الاستلام غير مفعّل لهذا المتجر. اختر وسيلة تحويل متاحة.");
+              return;
+            }
+            if (mode === "preview" && !previewTotals.minimumMet) {
+              setFormValidationErr(`الطلب أقل من الحد الأدنى المحفوظ (${Number(config.minOrderAmount ?? 0)} ${config.currency}).`);
+              return;
+            }
             if (mode === "live") {
               if (!submitOrder || orderSubmitting) return;
               if ((paymentMethod === "cod" && !codAvailable) || (paymentMethod === "wallet" && !currentWallet)) {
@@ -2197,7 +1958,7 @@ export default function StorePreview({
               try {
                 const payment = paymentMethod === "cod"
                   ? { method: "cod" as const }
-                  : currentWallet?.id === "bank-transfer"
+                  : currentWallet?.kind === "bank"
                     ? { method: "bank_transfer" as const, reference: transferRefNumber || undefined }
                     : { method: "wallet" as const, channelId: currentWallet?.id, reference: transferRefNumber || undefined };
                 const receipt = await submitOrder({
@@ -2236,6 +1997,7 @@ export default function StorePreview({
                   codFee: minor(receipt.totals.paymentFeeMinor),
                   total: minor(receipt.totals.grandTotalMinor),
                   currency: receipt.currencyCode,
+                  presentation: receipt.checkoutPresentation,
                 };
                 setPlacedOrderDetails(orderObj);
                 setOrderCompleted(true);
@@ -2256,18 +2018,23 @@ export default function StorePreview({
               customer: { ...checkoutForm },
               paymentMethod: paymentMethod === "cod" 
                 ? `الدفع عند الاستلام / التوصيل 💵 ${codFee > 0 ? `(+${codFee} ${config.currency} رسوم COD)` : ''}`
-                : `محفظة إلكترونية (${currentWallet?.name}) 📱`,
+                : `${currentWallet?.kind === "bank" ? "تحويل بنكي" : "محفظة إلكترونية"} (${currentWallet?.name})`,
               walletName: paymentMethod === "wallet" ? currentWallet?.name : null,
               walletAccount: paymentMethod === "wallet" ? currentWallet?.accountNumber : null,
-              transferRefNumber: paymentMethod === "wallet" ? (transferRefNumber || "غير محدد") : null,
+              transferRefNumber: paymentMethod === "wallet" ? transferRefNumber.trim() : null,
               items: [...cart],
               subtotal: cartTotal,
               discount: couponDiscount,
               shipping: shippingCost,
-              tax: 0,
-              codFee: codFee,
+              tax,
+              codFee,
               total: finalCheckoutTotal,
-              currency: config.currency || "ر.س"
+              currency: config.currency || "ر.س",
+              presentation: {
+                title: config.thankYouTitle?.trim() || "تم استلام طلبك",
+                message: config.thankYouMessage?.trim() || "احتفظ برقم الطلب للمتابعة مع المتجر.",
+                whatsappTarget: config.enableWhatsAppNotification === true ? preferredContactTarget(config) : null,
+              },
             };
 
             setPlacedOrderDetails(orderObj);
@@ -2282,278 +2049,29 @@ export default function StorePreview({
           };
 
           const handlePrintInvoice = (order: any) => {
-            if (!order) {
-              window.print();
-              return;
-            }
-
-            try {
-              const invoiceWindow = window.open('', '_blank', 'width=800,height=900');
-              if (!invoiceWindow) {
-                window.print();
-                return;
-              }
-
-              const itemsHtml = order.items.map((it: any, idx: number) => `
-                <tr>
-                  <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${idx + 1}</td>
-                  <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold;">${it.product.name}</td>
-                  <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.quantity}</td>
-                  <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.product.price} ${order.currency}</td>
-                  <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: left; font-weight: bold;">${(parseFloat(it.product.price) * it.quantity).toLocaleString()} ${order.currency}</td>
-                </tr>
-              `).join('');
-
-              const invoiceHtml = `
-                <!DOCTYPE html>
-                <html dir="rtl" lang="ar">
-                <head>
-                  <meta charset="UTF-8" />
-                  <title>فاتورة طلب رقم #${order.orderNum} - ${config.storeName || "المتجر"}</title>
-                  <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
-                    body {
-                      font-family: 'Cairo', system-ui, sans-serif;
-                      margin: 0;
-                      padding: 24px;
-                      color: #0f172a;
-                      background-color: #ffffff;
-                      direction: rtl;
-                    }
-                    .invoice-card {
-                      max-width: 750px;
-                      margin: 0 auto;
-                      border: 1px solid #e2e8f0;
-                      border-radius: 16px;
-                      padding: 28px;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                    }
-                    .header {
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      border-bottom: 2px solid #f1f5f9;
-                      padding-bottom: 20px;
-                      margin-bottom: 20px;
-                    }
-                    .store-title {
-                      font-size: 22px;
-                      font-weight: 900;
-                      color: #0284c7;
-                      margin: 0 0 4px 0;
-                    }
-                    .invoice-tag {
-                      background-color: #f0f9ff;
-                      color: #0369a1;
-                      font-size: 11px;
-                      font-weight: 800;
-                      padding: 4px 12px;
-                      border-radius: 6px;
-                      border: 1px solid #bae6fd;
-                      display: inline-block;
-                    }
-                    .details-grid {
-                      display: grid;
-                      grid-template-columns: 1fr 1fr;
-                      gap: 16px;
-                      background-color: #f8fafc;
-                      border: 1px solid #f1f5f9;
-                      border-radius: 12px;
-                      padding: 16px;
-                      margin-bottom: 24px;
-                      font-size: 13px;
-                    }
-                    .details-box h4 {
-                      margin: 0 0 8px 0;
-                      font-size: 14px;
-                      font-weight: 800;
-                      color: #0f172a;
-                    }
-                    .details-box p {
-                      margin: 4px 0;
-                      color: #334155;
-                    }
-                    table {
-                      width: 100%;
-                      border-collapse: collapse;
-                      margin-bottom: 20px;
-                      font-size: 13px;
-                    }
-                    th {
-                      background-color: #f1f5f9;
-                      padding: 10px;
-                      font-weight: 800;
-                      color: #1e293b;
-                      border-bottom: 2px solid #cbd5e1;
-                      text-align: right;
-                    }
-                    .summary-box {
-                      background-color: #0f172a;
-                      color: #ffffff;
-                      padding: 16px;
-                      border-radius: 12px;
-                      margin-top: 20px;
-                      font-size: 13px;
-                    }
-                    .summary-row {
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 4px 0;
-                    }
-                    .total-row {
-                      display: flex;
-                      justify-content: space-between;
-                      font-size: 16px;
-                      font-weight: 900;
-                      color: #38bdf8;
-                      border-top: 1px solid #334155;
-                      padding-top: 8px;
-                      margin-top: 8px;
-                    }
-                    .footer {
-                      text-align: center;
-                      margin-top: 32px;
-                      font-size: 11px;
-                      color: #64748b;
-                      border-top: 1px dashed #e2e8f0;
-                      padding-top: 16px;
-                    }
-                    @media print {
-                      body { padding: 0; }
-                      .invoice-card { border: none; box-shadow: none; width: 100%; max-width: none; }
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="invoice-card">
-                    <div class="header">
-                      <div>
-                        <span class="invoice-tag">فاتورة طلب مبيعات 🧾</span>
-                        <h1 class="store-title">${config.storeName || "المتجر الإلكتروني"}</h1>
-                        <p style="margin:2px 0 0 0; font-size: 12px; color: #64748b;">تاريخ الطلب: ${order.date}</p>
-                      </div>
-                      <div style="text-align: left;">
-                        <p style="margin: 0; font-size: 12px; color: #64748b;">رقم المرجعية المعتمد:</p>
-                        <p style="margin: 2px 0 0 0; font-size: 18px; font-weight: 900; color: #0284c7; font-family: monospace;">#${order.orderNum}</p>
-                      </div>
-                    </div>
-
-                    <div class="details-grid">
-                      <div class="details-box">
-                        <h4>👤 بيانات العميل والشحن:</h4>
-                        <p><strong>الاسم:</strong> ${order.customer.fullName}</p>
-                        <p><strong>رقم الجوال:</strong> ${order.customer.phone}</p>
-                        <p><strong>المدينة:</strong> ${order.customer.city}</p>
-                        <p><strong>العنوان:</strong> ${order.customer.address}</p>
-                        ${order.customer.notes ? `<p><strong>ملاحظات:</strong> ${order.customer.notes}</p>` : ''}
-                      </div>
-                      <div class="details-box">
-                        <h4>💳 بيانات الدفع والطلب:</h4>
-                        <p><strong>طريقة الدفع:</strong> ${order.paymentMethod}</p>
-                        ${order.walletName ? `<p><strong>المحفظة المختارة:</strong> ${order.walletName}</p>` : ''}
-                        ${order.transferRefNumber && order.transferRefNumber !== "غير محدد" ? `<p><strong>رقم التحويل/السند:</strong> ${order.transferRefNumber}</p>` : ''}
-                        <p><strong>حالة الطلب:</strong> <span style="color:#d97706; font-weight: bold;">قيد التجهيز والتوصيل ⏳</span></p>
-                      </div>
-                    </div>
-
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style="width: 40px; text-align: center;">#</th>
-                          <th>المنتج / البيان</th>
-                          <th style="text-align: center;">الكمية</th>
-                          <th style="text-align: center;">السعر الفردي</th>
-                          <th style="text-align: left;">الإجمالي</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${itemsHtml}
-                      </tbody>
-                    </table>
-
-                    <div class="summary-box">
-                      <div class="summary-row">
-                        <span>المجموع الفرعي:</span>
-                        <span>${order.subtotal} ${order.currency}</span>
-                      </div>
-                      ${order.discount > 0 ? `
-                      <div class="summary-row" style="color:#4ade80;">
-                        <span>الخصم المطبق:</span>
-                        <span>- ${order.discount} ${order.currency}</span>
-                      </div>` : ''}
-                      <div class="summary-row">
-                        <span>رسوم الشحن والتوصيل:</span>
-                        <span style="color:#4ade80; font-weight: bold;">${order.shipping === 0 ? 'مجاني 🚚' : order.shipping + ' ' + order.currency}</span>
-                      </div>
-                      ${order.tax > 0 ? `<div class="summary-row"><span>الضريبة:</span><span>+ ${order.tax} ${order.currency}</span></div>` : ''}
-                      ${order.codFee > 0 ? `<div class="summary-row"><span>رسوم الدفع عند الاستلام:</span><span>+ ${order.codFee} ${order.currency}</span></div>` : ''}
-                      <div class="total-row">
-                        <span>الإجمالي النهائي المستحق:</span>
-                        <span>${order.total} ${order.currency}</span>
-                      </div>
-                    </div>
-
-                    <div class="footer">
-                      <p>شكراً لثقتك بمتجر <strong>${config.storeName}</strong>! نتمنى لك تجربة تسوق رائعة دائماً.</p>
-                      <p style="margin-top: 4px; font-size: 10px;">تم إصدار هذه الفاتورة إلكترونياً وهي معتمدة لخدمات المبيعات والمتابعة.</p>
-                    </div>
-                  </div>
-
-                  <script>
-                    window.onload = function() {
-                      setTimeout(function() {
-                        window.print();
-                      }, 300);
-                    };
-                  </script>
-                </body>
-                </html>
-              `;
-
-              invoiceWindow.document.open();
-              invoiceWindow.document.write(invoiceHtml);
-              invoiceWindow.document.close();
-            } catch (e) {
-              window.print();
-            }
+            if (!order) return;
+            const invoiceWindow = window.open("", "_blank", "width=800,height=900");
+            if (!invoiceWindow) return;
+            invoiceWindow.document.open();
+            invoiceWindow.document.write(buildPrintableInvoiceHtml(order, config.storeName || "المتجر"));
+            invoiceWindow.document.close();
           };
 
           const getWhatsAppInvoiceUrl = (order: any) => {
-            if (!order) return "#";
-            const storePhone = config.whatsapp || config.phone || "+966500000000";
-            const itemsListStr = order.items.map((it: any, idx: number) => 
-              `${idx + 1}. ${it.product.name} × ${it.quantity} (${it.product.price} ${order.currency})`
-            ).join("\n");
-
-            const textMsg = 
-`*طلب جديد من متجر ${config.storeName || "المتجر"}* 🛍️
------------------------------------
-*رقم الطلب:* ${order.orderNum}
-*التاريخ:* ${order.date}
-
-*بيانات العميل والشحن:* 👤
-• الاسم: ${order.customer.fullName}
-• الجوال: ${order.customer.phone}
-• المدينة/المحافظة: ${order.customer.city}
-• العنوان التفصيلي: ${order.customer.address}
-${order.customer.notes ? `• ملاحظات: ${order.customer.notes}\n` : ""}
-*طريقة الدفع:* ${order.paymentMethod}
-${order.transferRefNumber ? `• رقم السند/الحوالة: ${order.transferRefNumber}\n` : ""}
------------------------------------
-*المنتجات المطلوبة:* 📦
-${itemsListStr}
-
------------------------------------
-*المجموع الكلي:* ${order.total} ${order.currency}
------------------------------------
-يرجى تأكيد تجهيز الشحنة والتوصيل وشكراً لكم! ✨`;
-
-            const cleanPhone = storePhone.replace(/[^0-9]/g, "");
-            return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`;
+            const target = order?.presentation?.whatsappTarget;
+            if (!target) return null;
+            const items = order.items.map((item: any) => `${item.product.name} × ${item.quantity}`).join("\n");
+            const message = `طلب ${order.orderNum}\n${items}\nالإجمالي: ${order.total} ${order.currency}`;
+            return `https://wa.me/${target.slice(1)}?text=${encodeURIComponent(message)}`;
           };
 
           return (
             <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8 animate-fadeIn pb-16 text-right">
+              <header className="space-y-2 text-center">
+                <h2 className="text-2xl font-black text-slate-900">{config.checkoutTitle?.trim() || "إتمام الطلب"}</h2>
+                {config.checkoutSubtitle?.trim() && <p className="text-sm text-slate-600">{config.checkoutSubtitle}</p>}
+                {config.checkoutNotice?.trim() && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">{config.checkoutNotice}</p>}
+              </header>
               {/* Checkout Progress Stepper Bar */}
               <div className="flex items-center justify-between border-b pb-4 overflow-x-auto gap-2"
                    style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
@@ -2599,10 +2117,8 @@ ${itemsListStr}
                     <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce">
                       <Check className="w-10 h-10 stroke-[3]" />
                     </div>
-                    <h2 className="text-xl md:text-2xl font-black">تم إرسال واستلام طلبك بنجاح! 🎉</h2>
-                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">
-                      شكراً لثقتك بمتجر <strong className="text-white underline">{config.storeName}</strong>. تم تسجيل بيانات طلبك وإشعار الإدارة لتجهيزه فوراً.
-                    </p>
+                    <h2 className="text-xl md:text-2xl font-black">{placedOrderDetails.presentation.title}</h2>
+                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">{placedOrderDetails.presentation.message}</p>
                     <div className="inline-flex items-center gap-2 bg-emerald-950/80 px-4 py-2 rounded-xl text-xs font-mono text-emerald-300 border border-emerald-600/40">
                       <span>رقم المرجعية المعتمد:</span>
                       <strong className="text-white font-bold text-sm">{placedOrderDetails.orderNum}</strong>
@@ -2725,15 +2241,15 @@ ${itemsListStr}
 
                     {/* Action Buttons Row */}
                     <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                      <a
-                        href={getWhatsAppInvoiceUrl(placedOrderDetails)}
+                      {getWhatsAppInvoiceUrl(placedOrderDetails) && <a
+                        href={getWhatsAppInvoiceUrl(placedOrderDetails)!}
                         target="_blank"
                         rel="noreferrer"
                         className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition"
                       >
                         <MessageSquare className="w-4 h-4 fill-white" />
-                        <span>إرسال تفاصيل الفاتورة عبر الواتساب لإدارة المتجر 💬</span>
-                      </a>
+                        <span>مشاركة تفاصيل الفاتورة عبر WhatsApp</span>
+                      </a>}
 
                       <button
                         onClick={() => handlePrintInvoice(placedOrderDetails)}
@@ -2775,26 +2291,7 @@ ${itemsListStr}
                     >
                       <span>استعراض معرض المنتجات 🛍️</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (config.products && config.products.length > 0) {
-                          addToCart(config.products[0]);
-                        } else {
-                          addToCart({
-                            id: "demo-p-1",
-                            name: "منتج تجريبي للاختبار",
-                            price: 120,
-                            description: "منتج افتراضي لاختبار نافذة الشراء والدفع",
-                            category: "عام",
-                            imageKeyword: "default"
-                          });
-                        }
-                      }}
-                      className="py-3 px-5 rounded-xl text-slate-900 font-extrabold text-xs bg-amber-400 hover:bg-amber-300 transition inline-flex items-center gap-2 w-full sm:w-auto justify-center cursor-pointer shadow-sm"
-                    >
-                      <span>إضافة منتج تجريبي واختبار الدفع الفوري ⚡</span>
-                    </button>
+
                   </div>
                 </div>
               ) : (
@@ -2985,9 +2482,7 @@ ${itemsListStr}
                           </div>
                           <div>
                             <h4 className="font-black text-xs text-slate-900">الدفع عبر المحافظ الإلكترونية</h4>
-                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                              تحويل مباشر عبر الكريمي، جوالي، ون كاش، فلوس، جيب، أو تحويل إلكتروني.
-                            </p>
+                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">استخدم فقط الحساب أو المحفظة التي فعّلها هذا المتجر.</p>
                           </div>
                         </div>)}
                       </div>
@@ -3012,11 +2507,11 @@ ${itemsListStr}
                           {/* Wallets Selector Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {WALLETS.map((w) => {
-                              const isSelected = effectiveWalletId === w.id;
+                              const isSelected = effectiveWalletId === w.selectionKey;
                               return (
                                 <div
-                                  key={w.id}
-                                  onClick={() => setSelectedWallet(w.id as any)}
+                                  key={w.selectionKey}
+                                  onClick={() => setSelectedWallet(w.selectionKey)}
                                   className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between gap-2 ${
                                     isSelected 
                                       ? "border-emerald-600 bg-white shadow-xs ring-1 ring-emerald-500" 
@@ -3038,7 +2533,7 @@ ${itemsListStr}
 
                           {/* Selected Wallet Information Box */}
                           {(() => {
-                            const activeW = WALLETS.find(w => w.id === effectiveWalletId) || WALLETS[0];
+                            const activeW = WALLETS.find(w => w.selectionKey === effectiveWalletId) || WALLETS[0];
                             if (!activeW) return null;
                             return (
                               <div className={`p-4 rounded-xl border space-y-3 ${activeW.bgColor}`}>
@@ -3072,7 +2567,9 @@ ${itemsListStr}
                                   </label>
                                   <input 
                                     type="text"
-                                    placeholder="أدخل رقم إشعار الحوالة المكون من أرقام (مثال: TRX-94281)"
+                                    required
+                                    maxLength={200}
+                                    placeholder="رقم مرجع التحويل أو الإيداع"
                                     value={transferRefNumber}
                                     onChange={(e) => setTransferRefNumber(e.target.value)}
                                     className="w-full border rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-slate-900 bg-white border-slate-300 focus:outline-none focus:border-emerald-600"
@@ -3125,7 +2622,7 @@ ${itemsListStr}
                         <div className="flex gap-2">
                           <input 
                             type="text"
-                            placeholder="أدخل كود الخصم (WELCOME10)"
+                            placeholder="أدخل كود الخصم"
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value)}
                             className="flex-1 border rounded-xl px-3 py-1.5 text-xs uppercase font-mono font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
@@ -3158,6 +2655,13 @@ ${itemsListStr}
                           <span className="font-mono">{cartTotal} {config.currency}</span>
                         </div>
 
+                        {tax > 0 && (
+                          <div className="flex justify-between text-slate-600">
+                            <span>الضريبة:</span>
+                            <span className="font-mono">+ {tax.toFixed(2)} {config.currency}</span>
+                          </div>
+                        )}
+
                         {couponDiscount > 0 && (
                           <div className="flex justify-between text-emerald-600">
                             <span>خصم الكوبون:</span>
@@ -3182,7 +2686,7 @@ ${itemsListStr}
                         <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
                           <span>المجموع الكلي النهائي:</span>
                           <span className="text-sky-700 text-base font-mono">
-                            {finalCheckoutTotal} {config.currency}
+                            {finalCheckoutTotal.toFixed(2)} {config.currency}
                           </span>
                         </div>
                         </>}
@@ -3191,7 +2695,7 @@ ${itemsListStr}
                       {/* Submit Order Button */}
                       <button
                         type="submit"
-                        disabled={orderSubmitting || (mode === "live" && !codAvailable && !transferAvailable)}
+                        disabled={orderSubmitting || (!codAvailable && !transferAvailable)}
                         className={`w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] ${
                           !isElegant ? "bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 font-mono shadow-sky-600/20" : "hover:opacity-90"
                         }`}
@@ -3347,8 +2851,8 @@ ${itemsListStr}
                   <div className={`space-y-2 text-xs p-3 rounded-xl border ${
                     !isElegant ? "bg-sky-50 border-sky-200 text-sky-900 font-mono" : "bg-slate-400/5 text-slate-500"
                   }`}>
-                    <p>* الشحن: مجاني لكافة المناطق 🚚</p>
-                    <p>* الدفع: متوفر عند الاستلام ومحاكاة مفعّلة بأمان 🔒</p>
+                    <p>* الشحن والضريبة: تظهر قيمهما النهائية في صفحة إتمام الطلب.</p>
+                    <p>* الدفع: تظهر فقط الوسائل التي فعّلها المتجر ببيانات مكتملة.</p>
                   </div>
 
                   <button

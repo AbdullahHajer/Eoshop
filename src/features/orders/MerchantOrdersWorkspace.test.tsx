@@ -9,7 +9,7 @@ import { createFakeUiAdapters } from "../../adapters/testing/fakeUiAdapters";
 import type { OrderReceipt } from "../../adapters/uiAdapters";
 import MerchantOrdersWorkspace from "../../components/MerchantOrdersWorkspace";
 
-const receipt: OrderReceipt = { id: "order-1", number: "EO-1", status: "submitted", allowedTransitions: ["accepted"], paymentState: "due_on_delivery", currencyCode: "YER", totals: { itemsSubtotalMinor: 100, discountMinor: 0, shippingMinor: 0, taxMinor: 0, paymentFeeMinor: 0, grandTotalMinor: 100 }, createdAt: "2026-08-19T10:00:00Z" };
+const receipt: OrderReceipt = { id: "order-1", number: "EO-1", status: "submitted", allowedTransitions: ["accepted"], paymentState: "due_on_delivery", currencyCode: "YER", totals: { itemsSubtotalMinor: 100, discountMinor: 0, shippingMinor: 0, taxMinor: 0, paymentFeeMinor: 0, grandTotalMinor: 100 }, createdAt: "2026-08-19T10:00:00Z", checkoutPresentation: { title: "تم استلام طلبك", message: "احتفظ برقم الطلب للمتابعة مع المتجر.", whatsappTarget: null } };
 
 afterEach(cleanup);
 

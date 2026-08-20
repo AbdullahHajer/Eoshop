@@ -52,7 +52,7 @@ final class StoreAssetPath
     public static function referencedIds(array $config, string $tenantId): array
     {
         $ids = [];
-        foreach (['logoUrl', 'heroBannerImage'] as $field) {
+        foreach (['logoUrl', 'heroBannerImage', 'aboutImage'] as $field) {
             $value = $config[$field] ?? null;
             if (is_string($value)) {
                 $id = self::assetId($value, $tenantId);

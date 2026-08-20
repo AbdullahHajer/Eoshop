@@ -13,6 +13,7 @@ use App\Exceptions\InventoryConflict;
 use App\Exceptions\OrderConflict;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\CheckoutPresentation;
 use App\Support\OrderIdentity;
 use App\Support\OrderReadiness;
 use Carbon\CarbonImmutable;
@@ -58,7 +59,9 @@ class OrderService
                     $payload['requestId'] ?? null,
                 );
                 if ($claim['replayed']) {
-                    return $this->operations->replayResult((string) $claim['operation']->id);
+                    return $this->withPresentationFallback(
+                        $this->operations->replayResult((string) $claim['operation']->id),
+                    );
                 }
 
                 $configRow = DB::table('store_configs')->where('is_current', true)->lockForUpdate()->first();
@@ -198,6 +201,7 @@ class OrderService
 
                 $receipt = $this->resource(DB::table('orders')->where('id', $orderId)->firstOrFail(), false);
                 $receipt['items'] = $quote['items'];
+                $receipt['checkoutPresentation'] = CheckoutPresentation::fromConfig($config);
 
                 return $this->operations->storeResult((string) $claim['operation']->id, [
                     'replayed' => false,
@@ -205,6 +209,20 @@ class OrderService
                 ]);
             }));
         });
+    }
+
+    /** @param array<string, mixed> $result @return array<string, mixed> */
+    private function withPresentationFallback(array $result): array
+    {
+        if (! isset($result['order']) || ! is_array($result['order'])) {
+            return $result;
+        }
+
+        if (! isset($result['order']['checkoutPresentation']) || ! is_array($result['order']['checkoutPresentation'])) {
+            $result['order']['checkoutPresentation'] = CheckoutPresentation::fallback();
+        }
+
+        return $result;
     }
 
     /** @return array<string, mixed> */
