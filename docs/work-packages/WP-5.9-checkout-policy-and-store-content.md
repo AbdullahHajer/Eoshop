@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.9 |
-| Status | Implementation |
+| Status | Complete and merged |
 | Started | 2026-08-20 |
 | Branch | `codex/wp-5.9-checkout-content` |
 | Base | Protected `main` at `4c44250` |
@@ -112,7 +112,7 @@ Replace the remaining checkout and content prototype panels with focused, truthf
 
 - [x] Record exact evidence and retained gateway/contact/legal-page debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 

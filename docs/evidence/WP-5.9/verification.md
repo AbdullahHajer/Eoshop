@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.9 — Checkout policy and store content tasks |
-| Status | Verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-21 |
 | Branch | `codex/wp-5.9-checkout-content` |
 | Base | `4c44250` |
@@ -64,4 +64,8 @@ Environment: exact WP 5.9 PHP 8.4 backend quality image `eoshop/backend-quality:
 ## Delivery status
 
 - Implementation is recorded separately in `12235b3fcfa06dbfef6a254c1ee6b94961d8777a`.
-- Evidence commit, pull request, required CI, merge commit and protected-main CI are pending and must be appended from verified delivery facts.
+- Evidence is recorded separately in `613f5176f7f7e24bb16f4f2a95c3ad1946548674`.
+- Pull request [#42](https://github.com/sas-prog1/Eoshop/pull/42) was merged from final head `613f5176f7f7e24bb16f4f2a95c3ad1946548674`.
+- Pull-request CI run [32424414550](https://github.com/sas-prog1/Eoshop/actions/runs/32424414550) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `ce5a2cfba375d3c3e7a6b496b4df0df11e54b370`.
+- Protected-main CI run [32424861479](https://github.com/sas-prog1/Eoshop/actions/runs/32424861479) passed the same four required jobs after merge.
