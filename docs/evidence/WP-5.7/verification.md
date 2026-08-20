@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.7 — Focused product editor and builder simplification |
-| Status | Implementation verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-20 |
 | Branch | `codex/wp-5.7-product-editor` |
 | Base | `ec662b8548a11c07114b43fdcf0e64a7e2e327e5` |
@@ -64,4 +64,9 @@ Environment: unchanged backend source with the current backend quality image.
 
 ## Delivery status
 
-- Implementation commit, evidence commit, PR, required CI and protected-main merge facts will be recorded only after they exist.
+- Implementation is recorded separately in `c1c2a44de56017d845421fa84bc167cb688cf03f`.
+- Evidence is recorded separately in `5da32635faf83ef8671975a8cdfa344a96d0dc64`.
+- Pull request [#38](https://github.com/sas-prog1/Eoshop/pull/38) was merged from head `5da32635faf83ef8671975a8cdfa344a96d0dc64`.
+- Pull-request CI run [32387916171](https://github.com/sas-prog1/Eoshop/actions/runs/32387916171) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `d0133432a2dde5837740c1ac3b8d9ef8748502f4`.
+- Protected-main CI run [32388520881](https://github.com/sas-prog1/Eoshop/actions/runs/32388520881) passed the same four required jobs after merge.
