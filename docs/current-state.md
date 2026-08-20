@@ -1,6 +1,6 @@
 # Eoshop current delivery state
 
-Updated: 2026-08-19
+Updated: 2026-08-20
 
 ## Product position
 
@@ -15,10 +15,11 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - Phase 4.1–4.3: catalog/pricing/media, inventory ledger/reservations and server-authoritative orders.
 - Phase 5.1–5.3: initial frontend boundaries and repeatable local QA Pilot.
 - WP 5.4–5.5: merchant portal, server-owned drafts, rejected-store correction/resubmission and merchant publication controls.
+- WP 5.6: route-owned merchant store operations for catalog, orders, inventory and store modules.
 
 ## Active
 
-- Select and contract the next merchant operational work package without reopening the delivered lifecycle core.
+- WP 5.7: extract a focused product editor, remove order/inventory duplication from the design builder and preserve the server-owned workspace save boundary.
 
 ## Approved next sequence
 

@@ -21,6 +21,13 @@ const config: StoreConfig = {
     description: "Description",
     category: "General",
     imageKeyword: "product",
+  }, {
+    id: "draft:55555555-5555-4555-8555-555555555555",
+    name: "Second product",
+    price: 8,
+    description: "Second description",
+    category: "General",
+    imageKeyword: "product",
   }],
 };
 
@@ -67,7 +74,10 @@ describe("workspaceApi", () => {
         updatedAt: "2026-08-15T12:01:00Z",
         config: {
           ...config,
-          products: [{ ...config.products[0], id: "22222222-2222-4222-8222-222222222222", price: "12.50" }],
+          products: [
+            { ...config.products[0], id: "22222222-2222-4222-8222-222222222222", price: "12.50" },
+            { ...config.products[1], id: "66666666-6666-4666-8666-666666666666", price: "8.00" },
+          ],
         },
       },
     };
@@ -77,7 +87,7 @@ describe("workspaceApi", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("crypto", { randomUUID: () => "33333333-3333-4333-8333-333333333333" });
 
-    await workspaceApi.save("tenant-1", 7, 3, config, ["44444444-4444-4444-8444-444444444444"]);
+    const result = await workspaceApi.save("tenant-1", 7, 3, config, ["44444444-4444-4444-8444-444444444444"]);
 
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     const body = JSON.parse(request.body as string);
@@ -85,8 +95,13 @@ describe("workspaceApi", () => {
     expect(body.catalogRevision).toBe(3);
     expect(body.archiveProductIds).toEqual(["44444444-4444-4444-8444-444444444444"]);
     expect(body.config.products[0].id).toBeUndefined();
+    expect(body.config.products[1].id).toBeUndefined();
     expect(body.config.products[0].basePrice).toBe("12.50");
     expect(body.config.products[0].status).toBe("draft");
+    expect(result.config.products.map((product) => product.id)).toEqual([
+      "22222222-2222-4222-8222-222222222222",
+      "66666666-6666-4666-8666-666666666666",
+    ]);
     expect(request.headers).toMatchObject({ "X-CSRF-TOKEN": "workspace-csrf" });
   });
 
