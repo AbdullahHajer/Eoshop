@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.7 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-20 |
 | Branch | `codex/wp-5.7-product-editor` |
 | Base | Protected `main` at `ec662b8` |
@@ -94,7 +94,7 @@ Give a merchant one focused, truthful place to add and edit products while simpl
 
 - [x] Record exact evidence and remaining builder debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 

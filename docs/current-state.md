@@ -16,10 +16,11 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - Phase 5.1–5.3: initial frontend boundaries and repeatable local QA Pilot.
 - WP 5.4–5.5: merchant portal, server-owned drafts, rejected-store correction/resubmission and merchant publication controls.
 - WP 5.6: route-owned merchant store operations for catalog, orders, inventory and store modules.
+- WP 5.7: focused product editor with ID-keyed changes, truthful archive/media behavior and removal of duplicate order/inventory builder modules.
 
 ## Active
 
-- WP 5.7: extract a focused product editor, remove order/inventory duplication from the design builder and preserve the server-owned workspace save boundary.
+- No implementation WP is active while the next Phase 5 boundary is defined from the retained builder and platform-console debt.
 
 ## Approved next sequence
 
