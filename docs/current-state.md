@@ -18,17 +18,17 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - WP 5.6: route-owned merchant store operations for catalog, orders, inventory and store modules.
 - WP 5.7: focused product editor with ID-keyed changes, truthful archive/media behavior and removal of duplicate order/inventory builder modules.
 - WP 5.8: focused store profile and appearance editor with tenant-isolated managed logo/hero assets and no second workspace writer.
+- WP 5.9: focused checkout policy and About/contact content tasks with truthful payment/contact behavior, immutable receipt presentation and managed About media.
 
 ## Active
 
-- WP 5.9: focused checkout policy and About/contact content tasks with truthful payment/contact behavior and no second workspace writer.
+- Phase 5 next boundary: platform administration console productization.
 
 ## Approved next sequence
 
-1. Focused checkout/settings and content-page merchant tasks, continuing removal of the retained prototype builder.
-2. Platform administration console with users, audit, platform settings and operational queues.
-3. UX/browser acceptance, accessibility and responsive hardening.
-4. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
+1. Platform administration console with users, audit, platform settings and operational queues.
+2. UX/browser acceptance, accessibility and responsive hardening.
+3. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 
