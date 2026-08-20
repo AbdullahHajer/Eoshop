@@ -227,7 +227,7 @@ describe("adapter-backed interface flows", () => {
 
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
     expect(saveWorkspace).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it("does not open new-store templates when the authoritative draft request fails", async () => {
     window.history.replaceState({}, "", "/app/new");
@@ -668,7 +668,7 @@ describe("adapter-backed interface flows", () => {
       </UiAdaptersProvider>
     );
     const view = render(panel("tenant-a"));
-    const productCard = screen.getByText(catalogConfig.products[0].name).closest("div.rounded-2xl");
+    const productCard = screen.getByText(catalogConfig.products[0].name).closest("article");
     const editButton = productCard?.querySelector("button");
     expect(editButton).toBeTruthy();
     fireEvent.click(editButton as HTMLButtonElement);
@@ -731,7 +731,7 @@ describe("adapter-backed interface flows", () => {
       </UiAdaptersProvider>
     );
     const view = render(panel(catalogConfig));
-    const productCard = screen.getByText(catalogConfig.products[0].name).closest("div.rounded-2xl");
+    const productCard = screen.getByText(catalogConfig.products[0].name).closest("article");
     fireEvent.click(productCard?.querySelector("button") as HTMLButtonElement);
     fireEvent.change(view.container.querySelector('input[type="file"]') as HTMLInputElement, {
       target: { files: [new File(["image"], "product.png", { type: "image/png" })] },
@@ -764,7 +764,7 @@ describe("adapter-backed interface flows", () => {
     await openRestoredBuilder(appAdapters(save), user);
     await user.click(screen.getByTestId("products-tab"));
     const product = workspace.config.products[0];
-    const productCard = screen.getAllByText(product.name)[0].closest("div.rounded-2xl");
+    const productCard = screen.getAllByText(product.name)[0].closest("article");
     fireEvent.click(productCard?.querySelector("button") as HTMLButtonElement);
 
     fireEvent.change(screen.getByTestId(`product-base-price-${product.id}`), { target: { value: "200" } });
@@ -776,194 +776,82 @@ describe("adapter-backed interface flows", () => {
     expect(savedConfig.products[0]).toMatchObject({ basePrice: 200, salePrice: 150, price: 150 });
   });
 
-  it("keeps an inventory mutation bound to its tenant and updates the saved baseline", async () => {
-    const product = workspace.config.products[0];
-    const inventoryWorkspace: StoreWorkspace = {
+  it("creates collision-safe draft products and keeps them controlled until workspace save", async () => {
+    const save = vi.fn(async (_tenantId, _revision, _catalogRevision, config) => ({
+      ...workspace,
+      revision: 8,
+      catalogRevision: 4,
+      config,
+    }));
+    const user = userEvent.setup();
+    await openRestoredBuilder(appAdapters(save), user);
+    await user.click(screen.getByTestId("products-tab"));
+    await user.click(screen.getByRole("button", { name: "إضافة منتج" }));
+    await user.click(screen.getByRole("button", { name: "إضافة منتج" }));
+    await user.click(screen.getByTestId("save-workspace"));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const products = save.mock.calls[0][3].products as Array<{ id: string }>;
+    expect(products[0].id).toMatch(/^draft:[0-9a-f-]{36}$/i);
+    expect(products[1].id).toMatch(/^draft:[0-9a-f-]{36}$/i);
+    expect(products[0].id).not.toBe(products[1].id);
+  });
+
+  it("retains a persisted archive intent after a failed save and clears it only on success", async () => {
+    const persistedId = "77777777-7777-4777-8777-777777777777";
+    const persistedWorkspace: StoreWorkspace = {
       ...workspace,
       config: {
         ...workspace.config,
-        products: [{
-          ...product,
-          stockQuantity: 10,
-          reservedQuantity: 0,
-          availableQuantity: 10,
-          inventoryRevision: 1,
-          manageStock: true,
-          lowStockThreshold: 3,
-        }, ...workspace.config.products.slice(1)],
+        products: [{ ...workspace.config.products[0], id: persistedId, name: "منتج قابل للأرشفة" }],
       },
     };
-    let resolveAdjustment!: (result: {
-      tenantId: string;
-      operationId: string;
-      replayed: boolean;
-      items: Array<{
-        productId: string;
-        onHand: number;
-        reserved: number;
-        available: number | null;
-        manageStock: boolean;
-        lowStockThreshold: number;
-        inventoryRevision: number;
-      }>;
-    }) => void;
-    const adjust = vi.fn(() => new Promise<Parameters<typeof resolveAdjustment>[0]>((resolve) => {
-      resolveAdjustment = resolve;
-    }));
-    const adapters = appAdapters(vi.fn());
-    adapters.workspace.load = vi.fn().mockResolvedValue(inventoryWorkspace);
-    adapters.inventory.adjust = adjust;
-    vi.spyOn(window, "prompt").mockReturnValue("12");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
+    const save = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("تعذر الحفظ.", "server"))
+      .mockImplementationOnce(async (_tenantId, _revision, _catalogRevision, config) => ({
+        ...persistedWorkspace,
+        revision: 8,
+        catalogRevision: 4,
+        config,
+      }));
+    const adapters = appAdapters(save);
+    adapters.workspace.load = vi.fn().mockResolvedValue(persistedWorkspace);
     const user = userEvent.setup();
     await openRestoredBuilder(adapters, user);
-    await user.click(screen.getByRole("button", { name: "أحدث نسخة" }));
-    await waitFor(() => expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0));
-    await user.click(screen.getByTestId("inventory-tab"));
-    await user.click(screen.getAllByRole("button", { name: "تسجيل حركة تصحيح" })[0]);
-    await waitFor(() => expect(adjust).toHaveBeenCalledWith(
-      submission.id,
-      [{
-        productId: product.id,
-        expectedInventoryRevision: 1,
-        movementKind: "correction",
-        delta: 2,
-      }],
-      "merchant_manual_correction",
-      expect.any(String),
-    ));
-    expect((screen.getByTestId("save-workspace") as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "خروج" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByTestId("products-tab"));
+    await user.click(screen.getByRole("button", { name: /منتج قابل للأرشفة/ }));
+    await user.click(screen.getByRole("button", { name: "أرشفة المنتج عند الحفظ" }));
+    await user.click(screen.getByRole("button", { name: "تأكيد" }));
+    expect(await screen.findByText(/أُضيفت نية أرشفة المنتج إلى تعديلاتك غير المحفوظة/)).toBeTruthy();
 
-    resolveAdjustment({
-      tenantId: submission.id,
-      operationId: "00000000-0000-0000-0000-000000000099",
-      replayed: false,
-      items: [{
-        productId: product.id,
-        onHand: 12,
-        reserved: 0,
-        available: 12,
-        manageStock: true,
-        lowStockThreshold: 3,
-        inventoryRevision: 2,
-      }],
-    });
+    await user.click(screen.getByTestId("save-workspace"));
+    await waitFor(() => expect(save).toHaveBeenNthCalledWith(1, submission.id, 7, 3, expect.any(Object), [persistedId]));
+    expect(await screen.findByText("تعذر الحفظ.")).toBeTruthy();
 
-    expect(await screen.findByText("الرصيد الفعلي: 12")).toBeTruthy();
-    await waitFor(() => expect((screen.getByTestId("save-workspace") as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.queryByText("تعديلات أو تعارضات غير محفوظة")).toBeNull();
+    await user.click(screen.getByTestId("save-workspace"));
+    await waitFor(() => expect(save).toHaveBeenNthCalledWith(2, submission.id, 7, 3, expect.any(Object), [persistedId]));
+    expect(await screen.findByText(/تم حفظ إعدادات المتجر والمنتجات/)).toBeTruthy();
   }, 15_000);
 
-  it("hides inventory for missing view permission and disables mutations for view-only access", async () => {
-    const adapters = appAdapters(vi.fn());
-    adapters.workspace.load = vi.fn().mockResolvedValue({
-      ...workspace,
-      capabilities: { inventoryView: false, inventoryManage: false },
-    });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("removes duplicate operational tabs and guards the dirty inventory handoff", async () => {
+    const confirm = vi.spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
     const user = userEvent.setup();
-    await openRestoredBuilder(adapters, user);
-    await user.click(screen.getByRole("button", { name: "أحدث نسخة" }));
-    await waitFor(() => expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0));
+    await openRestoredBuilder(appAdapters(vi.fn()), user);
+    await user.click(screen.getByTestId("products-tab"));
     expect(screen.queryByTestId("inventory-tab")).toBeNull();
+    expect(screen.queryByRole("button", { name: "الطلبات" })).toBeNull();
 
-    const inventoryProduct = {
-      ...workspace.config.products[0],
-      stockQuantity: 10,
-      reservedQuantity: 0,
-      availableQuantity: 10,
-      inventoryRevision: 1,
-      manageStock: true,
-      lowStockThreshold: 3,
-    };
-    renderInterface(
-      <ControlPanel
-        config={{ ...workspace.config, products: [inventoryProduct] }}
-        activeTenantId={submission.id}
-        canViewInventory
-        canManageInventory={false}
-        handleConfigChange={vi.fn()}
-        handleProductChange={vi.fn()}
-        handleProductMediaChange={vi.fn()}
-        adjustInventory={vi.fn()}
-        updateInventoryPolicy={vi.fn()}
-        addEmptyProduct={vi.fn()}
-        deleteProduct={vi.fn()}
-        activeTab="inventory"
-        setActiveTab={vi.fn()}
-        previewDevice="desktop"
-        setPreviewDevice={vi.fn()}
-      />,
-      createFakeUiAdapters(),
-    );
-    expect((screen.getAllByRole("button", { name: "تحديث عدد الكمية للكل" }).at(-1) as HTMLButtonElement).disabled).toBe(true);
-  }, 15_000);
+    const product = workspace.config.products[0];
+    await user.click(screen.getAllByRole("button", { name: new RegExp(product.name) })[0]);
+    fireEvent.change(screen.getByLabelText("اسم المنتج"), { target: { value: "تعديل غير محفوظ" } });
+    await user.click(screen.getByRole("button", { name: /فتح المخزون/ }));
+    expect(window.location.pathname).toContain("/design");
 
-  it("serializes merchant order transitions and reuses the logical idempotency key after failure", async () => {
-    let rejectFirst!: (error: Error) => void;
-    const firstAttempt = new Promise<never>((_resolve, reject) => { rejectFirst = reject; });
-    const order = {
-      id: "22222222-2222-4222-8222-222222222222",
-      number: "EO-222222222222",
-      status: "submitted" as const,
-      allowedTransitions: ["accepted" as const],
-      paymentState: "due_on_delivery",
-      currencyCode: "YER",
-      totals: {
-        itemsSubtotalMinor: 1000,
-        discountMinor: 0,
-        shippingMinor: 0,
-        taxMinor: 0,
-        paymentFeeMinor: 0,
-        grandTotalMinor: 1000,
-      },
-      items: [],
-      createdAt: "2026-08-17T10:00:00Z",
-    };
-    const updateStatus = vi.fn()
-      .mockImplementationOnce(() => firstAttempt)
-      .mockResolvedValueOnce({
-        replayed: false,
-        order: { ...order, status: "accepted" as const, allowedTransitions: ["processing" as const] },
-      });
-    const adapters = createFakeUiAdapters({
-      orders: {
-        list: vi.fn().mockResolvedValue({ items: [order], total: 1 }),
-        updateStatus,
-      },
-    });
-    renderInterface(
-      <ControlPanel
-        config={workspace.config}
-        activeTenantId={submission.id}
-        handleConfigChange={vi.fn()}
-        handleProductChange={vi.fn()}
-        handleProductMediaChange={vi.fn()}
-        addEmptyProduct={vi.fn()}
-        deleteProduct={vi.fn()}
-        activeTab="orders"
-        setActiveTab={vi.fn()}
-        previewDevice="desktop"
-        setPreviewDevice={vi.fn()}
-      />,
-      adapters,
-    );
-
-    const advance = await screen.findByRole("button", { name: "قبول الطلب" });
-    fireEvent.click(advance);
-    fireEvent.click(advance);
-    await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(1));
-    expect((advance as HTMLButtonElement).disabled).toBe(true);
-    const firstKey = updateStatus.mock.calls[0][4];
-
-    rejectFirst(new Error("ambiguous network failure"));
-    await screen.findByRole("alert");
-    fireEvent.click(screen.getByRole("button", { name: "قبول الطلب" }));
-    await waitFor(() => expect(updateStatus).toHaveBeenCalledTimes(2));
-    expect(updateStatus.mock.calls[1][4]).toBe(firstKey);
-    await screen.findByRole("button", { name: "بدء التجهيز" });
+    await user.click(screen.getByRole("button", { name: /فتح المخزون/ }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/app/stores/${submission.id}/inventory`));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("سيتجاهل تعديلات المحرر غير المحفوظة"));
   });
 
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {

@@ -4,8 +4,6 @@ export type ControlTab =
   | "branding"
   | "design"
   | "products"
-  | "inventory"
-  | "orders"
   | "checkout"
   | "pages"
   | "ai"
@@ -16,13 +14,11 @@ export type PreviewDevice = "desktop" | "mobile";
 export interface ControlPanelProps {
   config: StoreConfig;
   activeTenantId: string | null;
+  mediaOwnerKey?: string | null;
   canViewInventory?: boolean;
-  canManageInventory?: boolean;
   handleConfigChange: (key: keyof StoreConfig, value: any) => void;
-  handleProductChange: (index: number, key: keyof Product, value: any) => void;
+  handleProductChange: (productId: string, patch: Partial<Product>) => void;
   handleProductMediaChange: (productId: string, urls: string[]) => void;
-  adjustInventory?: (targets: Array<{ productId: string; targetOnHand: number }>) => Promise<boolean>;
-  updateInventoryPolicy?: (productId: string, manageStock: boolean, lowStockThreshold: number) => Promise<boolean>;
   addEmptyProduct: () => void;
   deleteProduct: (id: string) => void;
   activeTab: ControlTab;
@@ -30,6 +26,7 @@ export interface ControlPanelProps {
   previewDevice: PreviewDevice;
   setPreviewDevice: (device: PreviewDevice) => void;
   onOpenCheckoutPreview?: () => void;
+  onOpenInventory?: () => void;
   onOpenDomainModal?: () => void;
 }
 
