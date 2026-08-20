@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.6 — Merchant operations hub |
-| Status | Verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-19 |
 | Branch | `codex/wp-5.6-merchant-operations-hub` |
 | Base | `7e05ec56a12577f4e66e149db02d2740d9ac116d` |
@@ -69,5 +69,9 @@ Environment: `eoshop/backend-quality:ci`, rebuilt from the final implementation 
 ## Delivery status
 
 - Implementation is recorded separately in `6180adfcc9c4746850d14f710d98ae0d9c609745`.
-- Evidence is recorded in the following documentation-only commit.
-- PR, required CI, merge and protected-main CI facts will be appended only after they exist.
+- Evidence is recorded separately in `cec380c4695ce6fafb2b98e5e00da5f7f192334d`.
+- The CI-only test-contract correction is recorded in `b192f1039c3f05df7d62f409067cab4706821294`.
+- Pull request [#36](https://github.com/sas-prog1/Eoshop/pull/36) was merged from head `b192f1039c3f05df7d62f409067cab4706821294`.
+- Pull-request CI run [32284788462](https://github.com/sas-prog1/Eoshop/actions/runs/32284788462) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `0692bd9f570aa14ff545ce053f93ea4855831fcd`.
+- Protected-main CI run [32285367577](https://github.com/sas-prog1/Eoshop/actions/runs/32285367577) passed the same four required jobs after merge.
