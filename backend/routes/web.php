@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\PlatformOverviewController;
 use App\Http\Controllers\Admin\PlatformStoreController;
 use App\Http\Controllers\Auth\AuthenticationController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -48,6 +49,8 @@ Route::middleware('central.domain')->group(function (): void {
         ->middleware('throttle:auth.register');
 
     Route::prefix('api/admin')->middleware('auth')->group(function (): void {
+        Route::get('/overview', [PlatformOverviewController::class, 'show'])
+            ->can('viewAny', Tenant::class);
         Route::get('/stores', [PlatformStoreController::class, 'index'])
             ->can('viewAny', Tenant::class);
         Route::patch('/stores/{tenant}', [PlatformStoreController::class, 'update'])
