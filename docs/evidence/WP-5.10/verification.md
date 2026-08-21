@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.10 — Platform administration console foundation |
-| Status | T5 — Evidence and delivery |
+| Status | Complete and merged |
 | Verified | 2026-08-21 |
 | Branch | `codex/wp-5.10-platform-admin-console` |
 | Base | `f4074ae` |
@@ -37,6 +37,7 @@
 
 - TypeScript/Vite production build: PASS.
 - Vitest: **36 files / 204 tests passed**.
+- Locked frontend dependency audit: PASS.
 - Covered permission-derived console entry, direct routes, section boundaries, loading/empty/error states, filters, pagination, session expiry and guarded mutations.
 - The existing large production chunk warning remains non-blocking and is retained for route-level performance hardening.
 
@@ -65,5 +66,8 @@
 ## Delivery status
 
 - Implementation is recorded separately in `a797607b19af6a93ba65b391596dc11d85410567`.
-- Evidence is intentionally recorded in the next commit.
-- Pull-request, required-CI, merge and protected-main facts will be appended only after they exist.
+- Evidence is recorded separately in `963664993a503ce5781218d192a171b6ad68ec82`.
+- Pull request [#44](https://github.com/sas-prog1/Eoshop/pull/44) was merged from final head `963664993a503ce5781218d192a171b6ad68ec82`.
+- Pull-request CI run [32500919017](https://github.com/sas-prog1/Eoshop/actions/runs/32500919017) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `0d3f79932ce9cff738cd48f2c890b8935c916b71`.
+- Protected-main CI run [32501446747](https://github.com/sas-prog1/Eoshop/actions/runs/32501446747) passed the same four required jobs after merge.

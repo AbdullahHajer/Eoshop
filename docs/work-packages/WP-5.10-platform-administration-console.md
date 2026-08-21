@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.10 |
-| Status | T5 — Evidence and delivery |
+| Status | Complete and merged |
 | Started | 2026-08-21 |
 | Branch | `codex/wp-5.10-platform-admin-console` |
 | Base | Protected `main` at `f4074ae` |
@@ -99,7 +99,7 @@ Replace the transient store-review modal with a route-owned platform operations 
 
 - [x] Record exact evidence and retained user/settings/operations debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 
