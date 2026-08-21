@@ -17,7 +17,7 @@ import {
   type UserProfile,
 } from "../adapters/uiAdapters";
 import { ELEGANT_PRESET } from "../types";
-import AdminDashboard from "./AdminDashboard";
+import PlatformAdminConsole from "./PlatformAdminConsole";
 import ControlPanel from "./ControlPanel";
 import ResetPasswordGateway from "./ResetPasswordGateway";
 
@@ -485,25 +485,44 @@ describe("adapter-backed interface flows", () => {
   });
 
   it("shows reviewer decisions but keeps manager publication actions hidden", async () => {
-    const updateStatus = vi.fn().mockResolvedValue(undefined);
+    const reviewer = {
+      ...merchant,
+      role: "admin" as const,
+      platformRoles: ["platform_reviewer"],
+      platformPermissions: ["platform.stores.view", "platform.stores.review"],
+    };
+    const page = { items: [platformStore], pagination: { currentPage: 1, lastPage: 1, perPage: 25, total: 1 } };
+    const overview = {
+      generatedAt: "2026-08-21T12:00:00Z",
+      stores: {
+        total: 1,
+        verification: { pending: 1, approved: 0, rejected: 0, suspended: 0 },
+        provisioning: { notStarted: 0, queued: 0, provisioning: 0, retrying: 0, active: 1, failed: 0 },
+        publication: { requested: 1, published: 0, unpublished: 0, rejected: 0 },
+      },
+      attention: { review: 1, provisioning: 0, subscription: 0, publication: 1 },
+    };
+    const updateStatus = vi.fn().mockResolvedValue({ ...platformStore, verificationStatus: "approved" });
     const user = userEvent.setup();
-    render(
-      <AdminDashboard
-        stores={[platformStore]}
-        permissions={["platform.stores.view", "platform.stores.review"]}
-        loading={false}
-        error={null}
-        onReload={vi.fn()}
-        onUpdateStoreStatus={updateStatus}
-        onRetryProvisioning={vi.fn()}
-        onActivateSubscription={vi.fn()}
-        onPublish={vi.fn()}
-        onUnpublish={vi.fn()}
-        onClose={vi.fn()}
+    renderInterface(
+      <PlatformAdminConsole
+        user={reviewer}
+        section="stores"
+        onNavigate={vi.fn()}
+        onExit={vi.fn()}
+        onLogout={vi.fn().mockResolvedValue(undefined)}
+        onSessionExpired={vi.fn()}
+        onToast={vi.fn()}
       />,
+      createFakeUiAdapters({ administration: {
+        overview: vi.fn().mockResolvedValue(overview),
+        listStores: vi.fn().mockResolvedValue(page),
+        updateStoreStatus: updateStatus,
+      } }),
     );
 
-    expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
+    await screen.findByText(platformStore.storeName);
+    expect(screen.queryByRole("button", { name: /نشر/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "قبول" }));
     await waitFor(() => expect(updateStatus).toHaveBeenCalledWith(platformStore.id, "approved", undefined));
   });

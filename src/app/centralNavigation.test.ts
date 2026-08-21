@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { centralPathForView, merchantStorePath, parseCentralRoute, pushCentralPath, replaceCentralPath } from "./centralNavigation";
+import { adminPath, centralPathForView, merchantStorePath, parseCentralRoute, pushCentralPath, replaceCentralPath } from "./centralNavigation";
 
 afterEach(() => window.history.replaceState({}, "", "/"));
 
@@ -13,7 +13,17 @@ describe("central navigation", () => {
     expect(parseCentralRoute("/app/stores/tenant%201/design")).toEqual({ name: "merchant-store", tenantId: "tenant 1", section: "design" });
     expect(parseCentralRoute("/app/stores/tenant/orders")).toEqual({ name: "merchant-store", tenantId: "tenant", section: "orders" });
     expect(parseCentralRoute("/reset-password")).toEqual({ name: "auth-flow" });
+    expect(parseCentralRoute("/admin")).toEqual({ name: "admin", section: "overview" });
+    expect(parseCentralRoute("/admin/stores")).toEqual({ name: "admin", section: "stores" });
+    expect(parseCentralRoute("/admin/audit")).toEqual({ name: "admin", section: "audit" });
+    expect(parseCentralRoute("/admin/unknown")).toEqual({ name: "unknown" });
     expect(parseCentralRoute("/app/stores/tenant/unknown")).toEqual({ name: "unknown" });
+  });
+
+  it("builds fixed administration paths", () => {
+    expect(adminPath()).toBe("/admin");
+    expect(adminPath("stores")).toBe("/admin/stores");
+    expect(adminPath("audit")).toBe("/admin/audit");
   });
 
   it("builds route-owned central paths", () => {

@@ -52,7 +52,7 @@ describe("authApi", () => {
       }));
   });
 
-  it("does not promote a platform reviewer to super admin", () => {
+  it("classifies permission-bearing platform operators without relying on a super-admin role name", () => {
     expect(toUserProfile({
       id: "01REVIEWER",
       name: "Reviewer",
@@ -63,7 +63,7 @@ describe("authApi", () => {
       platformRoles: ["platform_reviewer"],
       platformPermissions: ["platform.stores.view", "platform.stores.review"],
     })).toEqual(expect.objectContaining({
-      role: "merchant",
+      role: "admin",
       platformPermissions: ["platform.stores.view", "platform.stores.review"],
     }));
 

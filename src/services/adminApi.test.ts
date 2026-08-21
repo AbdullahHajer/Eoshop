@@ -38,14 +38,55 @@ describe("adminApi", () => {
   it("loads authoritative platform stores with same-origin credentials", async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
       data: [{ ...store, databasePassword: "must-not-escape" }],
+      meta: { current_page: 1, last_page: 1, per_page: 25, total: 1 },
     }), { status: 200 })));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(adminApi.listStores()).resolves.toEqual([store]);
-    expect((await adminApi.listStores())[0]).not.toHaveProperty("databasePassword");
-    expect(fetchMock).toHaveBeenCalledWith("/api/admin/stores", expect.objectContaining({
+    const result = await adminApi.listStores({ attention: "review", page: 2 });
+    expect(result.items).toEqual([store]);
+    expect(result.items[0]).not.toHaveProperty("databasePassword");
+    expect(result.pagination).toEqual({ currentPage: 1, lastPage: 1, perPage: 25, total: 1 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/stores?attention=review&page=2", expect.objectContaining({
       credentials: "same-origin",
     }));
+  });
+
+  it("maps the overview and allowlisted audit projection", async () => {
+    const overview = {
+      generatedAt: "2026-08-21T12:00:00Z",
+      stores: {
+        total: 4,
+        verification: { pending: 1, approved: 2, rejected: 1, suspended: 0 },
+        provisioning: { notStarted: 1, queued: 0, provisioning: 0, retrying: 0, active: 2, failed: 1 },
+        publication: { requested: 2, published: 1, unpublished: 1, rejected: 0 },
+      },
+      attention: { review: 1, provisioning: 1, subscription: 1, publication: 2 },
+    };
+    const audit = {
+      id: 17,
+      actorUserId: "01ADMIN",
+      tenantId: store.id,
+      action: "platform.store.verification_status.changed",
+      subjectType: "tenant",
+      subjectId: store.id,
+      changedFields: ["verification_status"],
+      ipAddress: null,
+      requestId: "11111111-1111-4111-8111-111111111111",
+      occurredAt: "2026-08-21T12:01:00Z",
+    };
+    const fetchMock = vi.fn((path: string) => Promise.resolve(new Response(JSON.stringify(
+      path === "/api/admin/overview"
+        ? { data: overview }
+        : { data: [{ ...audit, oldValues: { secret: true }, userAgent: "must-not-escape" }], meta: { current_page: 1, last_page: 1, per_page: 25, total: 1 } },
+    ), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adminApi.overview()).resolves.toEqual(overview);
+    const events = await adminApi.listAuditLogs({ search: "verification", page: 1 });
+    expect(events.items).toEqual([audit]);
+    expect(events.items[0]).not.toHaveProperty("oldValues");
+    expect(events.items[0]).not.toHaveProperty("userAgent");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/admin/audit-logs?search=verification&page=1");
   });
 
   it("uses CSRF and PATCH for a review decision", async () => {

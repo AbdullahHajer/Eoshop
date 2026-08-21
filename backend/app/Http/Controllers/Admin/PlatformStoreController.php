@@ -6,12 +6,14 @@ use App\Enums\TenantVerificationStatus;
 use App\Exceptions\StoreSubmissionConflict;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ActivateSubscriptionRequest;
+use App\Http\Requests\Admin\ListPlatformStoresRequest;
 use App\Http\Requests\Admin\UpdateTenantMetadataRequest;
 use App\Http\Requests\Admin\UpdateTenantStatusRequest;
 use App\Http\Resources\PlatformStoreResource;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AdminAuditService;
+use App\Services\PlatformAdministrationReadService;
 use App\Services\PlatformStoreManagementService;
 use App\Services\PlatformStoreReviewService;
 use App\Services\ProvisioningCoordinator;
@@ -25,10 +27,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PlatformStoreController extends Controller
 {
-    public function index(): AnonymousResourceCollection
-    {
+    public function index(
+        ListPlatformStoresRequest $request,
+        PlatformAdministrationReadService $administration,
+    ): AnonymousResourceCollection {
         return PlatformStoreResource::collection(
-            Tenant::query()->with(self::relations())->latest()->paginate(50)
+            $administration->stores($request->validated(), self::relations())
         );
     }
 

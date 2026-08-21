@@ -12,6 +12,68 @@ import {
 export type VerificationStatus = "approved" | "pending" | "rejected" | "suspended";
 export type ProvisioningStatus = "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
 export type PublicationStatus = "requested" | "published" | "unpublished" | "rejected";
+export type PlatformAttentionQueue = "review" | "provisioning" | "subscription" | "publication";
+
+export interface PaginationMeta {
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+  total: number;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  pagination: PaginationMeta;
+}
+
+export interface PlatformOverview {
+  generatedAt: string;
+  stores: {
+    total: number;
+    verification: Record<VerificationStatus, number>;
+    provisioning: {
+      notStarted: number;
+      queued: number;
+      provisioning: number;
+      retrying: number;
+      active: number;
+      failed: number;
+    };
+    publication: Record<PublicationStatus, number>;
+  };
+  attention: Record<PlatformAttentionQueue, number>;
+}
+
+export interface PlatformStoreQuery {
+  search?: string;
+  verification?: VerificationStatus;
+  provisioning?: ProvisioningStatus;
+  publication?: PublicationStatus;
+  attention?: PlatformAttentionQueue;
+  page?: number;
+  perPage?: number;
+}
+
+export interface AdminAuditQuery {
+  search?: string;
+  action?: string;
+  tenantId?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface AdminAuditEvent {
+  id: number;
+  actorUserId: string | null;
+  tenantId: string | null;
+  action: string;
+  subjectType: string;
+  subjectId: string;
+  changedFields: string[];
+  ipAddress: string | null;
+  requestId: string | null;
+  occurredAt: string | null;
+}
 
 export interface PlatformStore {
   id: string;
@@ -51,13 +113,98 @@ export interface PlatformStore {
   } | null;
 }
 
-interface StoreCollectionResponse {
-  data: unknown[];
-}
-
 interface StoreResponse {
   data: unknown;
   meta: { requestId: string };
+}
+
+function queryPath(path: string, query: object): string {
+  const parameters = new URLSearchParams();
+  Object.entries(query as Record<string, string | number | undefined>).forEach(([key, value]) => {
+    if (value !== undefined) parameters.set(key, String(value));
+  });
+  const encoded = parameters.toString();
+
+  return encoded ? `${path}?${encoded}` : path;
+}
+
+function mapPagination(value: unknown, contract: string): PaginationMeta {
+  const meta = record(value, contract);
+
+  return {
+    currentPage: numberField(meta, "current_page", contract),
+    lastPage: numberField(meta, "last_page", contract),
+    perPage: numberField(meta, "per_page", contract),
+    total: numberField(meta, "total", contract),
+  };
+}
+
+function mapPaginated<T>(value: unknown, contract: string, mapper: (item: unknown) => T): PaginatedResult<T> {
+  const payload = record(value, contract);
+
+  return {
+    items: arrayField(payload, "data", contract).map(mapper),
+    pagination: mapPagination(payload.meta, `${contract} pagination`),
+  };
+}
+
+function mapOverview(value: unknown): PlatformOverview {
+  const payload = record(value, "ملخص إدارة المنصة");
+  const stores = record(payload.stores, "عدادات متاجر المنصة");
+  const verification = record(stores.verification, "عدادات مراجعة المتاجر");
+  const provisioning = record(stores.provisioning, "عدادات تجهيز المتاجر");
+  const publication = record(stores.publication, "عدادات نشر المتاجر");
+  const attention = record(payload.attention, "طوابير إدارة المنصة");
+
+  return {
+    generatedAt: stringField(payload, "generatedAt", "ملخص إدارة المنصة"),
+    stores: {
+      total: numberField(stores, "total", "عدادات متاجر المنصة"),
+      verification: {
+        pending: numberField(verification, "pending", "عدادات مراجعة المتاجر"),
+        approved: numberField(verification, "approved", "عدادات مراجعة المتاجر"),
+        rejected: numberField(verification, "rejected", "عدادات مراجعة المتاجر"),
+        suspended: numberField(verification, "suspended", "عدادات مراجعة المتاجر"),
+      },
+      provisioning: {
+        notStarted: numberField(provisioning, "notStarted", "عدادات تجهيز المتاجر"),
+        queued: numberField(provisioning, "queued", "عدادات تجهيز المتاجر"),
+        provisioning: numberField(provisioning, "provisioning", "عدادات تجهيز المتاجر"),
+        retrying: numberField(provisioning, "retrying", "عدادات تجهيز المتاجر"),
+        active: numberField(provisioning, "active", "عدادات تجهيز المتاجر"),
+        failed: numberField(provisioning, "failed", "عدادات تجهيز المتاجر"),
+      },
+      publication: {
+        requested: numberField(publication, "requested", "عدادات نشر المتاجر"),
+        published: numberField(publication, "published", "عدادات نشر المتاجر"),
+        unpublished: numberField(publication, "unpublished", "عدادات نشر المتاجر"),
+        rejected: numberField(publication, "rejected", "عدادات نشر المتاجر"),
+      },
+    },
+    attention: {
+      review: numberField(attention, "review", "طوابير إدارة المنصة"),
+      provisioning: numberField(attention, "provisioning", "طوابير إدارة المنصة"),
+      subscription: numberField(attention, "subscription", "طوابير إدارة المنصة"),
+      publication: numberField(attention, "publication", "طوابير إدارة المنصة"),
+    },
+  };
+}
+
+function mapAuditEvent(value: unknown): AdminAuditEvent {
+  const dto = record(value, "حدث سجل الإدارة");
+
+  return {
+    id: numberField(dto, "id", "حدث سجل الإدارة"),
+    actorUserId: nullableStringField(dto, "actorUserId", "حدث سجل الإدارة"),
+    tenantId: nullableStringField(dto, "tenantId", "حدث سجل الإدارة"),
+    action: stringField(dto, "action", "حدث سجل الإدارة"),
+    subjectType: stringField(dto, "subjectType", "حدث سجل الإدارة"),
+    subjectId: stringField(dto, "subjectId", "حدث سجل الإدارة"),
+    changedFields: stringArrayField(dto, "changedFields", "حدث سجل الإدارة"),
+    ipAddress: nullableStringField(dto, "ipAddress", "حدث سجل الإدارة"),
+    requestId: nullableStringField(dto, "requestId", "حدث سجل الإدارة"),
+    occurredAt: nullableStringField(dto, "occurredAt", "حدث سجل الإدارة"),
+  };
 }
 
 function mapStore(value: unknown): PlatformStore {
@@ -112,10 +259,22 @@ function mapStore(value: unknown): PlatformStore {
 }
 
 export const adminApi = {
-  async listStores(): Promise<PlatformStore[]> {
-    const payload = await apiClient.request<StoreCollectionResponse>("/api/admin/stores");
+  async overview(): Promise<PlatformOverview> {
+    const payload = record(await apiClient.request<unknown>("/api/admin/overview"), "ملخص إدارة المنصة");
 
-    return arrayField(record(payload, "قائمة متاجر المنصة"), "data", "قائمة متاجر المنصة").map(mapStore);
+    return mapOverview(payload.data);
+  },
+
+  async listStores(query: PlatformStoreQuery = {}): Promise<PaginatedResult<PlatformStore>> {
+    const payload = await apiClient.request<unknown>(queryPath("/api/admin/stores", query));
+
+    return mapPaginated(payload, "قائمة متاجر المنصة", mapStore);
+  },
+
+  async listAuditLogs(query: AdminAuditQuery = {}): Promise<PaginatedResult<AdminAuditEvent>> {
+    const payload = await apiClient.request<unknown>(queryPath("/api/admin/audit-logs", query));
+
+    return mapPaginated(payload, "سجل إدارة المنصة", mapAuditEvent);
   },
 
   async updateStoreStatus(

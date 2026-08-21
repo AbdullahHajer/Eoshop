@@ -37,9 +37,11 @@ export default function AdminAuthModal({
     try {
       const authenticated = await auth.login(email, password);
 
-      if (!authenticated.platformPermissions.includes("platform.stores.view")) {
+      if (!authenticated.platformPermissions.some((permission) => (
+        permission === "platform.stores.view" || permission === "platform.audit.view"
+      ))) {
         await auth.logout();
-        setError("هذا الحساب لا يملك صلاحية الدخول إلى إدارة متاجر المنصة.");
+        setError("هذا الحساب لا يملك صلاحية الدخول إلى إدارة المنصة.");
         return;
       }
 
@@ -73,7 +75,7 @@ export default function AdminAuthModal({
           </div>
           <h3 className="text-xl font-black text-white">بوابة مدراء المنصة 🔒</h3>
           <p className="text-xs text-slate-400 mt-1 font-medium">
-            منطقة محمية خاصة بالإدارة العليا لمراجعة السجلات وتفعيل قواعد البيانات
+            منطقة محمية لمشغلي المنصة حسب الصلاحيات الممنوحة من الخادم
           </p>
         </div>
 
@@ -87,7 +89,7 @@ export default function AdminAuthModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              بريد المسؤول (Super Admin)
+              بريد مشغل المنصة
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-500 absolute right-3.5 top-3.5" />

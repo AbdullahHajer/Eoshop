@@ -14,7 +14,6 @@ import ControlPanel from "./components/ControlPanel";
 import type { ControlTab } from "./features/store-builder/controlPanelTypes";
 import RegistrationGateway from "./components/RegistrationGateway";
 import AuthGateway from "./components/AuthGateway";
-import AdminDashboard, { PlatformStore } from "./components/AdminDashboard";
 import DomainSetupModal from "./components/DomainSetupModal";
 import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
@@ -26,8 +25,10 @@ import PublicStorefrontScreen from "./features/storefront/PublicStorefrontScreen
 import WorkspaceRecoveryOverlays from "./features/store-builder/WorkspaceRecoveryOverlays";
 import MerchantPortal from "./features/merchant/MerchantPortal";
 import MerchantStoreOperations from "./components/MerchantStoreOperations";
+import PlatformAdminConsole from "./components/PlatformAdminConsole";
+import { canAccessPlatformConsole, safeAdminSection, type AdminSection } from "./features/admin/adminAccess";
 import { useUiAdapters } from "./adapters/UiAdaptersContext";
-import { merchantStorePath, parseCentralRoute, pushCentralPath, replaceCentralPath, type MerchantStoreSection } from "./app/centralNavigation";
+import { adminPath, merchantStorePath, parseCentralRoute, pushCentralPath, replaceCentralPath, type MerchantStoreSection } from "./app/centralNavigation";
 import {
   isUiError,
   isUiErrorCode,
@@ -62,7 +63,6 @@ import { reconcileCartWithStorefront } from "./workflows/orderState";
 export default function App() {
   const {
     auth,
-    administration,
     assistant,
     provisioning,
     workspace: workspaceActions,
@@ -74,11 +74,9 @@ export default function App() {
   const [publicStorefrontError, setPublicStorefrontError] = useState<string | null>(null);
   
   // Platform Administrator States
-  const [platformStores, setPlatformStores] = useState<PlatformStore[]>([]);
-  const [platformStoresLoading, setPlatformStoresLoading] = useState(false);
-  const [platformStoresError, setPlatformStoresError] = useState<string | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState(false);
+  const [adminSection, setAdminSection] = useState<AdminSection>("overview");
   
   // Customization Configuration
   const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
@@ -269,15 +267,23 @@ export default function App() {
           return;
         }
 
-        if (profile.role === "admin" && initialRoute.name !== "auth-flow") {
-          replaceCentralPath("/admin");
+        if (initialRoute.name === "admin") {
+          setAdminSection(initialRoute.section);
           setIsAdminAuthModalOpen(false);
           setIsAdminOpen(true);
-          void loadPlatformStores();
           return;
         }
 
-        if (initialRoute.name === "admin" || initialRoute.name === "auth-flow") return;
+        if (canAccessPlatformConsole(profile) && initialRoute.name !== "auth-flow") {
+          const section = safeAdminSection("overview", profile) ?? "overview";
+          setAdminSection(section);
+          replaceCentralPath(adminPath(section));
+          setIsAdminAuthModalOpen(false);
+          setIsAdminOpen(true);
+          return;
+        }
+
+        if (initialRoute.name === "auth-flow") return;
 
         const builderSections: MerchantStoreSection[] = ["design", "checkout", "pages"];
         const requestedTenantId = initialRoute.name === "merchant-store" && builderSections.includes(initialRoute.section)
@@ -327,10 +333,9 @@ export default function App() {
       });
 
     // Dedicated Admin Route Check (/admin or #admin)
-    const currentPath = window.location.pathname;
     const currentHash = window.location.hash;
     if (isCentralFrontendHost(window.location.hostname)
-      && (currentPath === "/admin" || currentPath.startsWith("/admin") || currentHash === "#admin")) {
+      && (initialRoute.name === "admin" || currentHash === "#admin")) {
       setIsAdminAuthModalOpen(true);
     }
   }, []);
@@ -714,91 +719,6 @@ export default function App() {
       return false;
     } finally {
       if (operation === workspaceOperationSequence.current) setWorkspaceSaving(false);
-    }
-  };
-
-  const loadPlatformStores = async () => {
-    setPlatformStoresLoading(true);
-    setPlatformStoresError(null);
-    try {
-      setPlatformStores(await administration.listStores());
-    } catch (requestError) {
-      setPlatformStoresError(uiErrorMessage(requestError, "تعذر تحميل متاجر المنصة من الخادم."));
-    } finally {
-      setPlatformStoresLoading(false);
-    }
-  };
-
-  const handleAdminUpdateStatus = async (
-    storeId: string,
-    status: PlatformStore["verificationStatus"],
-    reason?: string,
-  ) => {
-    setPlatformStoresError(null);
-    try {
-      const updatedStore = await administration.updateStoreStatus(storeId, status, reason);
-      setPlatformStores((current) => current.map((storeRecord) => (
-        storeRecord.id === updatedStore.id ? updatedStore : storeRecord
-      )));
-      triggerToast("تم تحديث حالة المتجر وتسجيل العملية في سجل التدقيق.", "success");
-    } catch (requestError) {
-      const message = uiErrorMessage(requestError, "تعذر تحديث حالة المتجر.");
-      setPlatformStoresError(message);
-      throw requestError;
-    }
-  };
-
-  const handleAdminRetryProvisioning = async (storeId: string) => {
-    setPlatformStoresError(null);
-    try {
-      const updatedStore = await administration.retryProvisioning(storeId);
-      setPlatformStores((current) => current.map((storeRecord) => (
-        storeRecord.id === updatedStore.id ? updatedStore : storeRecord
-      )));
-      triggerToast("تمت جدولة إعادة محاولة تجهيز المتجر بأمان.", "success");
-    } catch (requestError) {
-      const message = uiErrorMessage(requestError, "تعذر جدولة إعادة محاولة تجهيز المتجر.");
-      setPlatformStoresError(message);
-      throw requestError;
-    }
-  };
-
-  const replacePlatformStore = (updatedStore: PlatformStore) => {
-    setPlatformStores((current) => current.map((storeRecord) => (
-      storeRecord.id === updatedStore.id ? updatedStore : storeRecord
-    )));
-  };
-
-  const handleAdminActivateSubscription = async (storeId: string, endsAt: string) => {
-    setPlatformStoresError(null);
-    try {
-      replacePlatformStore(await administration.activateSubscription(storeId, endsAt));
-      triggerToast("تم تفعيل استحقاق الباقة وتسجيل العملية في سجل التدقيق.", "success");
-    } catch (requestError) {
-      setPlatformStoresError(uiErrorMessage(requestError, "تعذر تفعيل الاشتراك."));
-      throw requestError;
-    }
-  };
-
-  const handleAdminPublish = async (storeId: string) => {
-    setPlatformStoresError(null);
-    try {
-      replacePlatformStore(await administration.publish(storeId));
-      triggerToast("تم نشر المتجر على النطاق المحجوز بعد اجتياز جميع الشروط.", "success");
-    } catch (requestError) {
-      setPlatformStoresError(uiErrorMessage(requestError, "تعذر نشر المتجر."));
-      throw requestError;
-    }
-  };
-
-  const handleAdminUnpublish = async (storeId: string) => {
-    setPlatformStoresError(null);
-    try {
-      replacePlatformStore(await administration.unpublish(storeId));
-      triggerToast("تم إيقاف نشر المتجر مع الاحتفاظ ببياناته ونطاقه.", "info");
-    } catch (requestError) {
-      setPlatformStoresError(uiErrorMessage(requestError, "تعذر إيقاف نشر المتجر."));
-      throw requestError;
     }
   };
 
@@ -1310,6 +1230,18 @@ export default function App() {
     if (!isCentralFrontendHost(window.location.hostname)) return;
     const handlePopState = () => {
       const route = parseCentralRoute(window.location.pathname);
+      if (route.name === "admin") {
+        setAdminSection(route.section);
+        if (authUser) {
+          setIsAdminAuthModalOpen(false);
+          setIsAdminOpen(true);
+        } else {
+          setIsAdminAuthModalOpen(true);
+        }
+        return;
+      }
+
+      setIsAdminOpen(false);
       if (route.name === "merchant" && authUser) {
         if (recoverableWorkspaceChanges) {
           const confirmed = window.confirm("توجد تعديلات غير محفوظة في المحرر. الرجوع إلى بوابة التاجر سيتجاهلها. هل تريد المتابعة؟");
@@ -2493,24 +2425,43 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Platform Administration Dashboard */}
-      <AnimatePresence>
-        {isAdminOpen && (
-          <AdminDashboard
-            stores={platformStores}
-            permissions={authUser?.platformPermissions ?? []}
-            loading={platformStoresLoading}
-            error={platformStoresError}
-            onReload={loadPlatformStores}
-            onUpdateStoreStatus={handleAdminUpdateStatus}
-            onRetryProvisioning={handleAdminRetryProvisioning}
-            onActivateSubscription={handleAdminActivateSubscription}
-            onPublish={handleAdminPublish}
-            onUnpublish={handleAdminUnpublish}
-            onClose={() => setIsAdminOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Route-owned platform administration console */}
+      {isAdminOpen && authUser && (
+        <PlatformAdminConsole
+          user={authUser}
+          section={adminSection}
+          onNavigate={(section) => {
+            setAdminSection(section);
+            pushCentralPath(adminPath(section));
+          }}
+          onExit={() => {
+            setIsAdminOpen(false);
+            setView("landing");
+            replaceCentralPath("/");
+          }}
+          onLogout={async () => {
+            try {
+              await auth.logout();
+            } catch {
+              triggerToast("تعذر إنهاء جلسة الإدارة على الخادم. حاول مجددًا.", "error");
+              return;
+            }
+            setAuthUser(null);
+            setIsAdminOpen(false);
+            resetTenantOwnedState();
+            setView("landing");
+            replaceCentralPath("/");
+            triggerToast("تم إنهاء جلسة إدارة المنصة.", "info");
+          }}
+          onSessionExpired={() => {
+            setAuthUser(null);
+            setIsAdminOpen(false);
+            resetTenantOwnedState();
+            setIsAdminAuthModalOpen(true);
+          }}
+          onToast={triggerToast}
+        />
+      )}
 
       {/* Registration & Business Documents Verification Gateway */}
       <AnimatePresence>
@@ -2658,12 +2609,14 @@ export default function App() {
         onLoginSuccess={(user) => {
           resetTenantOwnedState();
           setAuthUser(user);
-          if (user.role === "admin") {
+          if (canAccessPlatformConsole(user)) {
+            const section = safeAdminSection("overview", user) ?? "overview";
             setPendingAction(null);
             setIsAuthGatewayOpen(false);
-            replaceCentralPath("/admin");
+            setAdminSection(section);
+            replaceCentralPath(adminPath(section));
             setIsAdminOpen(true);
-            void loadPlatformStores();
+            triggerToast("مرحباً بك في مركز إدارة المنصة.", "success");
             return;
           }
           void restoreMerchantState(user).then((outcome) => {
@@ -2700,10 +2653,13 @@ export default function App() {
         isOpen={isAdminAuthModalOpen}
         onClose={() => setIsAdminAuthModalOpen(false)}
         onSuccess={(user) => {
+          const section = safeAdminSection(adminSection, user) ?? safeAdminSection("overview", user) ?? "overview";
           setAuthUser(user);
+          setAdminSection(section);
+          replaceCentralPath(adminPath(section));
           setIsAdminOpen(true);
-          void loadPlatformStores();
-          triggerToast("مرحباً بك في لوحة الإدارة المركزية لمالكي المنصة 🔒⚡", "success");
+          setIsAdminAuthModalOpen(false);
+          triggerToast("مرحباً بك في مركز إدارة المنصة.", "success");
         }}
       />
 

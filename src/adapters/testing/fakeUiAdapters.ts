@@ -19,7 +19,9 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
       resetPassword: async () => unexpected("auth.resetPassword"),
     },
     administration: {
+      overview: async () => unexpected("administration.overview"),
       listStores: async () => unexpected("administration.listStores"),
+      listAuditLogs: async () => unexpected("administration.listAuditLogs"),
       updateStoreStatus: async () => unexpected("administration.updateStoreStatus"),
       retryProvisioning: async () => unexpected("administration.retryProvisioning"),
       activateSubscription: async () => unexpected("administration.activateSubscription"),

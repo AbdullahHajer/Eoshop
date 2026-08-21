@@ -10,7 +10,14 @@ import { orderApi } from "../services/orderApi";
 import { storeAssetApi } from "../services/storeAssetApi";
 
 export type {
+  AdminAuditEvent,
+  AdminAuditQuery,
+  PaginatedResult,
+  PaginationMeta,
+  PlatformAttentionQueue,
+  PlatformOverview,
   PlatformStore,
+  PlatformStoreQuery,
   ProvisioningStatus,
   PublicationStatus,
   VerificationStatus,

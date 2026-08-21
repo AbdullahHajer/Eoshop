@@ -100,14 +100,14 @@ export const authApi = {
 };
 
 export function toUserProfile(user: AuthenticatedUser) {
-  const isSuperAdmin = user.platformRoles.includes("platform_super_admin");
+  const isPlatformOperator = user.platformPermissions.some((permission) => permission.startsWith("platform."));
 
   return {
     id: user.id,
     fullName: user.name,
     email: user.email,
     phone: user.phone ?? "",
-    role: isSuperAdmin ? "admin" as const : "merchant" as const,
+    role: isPlatformOperator ? "admin" as const : "merchant" as const,
     platformRoles: user.platformRoles,
     platformPermissions: user.platformPermissions,
     storeStatus: "none" as const,
