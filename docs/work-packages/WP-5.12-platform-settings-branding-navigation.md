@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.12 |
-| Status | Implementation complete; delivery in progress |
+| Status | Complete and merged |
 | Started | 2026-08-22 |
 | Branch | `codex/wp-5.12-platform-settings` |
 | Base | Protected `main` at `040c8a0` |
@@ -100,7 +100,7 @@ Give an authorized platform manager a real server-owned settings workspace for t
 
 - [x] Record exact evidence and retained managed-logo/secrets/plans/CMS debt.
 - [x] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass required CI, merge and record protected-main facts.
+- [x] Push, open PR, pass required CI, merge and record protected-main facts.
 
 ## Acceptance criteria
 

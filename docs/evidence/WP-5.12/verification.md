@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.12 — Platform settings, branding and landing navigation |
-| Status | Local verification complete; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-22 |
 | Branch | `codex/wp-5.12-platform-settings` |
 | Base | `040c8a0` |
@@ -64,6 +64,8 @@
 ## Delivery status
 
 - Implementation is recorded separately in `e457cadcb78704ddc6d27a66ae1556079d3722f5`.
-- Evidence commit: pending.
-- Pull request and protected CI: pending.
-- Merge and protected-main verification: pending.
+- Evidence is recorded separately in `55711890ca00742f2c56fbde5a4980ca4ccf0f9c`.
+- Pull request [#48](https://github.com/sas-prog1/Eoshop/pull/48) was merged from final head `55711890ca00742f2c56fbde5a4980ca4ccf0f9c`.
+- Pull-request CI run [32580887602](https://github.com/sas-prog1/Eoshop/actions/runs/32580887602) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `ad0a210b9f09f4487d3ea936f473b75a284a26d7`.
+- Protected-main CI run [32581245406](https://github.com/sas-prog1/Eoshop/actions/runs/32581245406) passed the same four required jobs after merge.
