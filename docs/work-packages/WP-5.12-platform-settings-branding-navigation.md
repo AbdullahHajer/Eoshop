@@ -98,8 +98,8 @@ Give an authorized platform manager a real server-owned settings workspace for t
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact evidence and retained managed-logo/secrets/plans/CMS debt.
-- [ ] Commit implementation and evidence separately.
+- [x] Record exact evidence and retained managed-logo/secrets/plans/CMS debt.
+- [x] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass required CI, merge and record protected-main facts.
 
 ## Acceptance criteria
