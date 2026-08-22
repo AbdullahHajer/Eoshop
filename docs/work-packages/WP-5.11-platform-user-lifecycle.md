@@ -103,7 +103,7 @@ Add a safe, server-authoritative platform-team workspace where an authorized adm
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact evidence and retained delivery/custom-role/deletion/MFA debt.
+- [x] Record exact evidence and retained delivery/custom-role/deletion/MFA debt.
 - [ ] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass required CI, merge and record protected-main facts.
 
