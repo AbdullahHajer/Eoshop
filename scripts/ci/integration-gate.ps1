@@ -701,6 +701,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $publicationMigration = 'database/migrations/system/2026_08_15_000008_create_domain_subscription_publication_lifecycle.php'
     $inventoryPermissionsMigration = 'database/migrations/system/2026_08_16_000009_add_inventory_permissions.php'
     $draftLifecycleMigration = 'database/migrations/system/2026_08_19_000010_create_store_drafts_and_merchant_publication.php'
+    $sessionGenerationMigration = 'database/migrations/system/2026_08_21_000011_add_session_generation_to_users.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$sessionGenerationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$draftLifecycleMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$inventoryPermissionsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$publicationMigration --force --no-interaction
@@ -744,6 +746,7 @@ VALUES (
         '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $draftAdoptionSql
     )
     Invoke-Compose exec -T backend php artisan migrate --path=$draftLifecycleMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$sessionGenerationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     $draftAdoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,

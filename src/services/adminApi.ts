@@ -13,6 +13,8 @@ export type VerificationStatus = "approved" | "pending" | "rejected" | "suspende
 export type ProvisioningStatus = "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
 export type PublicationStatus = "requested" | "published" | "unpublished" | "rejected";
 export type PlatformAttentionQueue = "review" | "provisioning" | "subscription" | "publication";
+export type PlatformUserStatus = "pending" | "active" | "suspended";
+export type InvitationDispatchStatus = "accepted" | "throttled" | "failed";
 
 export interface PaginationMeta {
   currentPage: number;
@@ -60,6 +62,46 @@ export interface AdminAuditQuery {
   tenantId?: string;
   page?: number;
   perPage?: number;
+}
+
+export interface PlatformUserQuery {
+  search?: string;
+  status?: PlatformUserStatus;
+  role?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface PlatformRole {
+  key: string;
+  name: string;
+  description: string | null;
+  permissionKeys: string[];
+}
+
+export interface PlatformUser {
+  id: string;
+  name: string;
+  email: string;
+  status: PlatformUserStatus;
+  resumeStatus: "active" | "pending" | null;
+  roles: Array<{ key: string; name: string }>;
+  platformPermissions: string[];
+  activeTenantMembershipCount: number;
+  emailVerifiedAt: string | null;
+  lastLoginAt: string | null;
+  createdAt: string | null;
+}
+
+export interface InvitePlatformUserInput {
+  name: string;
+  email: string;
+  roleKeys: string[];
+}
+
+export interface InvitePlatformUserResult {
+  user: PlatformUser;
+  invitationDispatchStatus: InvitationDispatchStatus;
 }
 
 export interface AdminAuditEvent {
@@ -207,6 +249,44 @@ function mapAuditEvent(value: unknown): AdminAuditEvent {
   };
 }
 
+function mapPlatformRole(value: unknown): PlatformRole {
+  const dto = record(value, "دور مستخدم المنصة");
+
+  return {
+    key: stringField(dto, "key", "دور مستخدم المنصة"),
+    name: stringField(dto, "name", "دور مستخدم المنصة"),
+    description: nullableStringField(dto, "description", "دور مستخدم المنصة"),
+    permissionKeys: stringArrayField(dto, "permissionKeys", "دور مستخدم المنصة"),
+  };
+}
+
+function mapPlatformUser(value: unknown): PlatformUser {
+  const dto = record(value, "مستخدم المنصة");
+  const resumeStatus = dto.resumeStatus === null
+    ? null
+    : enumField(dto, "resumeStatus", ["active", "pending"] as const, "مستخدم المنصة");
+
+  return {
+    id: stringField(dto, "id", "مستخدم المنصة"),
+    name: stringField(dto, "name", "مستخدم المنصة"),
+    email: stringField(dto, "email", "مستخدم المنصة"),
+    status: enumField(dto, "status", ["pending", "active", "suspended"] as const, "مستخدم المنصة"),
+    resumeStatus,
+    roles: arrayField(dto, "roles", "مستخدم المنصة").map((value) => {
+      const role = record(value, "دور المستخدم");
+      return {
+        key: stringField(role, "key", "دور المستخدم"),
+        name: stringField(role, "name", "دور المستخدم"),
+      };
+    }),
+    platformPermissions: stringArrayField(dto, "platformPermissions", "مستخدم المنصة"),
+    activeTenantMembershipCount: numberField(dto, "activeTenantMembershipCount", "مستخدم المنصة"),
+    emailVerifiedAt: nullableStringField(dto, "emailVerifiedAt", "مستخدم المنصة"),
+    lastLoginAt: nullableStringField(dto, "lastLoginAt", "مستخدم المنصة"),
+    createdAt: nullableStringField(dto, "createdAt", "مستخدم المنصة"),
+  };
+}
+
 function mapStore(value: unknown): PlatformStore {
   const dto = record(value, "متجر المنصة");
   const subscriptionValue = dto.subscription;
@@ -275,6 +355,80 @@ export const adminApi = {
     const payload = await apiClient.request<unknown>(queryPath("/api/admin/audit-logs", query));
 
     return mapPaginated(payload, "سجل إدارة المنصة", mapAuditEvent);
+  },
+
+  async listPlatformRoles(): Promise<PlatformRole[]> {
+    const payload = record(await apiClient.request<unknown>("/api/admin/platform-roles"), "أدوار مستخدمي المنصة");
+
+    return arrayField(payload, "data", "أدوار مستخدمي المنصة").map(mapPlatformRole);
+  },
+
+  async listUsers(query: PlatformUserQuery = {}): Promise<PaginatedResult<PlatformUser>> {
+    const payload = await apiClient.request<unknown>(queryPath("/api/admin/users", query));
+
+    return mapPaginated(payload, "قائمة مستخدمي المنصة", mapPlatformUser);
+  },
+
+  async inviteUser(input: InvitePlatformUserInput): Promise<InvitePlatformUserResult> {
+    const payload = record(await apiClient.request<unknown>("/api/admin/users", {
+      method: "POST",
+      body: input,
+    }), "دعوة مستخدم المنصة");
+    const dispatch = record(payload.invitationDispatch, "حالة إرسال الدعوة");
+
+    return {
+      user: mapPlatformUser(payload.data),
+      invitationDispatchStatus: enumField(
+        dispatch,
+        "status",
+        ["accepted", "throttled", "failed"] as const,
+        "حالة إرسال الدعوة",
+      ),
+    };
+  },
+
+  async replaceUserRoles(
+    userId: string,
+    expectedRoleKeys: string[],
+    roleKeys: string[],
+  ): Promise<PlatformUser> {
+    const payload = record(await apiClient.request<unknown>(
+      `/api/admin/users/${encodeURIComponent(userId)}/roles`, {
+        method: "PUT",
+        body: { expectedRoleKeys, roleKeys },
+      }), "تعديل أدوار مستخدم المنصة");
+
+    return mapPlatformUser(payload.data);
+  },
+
+  async updateUserStatus(
+    userId: string,
+    expectedStatus: PlatformUserStatus,
+    status: PlatformUserStatus,
+  ): Promise<PlatformUser> {
+    const payload = record(await apiClient.request<unknown>(
+      `/api/admin/users/${encodeURIComponent(userId)}/status`, {
+        method: "PATCH",
+        body: { expectedStatus, status },
+      }), "تحديث حالة مستخدم المنصة");
+
+    return mapPlatformUser(payload.data);
+  },
+
+  async resendUserInvitation(userId: string): Promise<InvitationDispatchStatus> {
+    const payload = record(await apiClient.request<unknown>(
+      `/api/admin/users/${encodeURIComponent(userId)}/invitation`, {
+        method: "POST",
+        body: {},
+      }), "إعادة إرسال دعوة مستخدم المنصة");
+    const dispatch = record(payload.invitationDispatch, "حالة إرسال الدعوة");
+
+    return enumField(
+      dispatch,
+      "status",
+      ["accepted", "throttled", "failed"] as const,
+      "حالة إرسال الدعوة",
+    );
   },
 
   async updateStoreStatus(

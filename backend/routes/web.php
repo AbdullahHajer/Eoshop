@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\PlatformOverviewController;
 use App\Http\Controllers\Admin\PlatformStoreController;
+use App\Http\Controllers\Admin\PlatformUserController;
 use App\Http\Controllers\Auth\AuthenticationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\CatalogMediaController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\StoreGeneratorController;
 use App\Http\Controllers\StoreSubmissionController;
 use App\Models\AdminAuditLog;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('known.domain')->prefix('api/auth')->group(function (): void {
@@ -49,6 +51,22 @@ Route::middleware('central.domain')->group(function (): void {
         ->middleware('throttle:auth.register');
 
     Route::prefix('api/admin')->middleware('auth')->group(function (): void {
+        Route::get('/platform-roles', [PlatformUserController::class, 'roles'])
+            ->can('viewAny', User::class);
+        Route::get('/users', [PlatformUserController::class, 'index'])
+            ->can('viewAny', User::class);
+        Route::post('/users', [PlatformUserController::class, 'store'])
+            ->can('create', User::class)
+            ->middleware('throttle:admin.mutations');
+        Route::put('/users/{user}/roles', [PlatformUserController::class, 'replaceRoles'])
+            ->can('update', 'user')
+            ->middleware('throttle:admin.mutations');
+        Route::patch('/users/{user}/status', [PlatformUserController::class, 'updateStatus'])
+            ->can('update', 'user')
+            ->middleware('throttle:admin.mutations');
+        Route::post('/users/{user}/invitation', [PlatformUserController::class, 'resendInvitation'])
+            ->can('update', 'user')
+            ->middleware('throttle:admin.mutations');
         Route::get('/overview', [PlatformOverviewController::class, 'show'])
             ->can('viewAny', Tenant::class);
         Route::get('/stores', [PlatformStoreController::class, 'index'])

@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Store,
+  UsersRound,
   XCircle,
 } from "lucide-react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
@@ -35,11 +36,13 @@ import {
 import { publicStoreUrl } from "../utils/publicStoreUrl";
 import {
   authorizedAdminSections,
+  canManagePlatformUsers,
   canViewPlatformAudit,
   canViewPlatformStores,
   safeAdminSection,
   type AdminSection,
 } from "../features/admin/adminAccess";
+import PlatformUsersPanel from "../features/admin/PlatformUsersPanel";
 
 interface PlatformAdminConsoleProps {
   user: UserProfile;
@@ -165,6 +168,9 @@ export default function PlatformAdminConsole({
   const [auditForbidden, setAuditForbidden] = useState(false);
   const [mutationPending, setMutationPending] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
+  const [usersRefreshSignal, setUsersRefreshSignal] = useState(0);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersForbidden, setUsersForbidden] = useState(false);
   const [reasonDecision, setReasonDecision] = useState<{ store: PlatformStore; status: "rejected" | "suspended" } | null>(null);
   const [reason, setReason] = useState("");
   const [activationStore, setActivationStore] = useState<PlatformStore | null>(null);
@@ -172,6 +178,7 @@ export default function PlatformAdminConsole({
 
   const canStores = canViewPlatformStores(user);
   const canAudit = canViewPlatformAudit(user);
+  const canUsers = canManagePlatformUsers(user);
   const canReview = user.platformPermissions.includes("platform.stores.review");
   const canManage = user.platformPermissions.includes("platform.stores.manage");
   const permissionSignature = [...user.platformPermissions].sort().join("|");
@@ -194,6 +201,7 @@ export default function PlatformAdminConsole({
     auditForbiddenRef.current = false;
     setStoresForbidden(false);
     setAuditForbidden(false);
+    setUsersForbidden(false);
   }, [permissionSignature, user.id]);
 
   useEffect(() => {
@@ -356,7 +364,7 @@ export default function PlatformAdminConsole({
         <div className="max-w-lg rounded-3xl border border-rose-800 bg-slate-900 p-8 text-center shadow-2xl">
           <ShieldAlert className="mx-auto h-12 w-12 text-rose-400" />
           <h1 className="mt-4 text-xl font-black">لا تملك صلاحية دخول إدارة المنصة</h1>
-          <p className="mt-2 text-sm leading-7 text-slate-400">تم التعرف على الجلسة، لكن الخادم لم يمنح هذا الحساب صلاحية المتاجر أو سجل التدقيق.</p>
+          <p className="mt-2 text-sm leading-7 text-slate-400">تم التعرف على الجلسة، لكن الخادم لم يمنح هذا الحساب صلاحية المتاجر أو المستخدمين أو سجل التدقيق.</p>
           <button type="button" onClick={onExit} className="mt-6 rounded-xl bg-white px-5 py-3 text-xs font-black text-slate-950">العودة للموقع</button>
         </div>
       </div>
@@ -374,8 +382,8 @@ export default function PlatformAdminConsole({
         </div>
         <nav className="flex-1 space-y-2 p-4" aria-label="أقسام إدارة المنصة">
           {allowedSections.map((item) => {
-            const Icon = item === "overview" ? LayoutDashboard : item === "stores" ? Store : ScrollText;
-            const label = item === "overview" ? "نظرة تشغيلية" : item === "stores" ? "المتاجر" : "سجل التدقيق";
+            const Icon = item === "overview" ? LayoutDashboard : item === "stores" ? Store : item === "users" ? UsersRound : ScrollText;
+            const label = item === "overview" ? "نظرة تشغيلية" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : "سجل التدقيق";
             return (
               <button key={item} type="button" onClick={() => onNavigate(item)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-900"}`}>
                 <Icon className="h-5 w-5" /> {label}
@@ -397,17 +405,17 @@ export default function PlatformAdminConsole({
         <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl font-black">{activeSection === "overview" ? "النظرة التشغيلية" : activeSection === "stores" ? "إدارة المتاجر" : "سجل التدقيق"}</h1>
+              <h1 className="text-xl font-black">{activeSection === "overview" ? "النظرة التشغيلية" : activeSection === "stores" ? "إدارة المتاجر" : activeSection === "users" ? "إدارة مستخدمي المنصة" : "سجل التدقيق"}</h1>
               <p className="mt-1 text-xs text-slate-500">بيانات مركزية محمية بصلاحيات الخادم</p>
             </div>
-            <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection !== "audit" && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading) ? "animate-spin" : ""}`} /> تحديث
+            <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection === "users" && usersForbidden) || ((activeSection === "overview" || activeSection === "stores") && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "users" ? setUsersRefreshSignal((value) => value + 1) : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading || usersLoading) ? "animate-spin" : ""}`} /> تحديث
             </button>
           </div>
           <nav className="mt-4 flex gap-2 overflow-x-auto lg:hidden" aria-label="أقسام إدارة المنصة للجوال">
             {allowedSections.map((item) => (
               <button key={item} type="button" onClick={() => onNavigate(item)} className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                {item === "overview" ? "النظرة" : item === "stores" ? "المتاجر" : "التدقيق"}
+                {item === "overview" ? "النظرة" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : "التدقيق"}
               </button>
             ))}
           </nav>
@@ -487,6 +495,18 @@ export default function PlatformAdminConsole({
               </div>
               <Pagination value={stores.pagination} onPage={(page) => setStoreQuery((current) => ({ ...current, page }))} />
             </section>
+          )}
+
+          {activeSection === "users" && canUsers && (
+            <PlatformUsersPanel
+              administration={administration}
+              currentUser={user}
+              onSessionExpired={onSessionExpired}
+              onToast={onToast}
+              refreshSignal={usersRefreshSignal}
+              onLoadingChange={setUsersLoading}
+              onForbiddenChange={setUsersForbidden}
+            />
           )}
 
           {activeSection === "audit" && canAudit && !auditForbidden && (

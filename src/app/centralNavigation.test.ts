@@ -15,6 +15,7 @@ describe("central navigation", () => {
     expect(parseCentralRoute("/reset-password")).toEqual({ name: "auth-flow" });
     expect(parseCentralRoute("/admin")).toEqual({ name: "admin", section: "overview" });
     expect(parseCentralRoute("/admin/stores")).toEqual({ name: "admin", section: "stores" });
+    expect(parseCentralRoute("/admin/users")).toEqual({ name: "admin", section: "users" });
     expect(parseCentralRoute("/admin/audit")).toEqual({ name: "admin", section: "audit" });
     expect(parseCentralRoute("/admin/unknown")).toEqual({ name: "unknown" });
     expect(parseCentralRoute("/app/stores/tenant/unknown")).toEqual({ name: "unknown" });
@@ -23,6 +24,7 @@ describe("central navigation", () => {
   it("builds fixed administration paths", () => {
     expect(adminPath()).toBe("/admin");
     expect(adminPath("stores")).toBe("/admin/stores");
+    expect(adminPath("users")).toBe("/admin/users");
     expect(adminPath("audit")).toBe("/admin/audit");
   });
 
