@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.11 — Platform user lifecycle and role assignment |
-| Status | Implementation verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-22 |
 | Branch | `codex/wp-5.11-platform-user-lifecycle` |
 | Base | `8188c82` |
@@ -69,5 +69,8 @@
 ## Delivery status
 
 - Implementation is recorded separately in `17f3bb9b2d20731a60788593b06dc2ed2dbe021d`.
-- Evidence is intentionally recorded in the next commit.
-- Pull-request, required-CI, merge and protected-main facts will be appended only after they exist.
+- Evidence is recorded separately in `0949e46618f203378d3827765791f2fbceeabd06`.
+- Pull request [#46](https://github.com/sas-prog1/Eoshop/pull/46) was merged from final head `0949e46618f203378d3827765791f2fbceeabd06`.
+- Pull-request CI run [32560333237](https://github.com/sas-prog1/Eoshop/actions/runs/32560333237) passed all four required jobs: Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `c6232050121e215361d0e4f30a25b1813463b5e1`.
+- Protected-main CI run [32560626924](https://github.com/sas-prog1/Eoshop/actions/runs/32560626924) passed the same four required jobs after merge.

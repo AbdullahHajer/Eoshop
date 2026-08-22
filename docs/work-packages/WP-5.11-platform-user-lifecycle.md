@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.11 |
-| Status | T5 — Evidence and delivery |
+| Status | Complete and merged |
 | Started | 2026-08-21 |
 | Branch | `codex/wp-5.11-platform-user-lifecycle` |
 | Base | Protected `main` at `8188c82` |
@@ -104,8 +104,8 @@ Add a safe, server-authoritative platform-team workspace where an authorized adm
 ### T5 — Evidence and delivery
 
 - [x] Record exact evidence and retained delivery/custom-role/deletion/MFA debt.
-- [ ] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass required CI, merge and record protected-main facts.
+- [x] Commit implementation and evidence separately.
+- [x] Push, open PR, pass required CI, merge and record protected-main facts.
 
 ## Acceptance criteria
 
