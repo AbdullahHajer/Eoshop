@@ -11,6 +11,7 @@ import { StoreConfig, Product } from "../types";
 import type { CreateOrderInput, OrderReceipt } from "../adapters/uiAdapters";
 import ProductArt from "./ProductArt";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
+import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -66,6 +67,7 @@ export default function StorePreview({
   mode = "preview",
   submitOrder,
 }: StorePreviewProps) {
+  const { settings: platformSettings } = usePlatformSettings();
   
   // Navigation Page State inside store
   const [storePage, setStorePage] = useState<"home" | "products" | "about" | "contact" | "product" | "checkout">("home");
@@ -2722,7 +2724,9 @@ export default function StorePreview({
       {/* Informative footer */}
       <footer className="pt-6 border-t border-slate-300/10 text-center space-y-2 text-slate-500 text-[11px] pb-12 bg-slate-400/5">
         <p>© {new Date().getFullYear()} {config.storeName} - جميع الحقوق محفوظة.</p>
-        <p className="text-[10px] text-slate-400">متجر إلكتروني متكامل ومدعوم من منصة مبتكر الذكية لإنشاء المتاجر.</p>
+        {platformSettings.storefrontAttributionEnabled && platformSettings.storefrontAttributionText && (
+          <p className="text-[10px] text-slate-400">{platformSettings.storefrontAttributionText}</p>
+        )}
       </footer>
 
       {/* ----------------- SHOPPING CART DRAWER ----------------- */}

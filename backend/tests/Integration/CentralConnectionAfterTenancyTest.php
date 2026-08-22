@@ -8,6 +8,8 @@ use App\Enums\UserStatus;
 use App\Models\AdminAuditLog;
 use App\Models\DomainReservation;
 use App\Models\Plan;
+use App\Models\PlatformNavigationItem;
+use App\Models\PlatformSetting;
 use App\Models\PublicationRequest;
 use App\Models\Role;
 use App\Models\Tenant;
@@ -58,10 +60,14 @@ class CentralConnectionAfterTenancyTest extends TestCase
             $this->assertSame(0, DomainReservation::query()->where('tenant_id', $tenantId)->count());
             $this->assertSame(0, PublicationRequest::query()->where('tenant_id', $tenantId)->count());
             $this->assertSame(0, TenantSubscription::query()->where('tenant_id', $tenantId)->count());
+            $this->assertSame(1, PlatformSetting::query()->whereKey(PlatformSetting::SINGLETON_ID)->count());
+            $this->assertSame(3, PlatformNavigationItem::query()->where('platform_setting_id', PlatformSetting::SINGLETON_ID)->count());
             $this->assertSame((string) config('tenancy.database.central_connection'), (new Plan)->getConnectionName());
             $this->assertSame((string) config('tenancy.database.central_connection'), (new DomainReservation)->getConnectionName());
             $this->assertSame((string) config('tenancy.database.central_connection'), (new PublicationRequest)->getConnectionName());
             $this->assertSame((string) config('tenancy.database.central_connection'), (new TenantSubscription)->getConnectionName());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new PlatformSetting)->getConnectionName());
+            $this->assertSame((string) config('tenancy.database.central_connection'), (new PlatformNavigationItem)->getConnectionName());
         } finally {
             tenancy()->end();
             $central->table('tenant_user')->where('tenant_id', $tenantId)->delete();

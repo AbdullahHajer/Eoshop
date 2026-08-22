@@ -8,6 +8,7 @@ import { catalogApi } from "../services/catalogApi";
 import { inventoryApi } from "../services/inventoryApi";
 import { orderApi } from "../services/orderApi";
 import { storeAssetApi } from "../services/storeAssetApi";
+import { platformSettingsApi } from "../services/platformSettingsApi";
 
 export type {
   AdminAuditEvent,
@@ -36,6 +37,7 @@ export type { StoreWorkspace } from "../services/workspaceApi";
 export type { CatalogSnapshot } from "../services/catalogApi";
 export type { StoreAssetUpload } from "../services/storeAssetApi";
 export type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../services/orderApi";
+export type { AdminPlatformSettings, PlatformNavigationItem, PlatformNavigationKey, PlatformSettings, UpdatePlatformSettingsInput } from "../services/platformSettingsApi";
 export {
   UiAdapterError,
   isUiError,
@@ -69,6 +71,7 @@ export interface AuthActions {
 export interface UiAdapters {
   auth: AuthActions;
   administration: typeof adminApi;
+  platformSettings: typeof platformSettingsApi;
   assistant: typeof assistantApi;
   plans: typeof plansApi;
   provisioning: typeof provisioningApi;
@@ -96,6 +99,7 @@ export const productionUiAdapters: UiAdapters = {
     resetPassword: (input) => authApi.resetPassword(input),
   },
   administration: adminApi,
+  platformSettings: platformSettingsApi,
   assistant: assistantApi,
   plans: plansApi,
   provisioning: provisioningApi,

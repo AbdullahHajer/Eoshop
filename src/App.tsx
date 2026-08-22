@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Store, Paintbrush, Package, Sparkles, Smartphone, Monitor, 
@@ -59,6 +59,7 @@ import {
   type WorkspaceConflictState,
 } from "./workflows/merchantWorkspaceState";
 import { reconcileCartWithStorefront } from "./workflows/orderState";
+import { usePlatformSettings } from "./adapters/PlatformSettingsContext";
 
 export default function App() {
   const {
@@ -68,6 +69,7 @@ export default function App() {
     workspace: workspaceActions,
     orders: orderActions,
   } = useUiAdapters();
+  const { settings: platformSettings } = usePlatformSettings();
   // Navigation State: 'landing' | 'templates' | 'builder' | 'merchant_dashboard'
   const [view, setView] = useState<AppView>("landing");
   const [publicStorefront, setPublicStorefront] = useState<StorefrontBootstrap | null>(null);
@@ -77,6 +79,8 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<AdminSection>("overview");
+  const [adminSettingsDirty, setAdminSettingsDirty] = useState(false);
+  const adminSettingsDirtyRef = useRef(false);
   
   // Customization Configuration
   const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
@@ -1226,9 +1230,33 @@ export default function App() {
     }
   };
 
+  const updateAdminSettingsDirty = useCallback((dirty: boolean) => {
+    adminSettingsDirtyRef.current = dirty;
+    setAdminSettingsDirty(dirty);
+  }, []);
+
+  useEffect(() => {
+    if (!adminSettingsDirty) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [adminSettingsDirty]);
+
   useEffect(() => {
     if (!isCentralFrontendHost(window.location.hostname)) return;
     const handlePopState = () => {
+      const currentAdminPath = adminPath(adminSection);
+      if (isAdminOpen && adminSettingsDirtyRef.current && window.location.pathname !== currentAdminPath) {
+        const confirmed = window.confirm("توجد تعديلات غير محفوظة في إعدادات المنصة. مغادرة الصفحة ستتجاهلها. هل تريد المتابعة؟");
+        if (!confirmed) {
+          pushCentralPath(currentAdminPath);
+          return;
+        }
+        updateAdminSettingsDirty(false);
+      }
       const route = parseCentralRoute(window.location.pathname);
       if (route.name === "admin") {
         setAdminSection(route.section);
@@ -1292,7 +1320,7 @@ export default function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [authUser, merchantStores, activeWorkspace, merchantStoreRoute, recoverableWorkspaceChanges, view]);
+  }, [adminSection, authUser, isAdminOpen, merchantStores, activeWorkspace, merchantStoreRoute, recoverableWorkspaceChanges, view]);
 
   const focusedBuilderTask = activeWorkspace && merchantStoreRoute
     ? ({
@@ -1301,6 +1329,19 @@ export default function App() {
       pages: ["المحتوى والتواصل", "حرر نبذة المتجر ووجهات التواصل المحفوظة دون وعود أو نماذج وهمية."],
     } as const)[merchantStoreRoute.section as "design" | "checkout" | "pages"] ?? null
     : null;
+
+  const visiblePlatformNavigation = platformSettings.navigationItems
+    .filter((item) => item.isVisible)
+    .sort((left, right) => left.position - right.position);
+
+  const followPlatformNavigation = (key: "templates" | "how_it_works" | "pricing") => {
+    if (key === "templates") {
+      setView("templates");
+      return;
+    }
+    document.getElementById(key === "how_it_works" ? "how-it-works" : "pricing")
+      ?.scrollIntoView({ behavior: "smooth" });
+  };
 
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
@@ -1394,26 +1435,35 @@ export default function App() {
           <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-sky-200/40 rounded-full blur-3xl -z-10" />
           <div className="absolute bottom-10 left-1/4 w-[600px] h-[600px] bg-amber-100/40 rounded-full blur-3xl -z-10" />
 
+          {platformSettings.announcementEnabled && platformSettings.announcementText && (
+            <div className="px-6 py-2 text-center text-xs font-black" style={{ backgroundColor: platformSettings.primaryColor, color: "var(--platform-primary-foreground)" }}>
+              {platformSettings.announcementText}
+            </div>
+          )}
+
           {/* Header */}
           <header className="container mx-auto px-6 py-5 flex items-center justify-between border-b border-slate-100/80">
             <div className="flex items-center gap-3">
-              <div className="bg-slate-900 text-white p-2.5 rounded-xl shadow-md shadow-slate-900/10">
-                <Store className="w-6 h-6" />
-              </div>
+              {platformSettings.logoUrl ? (
+                <img src={platformSettings.logoUrl} alt="" className="h-11 w-11 rounded-xl border border-slate-200 bg-white object-contain p-1" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="p-2.5 rounded-xl shadow-md text-white" style={{ backgroundColor: platformSettings.primaryColor }}><Store className="w-6 h-6" /></div>
+              )}
               <div>
-                <span className="font-display font-black text-xl tracking-tight text-slate-900">مُبتكِر</span>
-                <span className="text-[10px] block text-sky-600 font-bold -mt-1">منصة المتاجر الذكية</span>
+                <span className="font-display font-black text-xl tracking-tight text-slate-900">{platformSettings.platformName}</span>
+                {platformSettings.tagline && <span className="text-[10px] block font-bold -mt-1" style={{ color: platformSettings.primaryColor }}>{platformSettings.tagline}</span>}
               </div>
             </div>
+
+            <nav aria-label="التنقل الرئيسي" className="hidden items-center gap-1 lg:flex">
+              {visiblePlatformNavigation.map((item) => (
+                <button key={item.key} type="button" onClick={() => followPlatformNavigation(item.key)} className="rounded-lg px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950">
+                  {item.label}
+                </button>
+              ))}
+            </nav>
             
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setView("templates")}
-                className="hidden md:flex items-center gap-2 text-slate-600 hover:text-slate-900 transition font-semibold text-sm px-3 py-2"
-              >
-                تصفح القوالب
-              </button>
-
               {authUser ? (
                 <div className="flex items-center gap-2">
                   <button
@@ -1466,6 +1516,16 @@ export default function App() {
             </div>
           </header>
 
+          {visiblePlatformNavigation.length > 0 && (
+            <nav aria-label="التنقل الرئيسي للجوال" className="container mx-auto flex gap-2 overflow-x-auto border-b border-slate-100 px-6 pb-4 lg:hidden">
+              {visiblePlatformNavigation.map((item) => (
+                <button key={item.key} type="button" onClick={() => followPlatformNavigation(item.key)} className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          )}
+
           {/* Hero Content */}
           <main className="flex-1 container mx-auto px-6 py-12 md:py-20 flex flex-col lg:flex-row items-center gap-16">
             <div className="flex-1 text-right space-y-8 max-w-2xl">
@@ -1475,11 +1535,11 @@ export default function App() {
               </div>
               
               <h1 className="font-display font-extrabold text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight">
-                أنشئ متجرك الإلكتروني <span className="text-sky-600">بذكاء وسرعة</span>
+                {platformSettings.landingHeadline}
               </h1>
               
               <p className="text-slate-600 text-base md:text-lg leading-relaxed font-normal">
-                صمم هويتك التجارية المتكاملة واختر من بين قوالبنا الاحترافية القابلة للتعديل الفوري بدون أي حاجة لخبرة برمجية. ابدأ الآن واطلق متجرك في دقائق!
+                {platformSettings.landingDescription}
               </p>
 
               {/* Feature Highlights Grid */}
@@ -1643,10 +1703,10 @@ export default function App() {
           </main>
 
           {/* Steps Explanation Section */}
-          <section id="how-it-works" className="bg-white border-t border-slate-100 py-16 scroll-mt-6">
+          {platformSettings.showHowItWorks && <section id="how-it-works" className="bg-white border-t border-slate-100 py-16 scroll-mt-6">
             <div className="container mx-auto px-6">
               <div className="text-center max-w-xl mx-auto space-y-4 mb-16">
-                <h2 className="font-display font-extrabold text-2xl md:text-3xl text-slate-900">كيف تعمل منصة مبتكر؟</h2>
+                <h2 className="font-display font-extrabold text-2xl md:text-3xl text-slate-900">كيف تعمل منصة {platformSettings.platformName}؟</h2>
                 <p className="text-slate-500 text-sm md:text-base">بثلاثة خطوات بسيطة، ستتحول فكرتك التجارية إلى متجر إلكتروني متكامل جاهز للمعاينة والتخصيص.</p>
               </div>
 
@@ -1676,10 +1736,33 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </section>
+          </section>}
 
           {/* Pricing & Plans Section (الأسعار والباقات) */}
-          <ServerPricingPlans onStart={() => checkRegistrationAndExecute("templates")} />
+          {platformSettings.showPricing && <ServerPricingPlans onStart={() => checkRegistrationAndExecute("templates")} />}
+
+          <footer className="mt-20 shrink-0 border-t border-slate-800 bg-slate-900 py-10 text-slate-400">
+            <div className="container mx-auto flex flex-col items-center justify-between gap-6 px-6 sm:flex-row">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-sky-500 p-2 font-bold text-slate-950 shadow-md shadow-sky-500/20"><Store className="h-5 w-5" /></div>
+                <div className="text-right">
+                  <span className="block font-display text-base font-black text-white">{platformSettings.platformName}</span>
+                  {platformSettings.tagline && <span className="block text-[10px] text-slate-400">{platformSettings.tagline}</span>}
+                  <span className="block text-[10px] text-slate-500">© {new Date().getFullYear()}</span>
+                </div>
+              </div>
+              <div className="space-y-3 text-center text-xs text-slate-500 sm:text-left">
+                {(platformSettings.supportEmail || platformSettings.supportPhone || platformSettings.supportWhatsapp) && (
+                  <div className="flex flex-wrap justify-center gap-3 sm:justify-end" aria-label="قنوات دعم المنصة">
+                    {platformSettings.supportEmail && <a className="hover:text-white" dir="ltr" href={`mailto:${platformSettings.supportEmail}`}>{platformSettings.supportEmail}</a>}
+                    {platformSettings.supportPhone && <a className="hover:text-white" dir="ltr" href={`tel:${platformSettings.supportPhone}`}>{platformSettings.supportPhone}</a>}
+                    {platformSettings.supportWhatsapp && <a className="hover:text-white" href={`https://wa.me/${platformSettings.supportWhatsapp.slice(1)}`} target="_blank" rel="noreferrer">واتساب الدعم</a>}
+                  </div>
+                )}
+                <div className="font-medium">جميع الحقوق محفوظة لمنصة {platformSettings.platformName}</div>
+              </div>
+            </div>
+          </footer>
         </div>
       )}
 
@@ -1928,13 +2011,21 @@ export default function App() {
                   <Store className="w-5 h-5" />
                 </div>
                 <div className="text-right">
-                  <span className="font-display font-black text-white text-base">مُبتكِر</span>
-                  <span className="text-[10px] block text-slate-400">منصة المتاجر الذكية متعددة المستأجرين © 2026</span>
+                  <span className="font-display font-black text-white text-base">{platformSettings.platformName}</span>
+                  {platformSettings.tagline && <span className="text-[10px] block text-slate-400">{platformSettings.tagline}</span>}
+                  <span className="block text-[10px] text-slate-500">© {new Date().getFullYear()}</span>
                 </div>
               </div>
 
-              <div className="text-xs text-slate-500 font-medium">
-                جميع الحقوق محفوظة منصة مبتكر للمتاجر السحابية
+              <div className="space-y-3 text-center text-xs text-slate-500 sm:text-left">
+                {(platformSettings.supportEmail || platformSettings.supportPhone || platformSettings.supportWhatsapp) && (
+                  <div className="flex flex-wrap justify-center gap-3 sm:justify-end" aria-label="قنوات دعم المنصة">
+                    {platformSettings.supportEmail && <a className="hover:text-white" dir="ltr" href={`mailto:${platformSettings.supportEmail}`}>{platformSettings.supportEmail}</a>}
+                    {platformSettings.supportPhone && <a className="hover:text-white" dir="ltr" href={`tel:${platformSettings.supportPhone}`}>{platformSettings.supportPhone}</a>}
+                    {platformSettings.supportWhatsapp && <a className="hover:text-white" href={`https://wa.me/${platformSettings.supportWhatsapp.slice(1)}`} target="_blank" rel="noreferrer">واتساب الدعم</a>}
+                  </div>
+                )}
+                <div className="font-medium">جميع الحقوق محفوظة لمنصة {platformSettings.platformName}</div>
               </div>
             </div>
           </footer>
@@ -2261,7 +2352,7 @@ export default function App() {
                   </div>
                   <div>
                     <span className="font-extrabold text-sm md:text-base text-slate-900">{config.storeName} (عرض المعاينة الكاملة)</span>
-                    <span className="text-[10px] text-slate-500 font-bold block -mt-0.5">تصميم وحفظ عبر منصة مبتكر الذكية</span>
+                    <span className="text-[10px] text-slate-500 font-bold block -mt-0.5">تصميم وحفظ عبر منصة {platformSettings.platformName}</span>
                   </div>
                 </div>
 
@@ -2435,6 +2526,7 @@ export default function App() {
             pushCentralPath(adminPath(section));
           }}
           onExit={() => {
+            updateAdminSettingsDirty(false);
             setIsAdminOpen(false);
             setView("landing");
             replaceCentralPath("/");
@@ -2442,11 +2534,12 @@ export default function App() {
           onLogout={async () => {
             try {
               await auth.logout();
-            } catch {
+            } catch (caught) {
               triggerToast("تعذر إنهاء جلسة الإدارة على الخادم. حاول مجددًا.", "error");
-              return;
+              throw caught;
             }
             setAuthUser(null);
+            updateAdminSettingsDirty(false);
             setIsAdminOpen(false);
             resetTenantOwnedState();
             setView("landing");
@@ -2455,11 +2548,13 @@ export default function App() {
           }}
           onSessionExpired={() => {
             setAuthUser(null);
+            updateAdminSettingsDirty(false);
             setIsAdminOpen(false);
             resetTenantOwnedState();
             setIsAdminAuthModalOpen(true);
           }}
           onToast={triggerToast}
+          onDirtyChange={updateAdminSettingsDirty}
         />
       )}
 

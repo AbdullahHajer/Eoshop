@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
 import { uiErrorMessage, type UserProfile } from "../adapters/uiAdapters";
+import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 
 export type { UserProfile } from "../adapters/uiAdapters";
 
@@ -29,6 +30,7 @@ export default function AuthGateway({
   initialMode = "signup"
 }: AuthGatewayProps) {
   const { auth } = useUiAdapters();
+  const { settings: platformSettings } = usePlatformSettings();
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   
   // Form fields
@@ -141,7 +143,7 @@ export default function AuthGateway({
         className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden my-auto max-h-[92vh] flex flex-col"
       >
         {/* Top Gradient accent bar */}
-        <div className="h-2 bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 shrink-0" />
+        <div className="h-2 shrink-0" style={{ backgroundColor: platformSettings.primaryColor }} />
         
         {/* Close Button */}
         <button
@@ -222,6 +224,19 @@ export default function AuthGateway({
         ) : (
           /* Sign-up / Sign-in Tabs & Form */
           <div className="p-7 text-right overflow-y-auto">
+            <div className="mb-5 flex items-center justify-center gap-3" aria-label={`هوية ${platformSettings.platformName}`}>
+              {platformSettings.logoUrl ? (
+                <img src={platformSettings.logoUrl} alt="" className="h-10 w-10 rounded-xl border border-slate-200 object-contain" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl text-white" style={{ backgroundColor: platformSettings.primaryColor }}>
+                  <Sparkles className="h-5 w-5" />
+                </div>
+              )}
+              <div>
+                <p className="font-black text-slate-900 dark:text-white">{platformSettings.platformName}</p>
+                {platformSettings.tagline && <p className="text-[10px] font-bold text-slate-500">{platformSettings.tagline}</p>}
+              </div>
+            </div>
             {/* Header Tabs */}
             <div className="text-center mb-5">
               <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-1.5">

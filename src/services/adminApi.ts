@@ -8,6 +8,13 @@ import {
   stringArrayField,
   stringField,
 } from "./apiContract";
+import {
+  mapAdminPlatformSettings,
+  type AdminPlatformSettings,
+  type UpdatePlatformSettingsInput,
+} from "./platformSettingsApi";
+
+export type { AdminPlatformSettings, UpdatePlatformSettingsInput } from "./platformSettingsApi";
 
 export type VerificationStatus = "approved" | "pending" | "rejected" | "suspended";
 export type ProvisioningStatus = "not_started" | "queued" | "provisioning" | "retrying" | "active" | "failed";
@@ -339,6 +346,19 @@ function mapStore(value: unknown): PlatformStore {
 }
 
 export const adminApi = {
+  async getPlatformSettings(): Promise<AdminPlatformSettings> {
+    const payload = record(await apiClient.request<unknown>("/api/admin/platform-settings"), "إعدادات إدارة المنصة");
+    return mapAdminPlatformSettings(payload.data);
+  },
+
+  async updatePlatformSettings(input: UpdatePlatformSettingsInput): Promise<AdminPlatformSettings> {
+    const payload = record(await apiClient.request<unknown>("/api/admin/platform-settings", {
+      method: "PUT",
+      body: input,
+    }), "تحديث إعدادات المنصة");
+    return mapAdminPlatformSettings(payload.data);
+  },
+
   async overview(): Promise<PlatformOverview> {
     const payload = record(await apiClient.request<unknown>("/api/admin/overview"), "ملخص إدارة المنصة");
 
