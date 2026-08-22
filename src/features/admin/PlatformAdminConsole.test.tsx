@@ -64,6 +64,41 @@ function operator(platformPermissions: string[]): UserProfile {
 afterEach(cleanup);
 
 describe("PlatformAdminConsole", () => {
+  it("routes a users-only manager to users without requesting store or audit data", async () => {
+    const onNavigate = vi.fn();
+    const overviewCall = vi.fn();
+    const listStores = vi.fn();
+    const listAuditLogs = vi.fn();
+    const listUsers = vi.fn().mockResolvedValue(emptyPage);
+    const listPlatformRoles = vi.fn().mockResolvedValue([]);
+
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
+        overview: overviewCall,
+        listStores,
+        listAuditLogs,
+        listUsers,
+        listPlatformRoles,
+      } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.users.manage"])}
+          section="overview"
+          onNavigate={onNavigate}
+          onExit={vi.fn()}
+          onLogout={vi.fn().mockResolvedValue(undefined)}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("users"));
+    await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ page: 1, perPage: 25 }));
+    expect(overviewCall).not.toHaveBeenCalled();
+    expect(listStores).not.toHaveBeenCalled();
+    expect(listAuditLogs).not.toHaveBeenCalled();
+  });
+
   it("redirects an audit-only operator to audit and never requests store data", async () => {
     const onNavigate = vi.fn();
     const overviewCall = vi.fn();

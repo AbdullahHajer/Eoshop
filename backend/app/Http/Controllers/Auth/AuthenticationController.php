@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureActiveUserSession;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\AuthenticatedUserResource;
@@ -141,6 +142,10 @@ class AuthenticationController extends Controller
         $request->session()->put(
             'password_hash_'.Auth::getDefaultDriver(),
             $guard->hashPasswordForCookie($user->getAuthPassword()),
+        );
+        $request->session()->put(
+            EnsureActiveUserSession::SESSION_GENERATION_KEY,
+            (int) $user->getAttribute('session_generation'),
         );
     }
 }

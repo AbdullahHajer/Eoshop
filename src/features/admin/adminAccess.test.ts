@@ -19,17 +19,21 @@ function user(platformPermissions: string[]): UserProfile {
 }
 
 describe("platform administration access", () => {
-  it("routes store and audit operators only to authorized sections", () => {
+  it("routes store, user, and audit operators only to authorized sections", () => {
     const storesOnly = user(["platform.stores.view"]);
+    const usersOnly = user(["platform.users.manage"]);
     const auditOnly = user(["platform.audit.view"]);
 
     expect(authorizedAdminSections(storesOnly)).toEqual(["overview", "stores"]);
     expect(safeAdminSection("audit", storesOnly)).toBe("overview");
+    expect(canAccessPlatformConsole(usersOnly)).toBe(true);
+    expect(authorizedAdminSections(usersOnly)).toEqual(["users"]);
+    expect(safeAdminSection("overview", usersOnly)).toBe("users");
     expect(authorizedAdminSections(auditOnly)).toEqual(["audit"]);
     expect(safeAdminSection("overview", auditOnly)).toBe("audit");
   });
 
-  it("fails closed for merchants without either read permission", () => {
+  it("fails closed for merchants without any administration permission", () => {
     const merchant = user([]);
 
     expect(canAccessPlatformConsole(merchant)).toBe(false);

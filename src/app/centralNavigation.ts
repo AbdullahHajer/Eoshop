@@ -19,6 +19,7 @@ export function parseCentralRoute(pathname: string): CentralRoute {
   if (pathname === "/app/new" || pathname === "/app/new/") return { name: "merchant-new" };
   if (pathname === "/admin" || pathname === "/admin/") return { name: "admin", section: "overview" };
   if (pathname === "/admin/stores" || pathname === "/admin/stores/") return { name: "admin", section: "stores" };
+  if (pathname === "/admin/users" || pathname === "/admin/users/") return { name: "admin", section: "users" };
   if (pathname === "/admin/audit" || pathname === "/admin/audit/") return { name: "admin", section: "audit" };
   if (pathname === "/reset-password") return { name: "auth-flow" };
 

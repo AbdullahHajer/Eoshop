@@ -21,6 +21,11 @@ class User extends Authenticatable
 {
     use CentralConnection, HasFactory, HasUlids, Notifiable, SoftDeletes;
 
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'session_generation' => 1,
+    ];
+
     protected $fillable = [
         'name',
         'email',
@@ -34,6 +39,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'session_generation',
     ];
 
     /**
@@ -46,6 +52,7 @@ class User extends Authenticatable
             'email_verified_at' => 'immutable_datetime',
             'last_login_at' => 'immutable_datetime',
             'password' => 'hashed',
+            'session_generation' => 'integer',
         ];
     }
 

@@ -13,6 +13,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureActiveUserSession
 {
+    public const SESSION_GENERATION_KEY = 'identity_session_generation';
+
     /**
      * Reject stale authenticated sessions centrally before a protected action runs.
      */
@@ -27,7 +29,23 @@ class EnsureActiveUserSession
         $isInvalidUser = $user instanceof User
             && ($user->getAttribute('status') !== UserStatus::Active || $user->trashed());
 
-        if ($isInvalidUser || ($hasAuthenticatedSession && ! $user instanceof User)) {
+        $hasInvalidGeneration = false;
+        if ($user instanceof User && ! $isInvalidUser && $hasAuthenticatedSession) {
+            $currentGeneration = $user->getAttribute('session_generation');
+            $boundGeneration = $request->session()->get(self::SESSION_GENERATION_KEY);
+
+            if ($boundGeneration === null && $guard->viaRemember() && is_int($currentGeneration)) {
+                $request->session()->put(self::SESSION_GENERATION_KEY, $currentGeneration);
+                $boundGeneration = $currentGeneration;
+            }
+
+            $hasInvalidGeneration = ! is_int($currentGeneration)
+                || ! is_int($boundGeneration)
+                || $currentGeneration < 1
+                || $boundGeneration !== $currentGeneration;
+        }
+
+        if ($isInvalidUser || $hasInvalidGeneration || ($hasAuthenticatedSession && ! $user instanceof User)) {
             $guard->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

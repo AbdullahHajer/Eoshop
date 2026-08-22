@@ -34,6 +34,27 @@ const store = {
   latestProvisioningRun: null,
 };
 
+const platformRole = {
+  key: "platform_reviewer",
+  name: "Platform Reviewer",
+  description: null,
+  permissionKeys: ["platform.audit.view", "platform.stores.review", "platform.stores.view"],
+};
+
+const platformUser = {
+  id: "01PLATFORMUSER",
+  name: "Platform Operator",
+  email: "operator@example.test",
+  status: "active" as const,
+  resumeStatus: null,
+  roles: [{ key: platformRole.key, name: platformRole.name }],
+  platformPermissions: platformRole.permissionKeys,
+  activeTenantMembershipCount: 1,
+  emailVerifiedAt: "2026-08-21T10:00:00Z",
+  lastLoginAt: null,
+  createdAt: "2026-08-21T09:00:00Z",
+};
+
 describe("adminApi", () => {
   it("loads authoritative platform stores with same-origin credentials", async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
@@ -87,6 +108,62 @@ describe("adminApi", () => {
     expect(events.items[0]).not.toHaveProperty("oldValues");
     expect(events.items[0]).not.toHaveProperty("userAgent");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/admin/audit-logs?search=verification&page=1");
+  });
+
+  it("maps allowlisted platform roles and users", async () => {
+    const fetchMock = vi.fn((path: string) => Promise.resolve(new Response(JSON.stringify(
+      path === "/api/admin/platform-roles"
+        ? { data: [{ ...platformRole, internalId: 7 }] }
+        : {
+          data: [{ ...platformUser, password: "must-not-escape", rememberToken: "must-not-escape" }],
+          meta: { current_page: 1, last_page: 1, per_page: 25, total: 1 },
+        },
+    ), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adminApi.listPlatformRoles()).resolves.toEqual([platformRole]);
+    const result = await adminApi.listUsers({ status: "active", page: 1 });
+    expect(result.items).toEqual([platformUser]);
+    expect(result.items[0]).not.toHaveProperty("password");
+    expect(result.items[0]).not.toHaveProperty("rememberToken");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/admin/users?status=active&page=1");
+  });
+
+  it("uses explicit optimistic platform-user mutations", async () => {
+    const pending = { ...platformUser, status: "pending" as const, emailVerifiedAt: null };
+    const fetchMock = vi.fn((path: string, _options?: RequestInit) => Promise.resolve(path === "/api/auth/csrf"
+      ? new Response(JSON.stringify({ csrf_token: "users-csrf" }), { status: 200 })
+      : path === "/api/admin/users"
+        ? new Response(JSON.stringify({ data: pending, invitationDispatch: { status: "accepted" } }), { status: 201 })
+        : path.endsWith("/invitation")
+          ? new Response(JSON.stringify({ invitationDispatch: { status: "accepted" } }), { status: 202 })
+          : new Response(JSON.stringify({ data: platformUser, meta: { requestId: "request-id" } }), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(adminApi.inviteUser({
+      name: pending.name,
+      email: pending.email,
+      roleKeys: [platformRole.key],
+    })).resolves.toEqual({ user: pending, invitationDispatchStatus: "accepted" });
+    await adminApi.replaceUserRoles(platformUser.id, [platformRole.key], ["platform_super_admin"]);
+    await adminApi.updateUserStatus(platformUser.id, "active", "suspended");
+    await expect(adminApi.resendUserInvitation(platformUser.id)).resolves.toBe("accepted");
+
+    const calls = fetchMock.mock.calls.filter(([path]) => path !== "/api/auth/csrf");
+    expect(calls.map(([path]) => path)).toEqual([
+      "/api/admin/users",
+      "/api/admin/users/01PLATFORMUSER/roles",
+      "/api/admin/users/01PLATFORMUSER/status",
+      "/api/admin/users/01PLATFORMUSER/invitation",
+    ]);
+    expect(JSON.parse((calls[1][1] as RequestInit).body as string)).toEqual({
+      expectedRoleKeys: [platformRole.key],
+      roleKeys: ["platform_super_admin"],
+    });
+    expect(JSON.parse((calls[2][1] as RequestInit).body as string)).toEqual({
+      expectedStatus: "active",
+      status: "suspended",
+    });
   });
 
   it("uses CSRF and PATCH for a review decision", async () => {
