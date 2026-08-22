@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\PlatformOverviewController;
+use App\Http\Controllers\Admin\PlatformSettingsController as AdminPlatformSettingsController;
 use App\Http\Controllers\Admin\PlatformStoreController;
 use App\Http\Controllers\Admin\PlatformUserController;
 use App\Http\Controllers\Auth\AuthenticationController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\MerchantStoreLifecycleController;
 use App\Http\Controllers\MerchantWorkspaceController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlatformController;
+use App\Http\Controllers\PlatformSettingsController;
 use App\Http\Controllers\StoreAssetController;
 use App\Http\Controllers\StoreGeneratorController;
 use App\Http\Controllers\StoreSubmissionController;
@@ -44,6 +46,9 @@ Route::get('/api/store-assets/{tenant}/{asset}', [StoreAssetController::class, '
     ->middleware('known.domain')
     ->whereUuid('asset');
 
+Route::get('/api/platform-settings', [PlatformSettingsController::class, 'show'])
+    ->middleware('known.domain');
+
 Route::middleware('central.domain')->group(function (): void {
     Route::get('/api/plans', [PlanController::class, 'index']);
 
@@ -51,6 +56,9 @@ Route::middleware('central.domain')->group(function (): void {
         ->middleware('throttle:auth.register');
 
     Route::prefix('api/admin')->middleware('auth')->group(function (): void {
+        Route::get('/platform-settings', [AdminPlatformSettingsController::class, 'show']);
+        Route::put('/platform-settings', [AdminPlatformSettingsController::class, 'update'])
+            ->middleware('throttle:admin.mutations');
         Route::get('/platform-roles', [PlatformUserController::class, 'roles'])
             ->can('viewAny', User::class);
         Route::get('/users', [PlatformUserController::class, 'index'])

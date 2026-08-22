@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ScrollText,
   Search,
+  Settings,
   ShieldAlert,
   ShieldCheck,
   Store,
@@ -36,6 +37,7 @@ import {
 import { publicStoreUrl } from "../utils/publicStoreUrl";
 import {
   authorizedAdminSections,
+  canManagePlatformSettings,
   canManagePlatformUsers,
   canViewPlatformAudit,
   canViewPlatformStores,
@@ -43,6 +45,8 @@ import {
   type AdminSection,
 } from "../features/admin/adminAccess";
 import PlatformUsersPanel from "../features/admin/PlatformUsersPanel";
+import PlatformSettingsPanel from "../features/admin/PlatformSettingsPanel";
+import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 
 interface PlatformAdminConsoleProps {
   user: UserProfile;
@@ -52,7 +56,10 @@ interface PlatformAdminConsoleProps {
   onLogout: () => Promise<void>;
   onSessionExpired: () => void;
   onToast: (message: string, type?: "success" | "error" | "info") => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
+
+const noopDirtyChange = () => undefined;
 
 const emptyPagination = { currentPage: 1, lastPage: 1, perPage: 25, total: 0 };
 const emptyStores: PaginatedResult<PlatformStore> = { items: [], pagination: emptyPagination };
@@ -142,8 +149,10 @@ export default function PlatformAdminConsole({
   onLogout,
   onSessionExpired,
   onToast,
+  onDirtyChange = noopDirtyChange,
 }: PlatformAdminConsoleProps) {
   const { administration } = useUiAdapters();
+  const { settings: publicSettings, replace: replacePublicSettings } = usePlatformSettings();
   const mounted = useRef(true);
   const overviewSequence = useRef(0);
   const storesSequence = useRef(0);
@@ -171,6 +180,10 @@ export default function PlatformAdminConsole({
   const [usersRefreshSignal, setUsersRefreshSignal] = useState(0);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersForbidden, setUsersForbidden] = useState(false);
+  const [settingsRefreshSignal, setSettingsRefreshSignal] = useState(0);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsForbidden, setSettingsForbidden] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const [reasonDecision, setReasonDecision] = useState<{ store: PlatformStore; status: "rejected" | "suspended" } | null>(null);
   const [reason, setReason] = useState("");
   const [activationStore, setActivationStore] = useState<PlatformStore | null>(null);
@@ -179,6 +192,7 @@ export default function PlatformAdminConsole({
   const canStores = canViewPlatformStores(user);
   const canAudit = canViewPlatformAudit(user);
   const canUsers = canManagePlatformUsers(user);
+  const canSettings = canManagePlatformSettings(user);
   const canReview = user.platformPermissions.includes("platform.stores.review");
   const canManage = user.platformPermissions.includes("platform.stores.manage");
   const permissionSignature = [...user.platformPermissions].sort().join("|");
@@ -202,6 +216,7 @@ export default function PlatformAdminConsole({
     setStoresForbidden(false);
     setAuditForbidden(false);
     setUsersForbidden(false);
+    setSettingsForbidden(false);
   }, [permissionSignature, user.id]);
 
   useEffect(() => {
@@ -358,14 +373,40 @@ export default function PlatformAdminConsole({
     onNavigate("stores");
   };
 
+  const confirmSettingsDiscard = (): boolean => !settingsDirty || window.confirm("توجد تعديلات غير محفوظة في إعدادات المنصة. مغادرة القسم ستتجاهلها. هل تريد المتابعة؟");
+  const navigateSection = (next: AdminSection) => {
+    if (next === activeSection || !confirmSettingsDiscard()) return;
+    setSettingsDirty(false);
+    onDirtyChange(false);
+    onNavigate(next);
+  };
+  const exitConsole = () => {
+    if (!confirmSettingsDiscard()) return;
+    setSettingsDirty(false);
+    onDirtyChange(false);
+    onExit();
+  };
+  const logout = () => {
+    if (!confirmSettingsDiscard() || logoutPending) return;
+    setLogoutPending(true);
+    void onLogout()
+      .then(() => {
+        if (!mounted.current) return;
+        setSettingsDirty(false);
+        onDirtyChange(false);
+      })
+      .catch(() => undefined)
+      .finally(() => mounted.current && setLogoutPending(false));
+  };
+
   if (!activeSection) {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950 p-6 text-white" dir="rtl">
         <div className="max-w-lg rounded-3xl border border-rose-800 bg-slate-900 p-8 text-center shadow-2xl">
           <ShieldAlert className="mx-auto h-12 w-12 text-rose-400" />
           <h1 className="mt-4 text-xl font-black">لا تملك صلاحية دخول إدارة المنصة</h1>
-          <p className="mt-2 text-sm leading-7 text-slate-400">تم التعرف على الجلسة، لكن الخادم لم يمنح هذا الحساب صلاحية المتاجر أو المستخدمين أو سجل التدقيق.</p>
-          <button type="button" onClick={onExit} className="mt-6 rounded-xl bg-white px-5 py-3 text-xs font-black text-slate-950">العودة للموقع</button>
+          <p className="mt-2 text-sm leading-7 text-slate-400">تم التعرف على الجلسة، لكن الخادم لم يمنح هذا الحساب أي صلاحية لإدارة المنصة.</p>
+          <button type="button" onClick={exitConsole} className="mt-6 rounded-xl bg-white px-5 py-3 text-xs font-black text-slate-950">العودة للموقع</button>
         </div>
       </div>
     );
@@ -376,16 +417,16 @@ export default function PlatformAdminConsole({
       <aside className="hidden w-72 shrink-0 flex-col bg-slate-950 text-white lg:flex">
         <div className="border-b border-slate-800 p-6">
           <div className="flex items-center gap-3">
-            <span className="rounded-2xl bg-indigo-500 p-3"><ShieldCheck className="h-6 w-6" /></span>
-            <div><strong className="block text-lg">Eoshop</strong><span className="text-xs text-slate-400">مركز إدارة المنصة</span></div>
+            {publicSettings.logoUrl ? <img src={publicSettings.logoUrl} referrerPolicy="no-referrer" alt="" className="h-12 w-12 rounded-2xl bg-white object-contain p-1" /> : <span style={{ backgroundColor: publicSettings.primaryColor }} className="rounded-2xl p-3"><ShieldCheck className="h-6 w-6" /></span>}
+            <div><strong className="block text-lg">{publicSettings.platformName}</strong><span className="text-xs text-slate-400">مركز إدارة المنصة</span></div>
           </div>
         </div>
         <nav className="flex-1 space-y-2 p-4" aria-label="أقسام إدارة المنصة">
           {allowedSections.map((item) => {
-            const Icon = item === "overview" ? LayoutDashboard : item === "stores" ? Store : item === "users" ? UsersRound : ScrollText;
-            const label = item === "overview" ? "نظرة تشغيلية" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : "سجل التدقيق";
+            const Icon = item === "overview" ? LayoutDashboard : item === "stores" ? Store : item === "users" ? UsersRound : item === "settings" ? Settings : ScrollText;
+            const label = item === "overview" ? "نظرة تشغيلية" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : item === "settings" ? "إعدادات المنصة" : "سجل التدقيق";
             return (
-              <button key={item} type="button" onClick={() => onNavigate(item)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-900"}`}>
+              <button key={item} type="button" onClick={() => navigateSection(item)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-900"}`}>
                 <Icon className="h-5 w-5" /> {label}
               </button>
             );
@@ -395,8 +436,8 @@ export default function PlatformAdminConsole({
           <strong className="block truncate">{user.fullName}</strong>
           <span className="mt-1 block truncate text-slate-400" dir="ltr">{user.email}</span>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <button type="button" onClick={onExit} className="rounded-xl border border-slate-700 px-3 py-2 text-slate-300">الموقع</button>
-            <button type="button" disabled={logoutPending} onClick={() => { setLogoutPending(true); void onLogout().finally(() => mounted.current && setLogoutPending(false)); }} className="flex items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 py-2 font-bold disabled:opacity-50"><LogOut className="h-4 w-4" /> خروج</button>
+            <button type="button" onClick={exitConsole} className="rounded-xl border border-slate-700 px-3 py-2 text-slate-300">الموقع</button>
+            <button type="button" disabled={logoutPending} onClick={logout} className="flex items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 py-2 font-bold disabled:opacity-50"><LogOut className="h-4 w-4" /> خروج</button>
           </div>
         </div>
       </aside>
@@ -405,17 +446,17 @@ export default function PlatformAdminConsole({
         <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl font-black">{activeSection === "overview" ? "النظرة التشغيلية" : activeSection === "stores" ? "إدارة المتاجر" : activeSection === "users" ? "إدارة مستخدمي المنصة" : "سجل التدقيق"}</h1>
+              <h1 className="text-xl font-black">{activeSection === "overview" ? "النظرة التشغيلية" : activeSection === "stores" ? "إدارة المتاجر" : activeSection === "users" ? "إدارة مستخدمي المنصة" : activeSection === "settings" ? "إعدادات المنصة" : "سجل التدقيق"}</h1>
               <p className="mt-1 text-xs text-slate-500">بيانات مركزية محمية بصلاحيات الخادم</p>
             </div>
-            <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection === "users" && usersForbidden) || ((activeSection === "overview" || activeSection === "stores") && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "users" ? setUsersRefreshSignal((value) => value + 1) : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading || usersLoading) ? "animate-spin" : ""}`} /> تحديث
+            <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection === "users" && usersForbidden) || (activeSection === "settings" && (settingsForbidden || settingsDirty)) || ((activeSection === "overview" || activeSection === "stores") && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "users" ? setUsersRefreshSignal((value) => value + 1) : activeSection === "settings" ? setSettingsRefreshSignal((value) => value + 1) : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading || usersLoading || settingsLoading) ? "animate-spin" : ""}`} /> تحديث
             </button>
           </div>
           <nav className="mt-4 flex gap-2 overflow-x-auto lg:hidden" aria-label="أقسام إدارة المنصة للجوال">
             {allowedSections.map((item) => (
-              <button key={item} type="button" onClick={() => onNavigate(item)} className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                {item === "overview" ? "النظرة" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : "التدقيق"}
+              <button key={item} type="button" onClick={() => navigateSection(item)} className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                {item === "overview" ? "النظرة" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : item === "settings" ? "الإعدادات" : "التدقيق"}
               </button>
             ))}
           </nav>
@@ -424,6 +465,7 @@ export default function PlatformAdminConsole({
         <main className="flex-1 overflow-auto p-4 sm:p-6">
           {((activeSection === "overview" || activeSection === "stores") && storesForbidden) && <AccessDeniedState />}
           {(activeSection === "audit" && auditForbidden) && <AccessDeniedState />}
+          {(activeSection === "settings" && settingsForbidden) && <AccessDeniedState />}
 
           {activeSection === "overview" && canStores && !storesForbidden && (
             <section className="mx-auto max-w-7xl space-y-6">
@@ -506,6 +548,19 @@ export default function PlatformAdminConsole({
               refreshSignal={usersRefreshSignal}
               onLoadingChange={setUsersLoading}
               onForbiddenChange={setUsersForbidden}
+            />
+          )}
+
+          {activeSection === "settings" && canSettings && !settingsForbidden && (
+            <PlatformSettingsPanel
+              administration={administration}
+              refreshSignal={settingsRefreshSignal}
+              onSessionExpired={onSessionExpired}
+              onForbiddenChange={setSettingsForbidden}
+              onLoadingChange={setSettingsLoading}
+              onDirtyChange={(dirty) => { setSettingsDirty(dirty); onDirtyChange(dirty); }}
+              onSaved={replacePublicSettings}
+              onToast={(message, type) => onToast(message, type)}
             />
           )}
 

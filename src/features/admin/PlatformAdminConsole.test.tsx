@@ -8,6 +8,7 @@ import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
 import { createFakeUiAdapters } from "../../adapters/testing/fakeUiAdapters";
 import { UiAdapterError, type PlatformOverview, type PlatformStore, type UserProfile } from "../../adapters/uiAdapters";
 import PlatformAdminConsole from "../../components/PlatformAdminConsole";
+import { DEFAULT_PLATFORM_SETTINGS } from "../../services/platformSettingsApi";
 
 const overview: PlatformOverview = {
   generatedAt: "2026-08-21T12:00:00Z",
@@ -64,6 +65,70 @@ function operator(platformPermissions: string[]): UserProfile {
 afterEach(cleanup);
 
 describe("PlatformAdminConsole", () => {
+  it("routes a settings-only manager to the protected settings workspace", async () => {
+    const getPlatformSettings = vi.fn().mockResolvedValue({
+      ...structuredClone(DEFAULT_PLATFORM_SETTINGS),
+      updatedAt: null,
+      updatedByUserId: null,
+    });
+    const onNavigate = vi.fn();
+
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: { getPlatformSettings } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.settings.manage"])}
+          section="overview"
+          onNavigate={onNavigate}
+          onExit={vi.fn()}
+          onLogout={vi.fn().mockResolvedValue(undefined)}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("settings"));
+    expect(await screen.findByLabelText("اسم المنصة")).toBeTruthy();
+    expect(getPlatformSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the settings dirty guard when server logout fails", async () => {
+    const onDirtyChange = vi.fn();
+    const onLogout = vi.fn().mockRejectedValue(new Error("logout failed"));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
+        getPlatformSettings: vi.fn().mockResolvedValue({
+          ...structuredClone(DEFAULT_PLATFORM_SETTINGS),
+          updatedAt: null,
+          updatedByUserId: null,
+        }),
+      } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.settings.manage"])}
+          section="settings"
+          onNavigate={vi.fn()}
+          onExit={vi.fn()}
+          onLogout={onLogout}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+          onDirtyChange={onDirtyChange}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    const name = await screen.findByLabelText("اسم المنصة");
+    await user.clear(name);
+    await user.type(name, "هوية غير محفوظة");
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+    await user.click(screen.getByRole("button", { name: "خروج" }));
+    await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("routes a users-only manager to users without requesting store or audit data", async () => {
     const onNavigate = vi.fn();
     const overviewCall = vi.fn();

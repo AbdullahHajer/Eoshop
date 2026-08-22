@@ -3,13 +3,14 @@ import { ArrowLeft, Check, RefreshCw, ShieldCheck } from "lucide-react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
 import type { StorePlan } from "../adapters/uiAdapters";
 import { useApiTask } from "../hooks/useApiTask";
+import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 
 interface ServerPricingPlansProps {
   onStart: () => void;
 }
 
 const featureLabels: Record<string, string> = {
-  platform_subdomain: "عنوان متجر داخل منصة Eoshop",
+  platform_subdomain: "عنوان متجر داخل المنصة",
   basic_theme: "القالب الأساسي",
   unlimited_products: "منتجات غير محدودة بحسب الباقة",
   priority_review: "أولوية في المراجعة",
@@ -18,6 +19,7 @@ const featureLabels: Record<string, string> = {
 
 export default function ServerPricingPlans({ onStart }: ServerPricingPlansProps) {
   const { plans: planActions } = useUiAdapters();
+  const { settings: platformSettings } = usePlatformSettings();
   const plansTask = useApiTask<StorePlan[], []>(planActions.list, { retry: "safe" });
   const plans = plansTask.data ?? [];
 
@@ -29,7 +31,7 @@ export default function ServerPricingPlans({ onStart }: ServerPricingPlansProps)
     <section id="pricing" className="scroll-mt-6 border-t border-slate-200/80 bg-slate-50 py-16 md:py-24">
       <div className="container mx-auto px-6">
         <div className="mx-auto mb-12 max-w-2xl space-y-4 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-black text-indigo-800"><ShieldCheck className="h-4 w-4" /> باقات موثقة من خادم Eoshop</span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-xs font-black text-indigo-800"><ShieldCheck className="h-4 w-4" /> باقات موثقة من خادم {platformSettings.platformName}</span>
           <h2 className="font-display text-3xl font-black text-slate-900 md:text-4xl">الباقات والأسعار</h2>
           <p className="text-sm leading-relaxed text-slate-600">اختيار الباقة المدفوعة يسجل طلبًا فقط؛ تفعيلها إداري في هذه المرحلة، ولم تُربط بوابة دفع إلكترونية بعد.</p>
         </div>

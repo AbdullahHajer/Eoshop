@@ -170,6 +170,66 @@ function Assert-AuthenticationBoundary {
     }
 }
 
+function Assert-PlatformSettingsMutationBoundary {
+    param([int]$Port)
+
+    $roleSql = @"
+INSERT INTO role_user (user_id, role_id, role_scope, assigned_by, created_at, updated_at)
+SELECT u.id, r.id, 'platform', u.id, now(), now()
+FROM users u CROSS JOIN roles r
+WHERE u.email = 'wp12-live-gate@example.test' AND r.key = 'platform_super_admin'
+ON CONFLICT (user_id, role_id) DO NOTHING;
+"@
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB, '-c', $roleSql
+    )
+
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.CookieContainer = [System.Net.CookieContainer]::new()
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.BaseAddress = [Uri]"http://127.0.0.1:$Port"
+    $jsonContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/json')
+
+    try {
+        $missingCsrf = [System.Net.Http.StringContent]::new('{}')
+        $missingCsrf.Headers.ContentType = $jsonContentType
+        $missingCsrfResponse = $client.PutAsync('/api/admin/platform-settings', $missingCsrf).GetAwaiter().GetResult()
+        if ([int]$missingCsrfResponse.StatusCode -ne 419) {
+            throw "Expected platform settings mutation HTTP 419 without CSRF, received $([int]$missingCsrfResponse.StatusCode)."
+        }
+
+        $csrfResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
+        $csrfPayload = $csrfResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$csrfPayload.csrf_token)
+        $login = [System.Net.Http.StringContent]::new('{"email":"wp12-live-gate@example.test","password":"not-a-secret"}')
+        $login.Headers.ContentType = $jsonContentType
+        $loginResponse = $client.PostAsync('/api/auth/login', $login).GetAwaiter().GetResult()
+        if ([int]$loginResponse.StatusCode -ne 200) {
+            throw "Expected platform settings gate login HTTP 200, received $([int]$loginResponse.StatusCode)."
+        }
+
+        $client.DefaultRequestHeaders.Remove('X-CSRF-TOKEN') | Out-Null
+        $authenticatedCsrfResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
+        $authenticatedCsrfPayload = $authenticatedCsrfResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        $client.DefaultRequestHeaders.Add('X-CSRF-TOKEN', [string]$authenticatedCsrfPayload.csrf_token)
+
+        for ($attempt = 1; $attempt -le 31; $attempt++) {
+            $invalid = [System.Net.Http.StringContent]::new('{}')
+            $invalid.Headers.ContentType = $jsonContentType
+            $response = $client.PutAsync('/api/admin/platform-settings', $invalid).GetAwaiter().GetResult()
+            $expected = if ($attempt -le 30) { 422 } else { 429 }
+            if ([int]$response.StatusCode -ne $expected) {
+                throw "Expected platform settings mutation HTTP $expected on attempt $attempt, received $([int]$response.StatusCode)."
+            }
+        }
+    }
+    finally {
+        $client.Dispose()
+        $handler.Dispose()
+    }
+}
+
 function Assert-TenancyBoundary {
     param([int]$Port)
 
@@ -325,6 +385,12 @@ SET session_replication_role = origin;
             throw "Tenant Host did not resolve its isolated store configuration. Status: $([int]$configResponse.StatusCode)."
         }
 
+        $platformSettingsResponse = $client.GetAsync('/api/platform-settings').GetAwaiter().GetResult()
+        $platformSettingsBody = $platformSettingsResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        if ([int]$platformSettingsResponse.StatusCode -ne 200 -or -not $platformSettingsBody.Contains('platformName')) {
+            throw "Published tenant Host did not receive the central safe platform settings projection. Status: $([int]$platformSettingsResponse.StatusCode)."
+        }
+
         $adminResponse = $client.GetAsync('/api/admin/stores').GetAwaiter().GetResult()
         if ([int]$adminResponse.StatusCode -ne 404) {
             throw "Expected platform administration HTTP 404 on a tenant Host, received $([int]$adminResponse.StatusCode)."
@@ -334,6 +400,10 @@ SET session_replication_role = origin;
         $unknownResponse = $client.GetAsync('/api/auth/csrf').GetAwaiter().GetResult()
         if ([int]$unknownResponse.StatusCode -ne 404) {
             throw "Expected unknown Host authentication HTTP 404, received $([int]$unknownResponse.StatusCode)."
+        }
+        $unknownSettingsResponse = $client.GetAsync('/api/platform-settings').GetAwaiter().GetResult()
+        if ([int]$unknownSettingsResponse.StatusCode -ne 404) {
+            throw "Expected unknown Host platform settings HTTP 404, received $([int]$unknownSettingsResponse.StatusCode)."
         }
     }
     finally {
@@ -702,6 +772,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $inventoryPermissionsMigration = 'database/migrations/system/2026_08_16_000009_add_inventory_permissions.php'
     $draftLifecycleMigration = 'database/migrations/system/2026_08_19_000010_create_store_drafts_and_merchant_publication.php'
     $sessionGenerationMigration = 'database/migrations/system/2026_08_21_000011_add_session_generation_to_users.php'
+    $platformSettingsMigration = 'database/migrations/system/2026_08_22_000012_create_platform_settings.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$platformSettingsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$sessionGenerationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$draftLifecycleMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$inventoryPermissionsMigration --force --no-interaction
@@ -747,6 +819,7 @@ VALUES (
     )
     Invoke-Compose exec -T backend php artisan migrate --path=$draftLifecycleMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$sessionGenerationMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$platformSettingsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     $draftAdoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
@@ -810,6 +883,7 @@ VALUES (
         Assert-HttpResponse $client '/api/auth/session' 200 'application/json' '"data":null'
         Assert-HttpResponse $client '/api/admin/stores' 401 'application/json'
         Assert-AuthenticationBoundary -Port $Port
+        Assert-PlatformSettingsMutationBoundary -Port $Port
         Assert-TenancyBoundary -Port $Port
         Assert-InventoryHttpBoundary -Port $Port
         Assert-InventoryScheduler

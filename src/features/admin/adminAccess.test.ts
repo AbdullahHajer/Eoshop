@@ -23,6 +23,7 @@ describe("platform administration access", () => {
     const storesOnly = user(["platform.stores.view"]);
     const usersOnly = user(["platform.users.manage"]);
     const auditOnly = user(["platform.audit.view"]);
+    const settingsOnly = user(["platform.settings.manage"]);
 
     expect(authorizedAdminSections(storesOnly)).toEqual(["overview", "stores"]);
     expect(safeAdminSection("audit", storesOnly)).toBe("overview");
@@ -31,6 +32,8 @@ describe("platform administration access", () => {
     expect(safeAdminSection("overview", usersOnly)).toBe("users");
     expect(authorizedAdminSections(auditOnly)).toEqual(["audit"]);
     expect(safeAdminSection("overview", auditOnly)).toBe("audit");
+    expect(authorizedAdminSections(settingsOnly)).toEqual(["settings"]);
+    expect(safeAdminSection("stores", settingsOnly)).toBe("settings");
   });
 
   it("fails closed for merchants without any administration permission", () => {

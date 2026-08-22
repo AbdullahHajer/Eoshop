@@ -17,6 +17,7 @@ describe("central navigation", () => {
     expect(parseCentralRoute("/admin/stores")).toEqual({ name: "admin", section: "stores" });
     expect(parseCentralRoute("/admin/users")).toEqual({ name: "admin", section: "users" });
     expect(parseCentralRoute("/admin/audit")).toEqual({ name: "admin", section: "audit" });
+    expect(parseCentralRoute("/admin/settings")).toEqual({ name: "admin", section: "settings" });
     expect(parseCentralRoute("/admin/unknown")).toEqual({ name: "unknown" });
     expect(parseCentralRoute("/app/stores/tenant/unknown")).toEqual({ name: "unknown" });
   });
@@ -26,6 +27,7 @@ describe("central navigation", () => {
     expect(adminPath("stores")).toBe("/admin/stores");
     expect(adminPath("users")).toBe("/admin/users");
     expect(adminPath("audit")).toBe("/admin/audit");
+    expect(adminPath("settings")).toBe("/admin/settings");
   });
 
   it("builds route-owned central paths", () => {

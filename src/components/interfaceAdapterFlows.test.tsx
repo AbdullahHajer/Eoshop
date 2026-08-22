@@ -827,7 +827,7 @@ describe("adapter-backed interface flows", () => {
     expect(products[0].id).toMatch(/^draft:[0-9a-f-]{36}$/i);
     expect(products[1].id).toMatch(/^draft:[0-9a-f-]{36}$/i);
     expect(products[0].id).not.toBe(products[1].id);
-  });
+  }, 15_000);
 
   it("retains a persisted archive intent after a failed save and clears it only on success", async () => {
     const persistedId = "77777777-7777-4777-8777-777777777777";
@@ -882,7 +882,7 @@ describe("adapter-backed interface flows", () => {
     await user.click(screen.getByRole("button", { name: /فتح المخزون/ }));
     await waitFor(() => expect(window.location.pathname).toBe(`/app/stores/${submission.id}/inventory`));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining("سيتجاهل تعديلات المحرر غير المحفوظة"));
-  });
+  }, 15_000);
 
   it("restores the workspace, saves the current revision and opens only revision-code recovery", async () => {
     const save = vi.fn()

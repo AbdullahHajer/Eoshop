@@ -19,6 +19,8 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
       resetPassword: async () => unexpected("auth.resetPassword"),
     },
     administration: {
+      getPlatformSettings: async () => unexpected("administration.getPlatformSettings"),
+      updatePlatformSettings: async () => unexpected("administration.updatePlatformSettings"),
       overview: async () => unexpected("administration.overview"),
       listStores: async () => unexpected("administration.listStores"),
       listAuditLogs: async () => unexpected("administration.listAuditLogs"),
@@ -33,6 +35,9 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
       activateSubscription: async () => unexpected("administration.activateSubscription"),
       publish: async () => unexpected("administration.publish"),
       unpublish: async () => unexpected("administration.unpublish"),
+    },
+    platformSettings: {
+      load: async () => unexpected("platformSettings.load"),
     },
     assistant: {
       generateStoreIdeas: async () => unexpected("assistant.generateStoreIdeas"),
@@ -79,6 +84,7 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
   return {
     auth: { ...adapters.auth, ...overrides.auth },
     administration: { ...adapters.administration, ...overrides.administration },
+    platformSettings: { ...adapters.platformSettings, ...overrides.platformSettings },
     assistant: { ...adapters.assistant, ...overrides.assistant },
     plans: { ...adapters.plans, ...overrides.plans },
     provisioning: { ...adapters.provisioning, ...overrides.provisioning },

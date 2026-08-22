@@ -24,6 +24,7 @@ import {
 import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
 import { publicStoreUrl } from "../../utils/publicStoreUrl";
 import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycleTone } from "./lifecycle";
+import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
 
 interface MerchantPortalProps {
   user: UserProfile;
@@ -72,6 +73,7 @@ export default function MerchantPortal({
   onLogout,
   onCopyPublicUrl,
 }: MerchantPortalProps) {
+  const { settings: platformSettings } = usePlatformSettings();
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(stores[0]?.id ?? null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -119,11 +121,13 @@ export default function MerchantPortal({
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-slate-950 p-2.5 text-white shadow-lg shadow-slate-900/10">
-              <Store className="h-5 w-5" />
-            </div>
+            {platformSettings.logoUrl ? (
+              <img src={platformSettings.logoUrl} alt="" className="h-10 w-10 rounded-2xl border border-slate-200 bg-white object-contain p-1" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="rounded-2xl p-2.5 text-white shadow-lg" style={{ backgroundColor: platformSettings.primaryColor }}><Store className="h-5 w-5" /></div>
+            )}
             <div>
-              <p className="text-base font-black tracking-tight">مبتكر</p>
+              <p className="text-base font-black tracking-tight">{platformSettings.platformName}</p>
               <p className="text-[11px] font-bold text-slate-500">بوابة التاجر</p>
             </div>
           </div>

@@ -38,6 +38,7 @@ enum SystemRole: string
                 PermissionKey::PlatformStoresReview,
                 PermissionKey::PlatformStoresManage,
                 PermissionKey::PlatformUsersManage,
+                PermissionKey::PlatformSettingsManage,
                 PermissionKey::PlatformAuditView,
             ],
             self::PlatformReviewer => [
