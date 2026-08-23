@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.14 — Visual onboarding, template preview and reliable submission handoff |
-| Status | Implementation verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-23 |
 | Branch | `codex/wp-5.14-visual-onboarding` |
 | Base | `4b267de38b03e3e2dbaa66e3aac03d9da6f06fea` |
-| Implementation commit | `a816931` |
+| Implementation commit | `a8169315fc56699a901988ae8b62707cd35022dc` |
 
 ## Delivered product boundary
 
@@ -74,4 +74,9 @@
 
 ## Delivery status
 
-- Implementation commit, evidence commit, pull request, required CI, merge commit and protected-main CI are pending T5 delivery.
+- Implementation is recorded separately in `a8169315fc56699a901988ae8b62707cd35022dc`.
+- Evidence is recorded separately in `6493e496d138da819a561e1ef09f7218b45737be`.
+- Pull request [#52](https://github.com/sas-prog1/Eoshop/pull/52) was merged from final head `6493e496d138da819a561e1ef09f7218b45737be`.
+- Pull-request CI run [32662182423](https://github.com/sas-prog1/Eoshop/actions/runs/32662182423) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `615fde52f69f5be2184364c02ac9b65dfaf0dbcb`.
+- Protected-main CI run [32662521696](https://github.com/sas-prog1/Eoshop/actions/runs/32662521696) passed the same four required jobs after merge.
