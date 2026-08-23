@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\StoreDraftStatus;
+use App\Enums\StoreOnboardingStage;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,8 @@ class StoreDraft extends Model
         return [
             'status' => StoreDraftStatus::class,
             'revision' => 'integer',
+            'onboarding_stage' => StoreOnboardingStage::class,
+            'onboarding_stage_baseline' => StoreOnboardingStage::class,
             'config' => 'array',
             'saved_at' => 'immutable_datetime',
             'submitted_at' => 'immutable_datetime',

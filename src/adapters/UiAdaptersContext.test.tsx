@@ -22,6 +22,8 @@ describe("UiAdaptersProvider", () => {
       register: vi.fn(),
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
       forgotPassword: vi.fn(),
       resetPassword: vi.fn(),
     };

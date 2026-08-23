@@ -24,6 +24,7 @@ class User extends Authenticatable
     /** @var array<string, mixed> */
     protected $attributes = [
         'session_generation' => 1,
+        'profile_revision' => 1,
     ];
 
     protected $fillable = [
@@ -53,6 +54,7 @@ class User extends Authenticatable
             'last_login_at' => 'immutable_datetime',
             'password' => 'hashed',
             'session_generation' => 'integer',
+            'profile_revision' => 'integer',
         ];
     }
 

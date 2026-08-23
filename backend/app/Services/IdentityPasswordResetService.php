@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\RoleScope;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Support\IdentityLifecycleLock;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Events\PasswordResetLinkSent;
 use Illuminate\Auth\Passwords\PasswordBroker;
@@ -23,8 +24,6 @@ use Throwable;
 
 class IdentityPasswordResetService
 {
-    private const LIFECYCLE_LOCK_KEY = 51120260821;
-
     public function __construct(private readonly AdminAuditService $audit) {}
 
     public function requestLink(Request $request, string $email): void
@@ -39,7 +38,7 @@ class IdentityPasswordResetService
         $broker->getTimebox()->call(function () use ($request, $email, $central, $tokens): void {
             /** @var array{user: User, token: string}|null $dispatch */
             $dispatch = $central->transaction(function () use ($email, $central, $tokens): ?array {
-                $central->select('SELECT pg_advisory_xact_lock(?)', [self::LIFECYCLE_LOCK_KEY]);
+                IdentityLifecycleLock::acquire($central);
                 $user = User::withTrashed()->where('email', $email)->lockForUpdate()->first();
 
                 if ($user instanceof User && $this->canIssueResetLink($user, $central)) {
@@ -101,7 +100,7 @@ class IdentityPasswordResetService
                 $central,
                 $broker,
             ): User {
-                $central->select('SELECT pg_advisory_xact_lock(?)', [self::LIFECYCLE_LOCK_KEY]);
+                IdentityLifecycleLock::acquire($central);
                 $user = User::withTrashed()->where('email', $email)->lockForUpdate()->first();
 
                 if (! $user instanceof User) {
@@ -215,7 +214,7 @@ class IdentityPasswordResetService
     ): void {
         $central = DB::connection((string) config('tenancy.database.central_connection'));
         $central->transaction(function () use ($user, $token, $tokens, $central): void {
-            $central->select('SELECT pg_advisory_xact_lock(?)', [self::LIFECYCLE_LOCK_KEY]);
+            IdentityLifecycleLock::acquire($central);
             $target = User::withTrashed()->whereKey($user->getKey())->lockForUpdate()->first();
             if ($target instanceof User && $tokens->exists($target, $token)) {
                 $tokens->delete($target);

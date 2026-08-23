@@ -5,24 +5,31 @@ export type MerchantStoreSection = "overview" | "products" | "orders" | "invento
 
 export type CentralRoute =
   | { name: "landing" }
+  | { name: "auth"; mode: "login" | "register" | "forgot" | "reset" }
+  | { name: "account" }
   | { name: "merchant" }
-  | { name: "merchant-new" }
+  | { name: "merchant-new"; step: "business" | "design" | "review" }
   | { name: "merchant-store"; tenantId: string; section: MerchantStoreSection }
   | { name: "merchant-correction"; tenantId: string }
   | { name: "admin"; section: AdminSection }
-  | { name: "auth-flow" }
   | { name: "unknown" };
 
 export function parseCentralRoute(pathname: string): CentralRoute {
   if (pathname === "/" || pathname === "") return { name: "landing" };
+  if (pathname === "/login" || pathname === "/login/") return { name: "auth", mode: "login" };
+  if (pathname === "/register" || pathname === "/register/") return { name: "auth", mode: "register" };
+  if (pathname === "/forgot-password" || pathname === "/forgot-password/") return { name: "auth", mode: "forgot" };
+  if (pathname === "/reset-password" || pathname === "/reset-password/") return { name: "auth", mode: "reset" };
+  if (pathname === "/app/account" || pathname === "/app/account/") return { name: "account" };
   if (pathname === "/app" || pathname === "/app/") return { name: "merchant" };
-  if (pathname === "/app/new" || pathname === "/app/new/") return { name: "merchant-new" };
+  if (pathname === "/app/new" || pathname === "/app/new/") return { name: "merchant-new", step: "business" };
+  if (pathname === "/app/new/design" || pathname === "/app/new/design/") return { name: "merchant-new", step: "design" };
+  if (pathname === "/app/new/review" || pathname === "/app/new/review/") return { name: "merchant-new", step: "review" };
   if (pathname === "/admin" || pathname === "/admin/") return { name: "admin", section: "overview" };
   if (pathname === "/admin/stores" || pathname === "/admin/stores/") return { name: "admin", section: "stores" };
   if (pathname === "/admin/users" || pathname === "/admin/users/") return { name: "admin", section: "users" };
   if (pathname === "/admin/settings" || pathname === "/admin/settings/") return { name: "admin", section: "settings" };
   if (pathname === "/admin/audit" || pathname === "/admin/audit/") return { name: "admin", section: "audit" };
-  if (pathname === "/reset-password") return { name: "auth-flow" };
 
   const store = pathname.match(/^\/app\/stores\/([^/]+)(?:\/(overview|products|orders|inventory|design|checkout|pages))?\/?$/);
   if (store) {

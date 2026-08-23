@@ -26,6 +26,9 @@ const merchant: UserProfile = {
   fullName: "تاجر تجريبي",
   email: "merchant@example.com",
   phone: "+967700000000",
+  profileRevision: 1,
+  createdAt: null,
+  updatedAt: null,
   role: "merchant",
   platformRoles: [],
   platformPermissions: [],
@@ -65,6 +68,9 @@ const serverDraft: StoreDraft = {
   tenantId: null,
   status: "draft",
   revision: 1,
+  onboardingStage: "business",
+  onboardingReadiness: { business: true, design: false, review: false, blockers: ["design_incomplete"] },
+  nextRequiredStep: "design",
   storeName: "مسودة الحساب أ",
   businessType: "تجزئة",
   themeStyle: "elegant",
@@ -193,39 +199,67 @@ describe("adapter-backed interface flows", () => {
     const adapters = createFakeUiAdapters({
       auth: { session: vi.fn().mockResolvedValue(merchant) },
       plans: { list: vi.fn().mockResolvedValue([]) },
-      provisioning: { listStores: vi.fn().mockResolvedValue([]), currentDraft: vi.fn().mockResolvedValue(null) },
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), listStores: vi.fn().mockResolvedValue([]), currentDraft: vi.fn().mockResolvedValue(null) },
     });
 
     renderInterface(<App />, adapters);
 
-    expect(await screen.findByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "عرّفنا بالنشاط" })).toBeTruthy();
     expect(window.location.pathname).toBe("/app/new");
   });
 
-  it("detaches an existing workspace before a new-store template can be saved", async () => {
+  it("preserves ambiguous submission recovery across passive expiry and clears it after same-owner recovery", async () => {
+    const pendingKey = `eoshop.pending-store-submission.v2:${merchant.id}:${serverDraft.id}`;
+    localStorage.setItem(pendingKey, JSON.stringify({
+      version: 2,
+      ownerId: merchant.id,
+      draftId: serverDraft.id,
+      digest: "pending-digest",
+      idempotencyKey: "pending-idempotency-key",
+    }));
+    window.history.replaceState({}, "", "/app/new");
+    const clearPendingForOwner = vi.fn();
+    const recoverCommittedSubmission = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("انتهت الجلسة.", "unauthenticated"))
+      .mockImplementationOnce(async () => {
+        localStorage.removeItem(pendingKey);
+        return submission;
+      });
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      provisioning: {
+        clearPendingForOwner,
+        recoverCommittedSubmission,
+        listStores: vi.fn().mockResolvedValue([]),
+      },
+    });
+
+    const first = renderInterface(<App />, adapters);
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
+    expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/app/new");
+    expect(localStorage.getItem(pendingKey)).not.toBeNull();
+    expect(clearPendingForOwner).not.toHaveBeenCalled();
+
+    first.unmount();
+    window.history.replaceState({}, "", "/app/new");
+    renderInterface(<App />, adapters);
+
+    await waitFor(() => expect(recoverCommittedSubmission).toHaveBeenCalledTimes(2));
+    expect(localStorage.getItem(pendingKey)).toBeNull();
+    expect(clearPendingForOwner).not.toHaveBeenCalled();
+  });
+
+  it("persists a new-store business step without writing an existing workspace", async () => {
     window.history.replaceState({}, "", "/app/new");
     const saveWorkspace = vi.fn();
-    const saveDraft = vi.fn().mockResolvedValue({
-      id: "draft-new",
-      tenantId: null,
-      status: "draft",
-      revision: 1,
-      storeName: "تيك فيو للأجهزة الذكية",
-      businessType: "تجزئة",
-      themeStyle: "tech",
-      handle: null,
-      planKey: null,
-      config: { ...ELEGANT_PRESET, themeStyle: "tech" },
-      savedAt: "2026-08-19T12:00:00Z",
-      submittedAt: null,
-    });
+    const saveBusiness = vi.fn().mockResolvedValue({ ...serverDraft, id: "draft-new", storeName: "تيك فيو للأجهزة الذكية" });
     const adapters = createFakeUiAdapters({
       auth: { session: vi.fn().mockResolvedValue(merchant) },
       plans: { list: vi.fn().mockResolvedValue([]) },
       provisioning: {
-        listStores: vi.fn().mockResolvedValue([submission]),
+        recoverCommittedSubmission: vi.fn().mockResolvedValue(null),
         currentDraft: vi.fn().mockResolvedValue(null),
-        saveDraft,
+        saveBusiness,
       },
       workspace: {
         load: vi.fn().mockResolvedValue(workspace),
@@ -235,14 +269,14 @@ describe("adapter-backed interface flows", () => {
     const user = userEvent.setup();
 
     renderInterface(<App />, adapters);
-    expect(await screen.findByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeTruthy();
-    await user.click(screen.getAllByRole("button", { name: /تفعيل القالب/ })[1]);
-    const beforeUnload = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(beforeUnload);
-    expect(beforeUnload.defaultPrevented).toBe(true);
-    await user.click(await screen.findByRole("button", { name: "حفظ التعديلات" }));
+    expect(await screen.findByRole("heading", { name: "عرّفنا بالنشاط" })).toBeTruthy();
+    await user.type(screen.getByLabelText("اسم المتجر أو النشاط"), "تيك فيو للأجهزة الذكية");
+    await user.click(screen.getByRole("button", { name: "حفظ ومتابعة التصميم" }));
 
-    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveBusiness).toHaveBeenCalledWith(expect.objectContaining({
+      expectedRevision: 0,
+      storeName: "تيك فيو للأجهزة الذكية",
+    }), expect.any(AbortSignal)));
     expect(saveWorkspace).not.toHaveBeenCalled();
   }, 15_000);
 
@@ -252,6 +286,7 @@ describe("adapter-backed interface flows", () => {
       auth: { session: vi.fn().mockResolvedValue(merchant) },
       plans: { list: vi.fn().mockResolvedValue([]) },
       provisioning: {
+        recoverCommittedSubmission: vi.fn().mockResolvedValue(null),
         listStores: vi.fn().mockResolvedValue([submission]),
         currentDraft: vi.fn().mockRejectedValue(new UiAdapterError("draft unavailable", "server")),
       },
@@ -261,32 +296,6 @@ describe("adapter-backed interface flows", () => {
     renderInterface(<App />, adapters);
     await waitFor(() => expect(adapters.provisioning.currentDraft).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeNull();
-  });
-
-  it("ignores a delayed draft save after logout resets the account context", async () => {
-    window.history.replaceState({}, "", "/app/new");
-    let resolveSave!: (draft: StoreDraft) => void;
-    const saveDraft = vi.fn(() => new Promise<StoreDraft>((resolve) => { resolveSave = resolve; }));
-    const logout = vi.fn().mockResolvedValue(undefined);
-    const adapters = createFakeUiAdapters({
-      auth: { session: vi.fn().mockResolvedValue(merchant), logout },
-      plans: { list: vi.fn().mockResolvedValue([]) },
-      provisioning: { listStores: vi.fn().mockResolvedValue([]), currentDraft: vi.fn().mockResolvedValue(serverDraft), saveDraft },
-    });
-    const user = userEvent.setup();
-
-    renderInterface(<App />, adapters);
-    await screen.findByRole("button", { name: "حفظ التعديلات" });
-    await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
-    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByTitle("تسجيل الخروج وإلغاء توثيق النشاط"));
-    await user.click(await screen.findByRole("button", { name: "نعم، تسجيل الخروج" }));
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-
-    resolveSave({ ...serverDraft, revision: 2, storeName: "سر الحساب أ", config: { ...serverDraft.config, storeName: "سر الحساب أ" } });
-    await Promise.resolve();
-    expect(screen.queryByText("سر الحساب أ")).toBeNull();
-    expect(window.location.pathname).toBe("/");
   });
 
   it("ignores a delayed draft save after switching to an existing store workspace", async () => {
@@ -332,55 +341,6 @@ describe("adapter-backed interface flows", () => {
     await Promise.resolve();
     expect(screen.queryByDisplayValue("مسودة أ المتأخرة")).toBeNull();
     expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0);
-  });
-
-  it("keeps a deferred draft save usable when server logout fails", async () => {
-    window.history.replaceState({}, "", "/app/new");
-    let resolveSave!: (draft: StoreDraft) => void;
-    const saveDraft = vi.fn(() => new Promise<StoreDraft>((resolve) => { resolveSave = resolve; }));
-    const logout = vi.fn().mockRejectedValue(new UiAdapterError("offline", "network"));
-    const adapters = createFakeUiAdapters({
-      auth: { session: vi.fn().mockResolvedValue(merchant), logout },
-      plans: { list: vi.fn().mockResolvedValue([]) },
-      provisioning: { listStores: vi.fn().mockResolvedValue([]), currentDraft: vi.fn().mockResolvedValue(serverDraft), saveDraft },
-    });
-    const user = userEvent.setup();
-
-    renderInterface(<App />, adapters);
-    await screen.findByRole("button", { name: "حفظ التعديلات" });
-    await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
-    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByTitle("تسجيل الخروج وإلغاء توثيق النشاط"));
-    await user.click(await screen.findByRole("button", { name: "نعم، تسجيل الخروج" }));
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-
-    resolveSave({ ...serverDraft, revision: 2, storeName: "المسودة المحفوظة", config: { ...serverDraft.config, storeName: "المسودة المحفوظة" } });
-    expect(await screen.findByDisplayValue("المسودة المحفوظة")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "حفظ التعديلات" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(window.location.pathname).toBe("/app/new");
-  });
-
-  it("does not treat a second new-store click as an authoritative no-draft result", async () => {
-    let resolveDraft!: (draft: StoreDraft | null) => void;
-    const currentDraft = vi.fn(() => new Promise<StoreDraft | null>((resolve) => { resolveDraft = resolve; }));
-    const adapters = createFakeUiAdapters({
-      auth: { session: vi.fn().mockResolvedValue(merchant) },
-      plans: { list: vi.fn().mockResolvedValue([]) },
-      provisioning: { listStores: vi.fn().mockResolvedValue([submission]), currentDraft },
-      workspace: { load: vi.fn().mockResolvedValue(workspace) },
-    });
-    const user = userEvent.setup();
-
-    renderInterface(<App />, adapters);
-    await screen.findByRole("heading", { name: /مرحبًا تاجر/ });
-    const createButton = screen.getByRole("button", { name: /إنشاء متجر جديد/ });
-    await user.click(createButton);
-    await user.click(createButton);
-    expect(currentDraft).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeNull();
-
-    resolveDraft(null);
-    expect(await screen.findByRole("heading", { name: "اختر القالب الأنسب لتجارتك" })).toBeTruthy();
   });
 
   it("restores an exact ready store design route without passing through templates", async () => {

@@ -51,6 +51,9 @@ export interface UserProfile {
   fullName: string;
   email: string;
   phone: string;
+  profileRevision: number;
+  createdAt: string | null;
+  updatedAt: string | null;
   role: "merchant" | "admin";
   platformRoles: string[];
   platformPermissions: string[];
@@ -60,10 +63,12 @@ export interface UserProfile {
 }
 
 export interface AuthActions {
-  session(): Promise<UserProfile | null>;
+  session(signal?: AbortSignal): Promise<UserProfile | null>;
   register(input: Parameters<typeof authApi.register>[0]): Promise<UserProfile>;
   login(email: string, password: string): Promise<UserProfile>;
   logout(): Promise<void>;
+  updateProfile(input: Parameters<typeof authApi.updateProfile>[0], signal?: AbortSignal): Promise<UserProfile>;
+  changePassword(input: Parameters<typeof authApi.changePassword>[0], signal?: AbortSignal): Promise<string>;
   forgotPassword(email: string): Promise<string>;
   resetPassword(input: Parameters<typeof authApi.resetPassword>[0]): Promise<string>;
 }
@@ -84,8 +89,8 @@ export interface UiAdapters {
 
 export const productionUiAdapters: UiAdapters = {
   auth: {
-    async session() {
-      const user = await authApi.session();
+    async session(signal) {
+      const user = await authApi.session(signal);
       return user ? toUserProfile(user) : null;
     },
     async register(input) {
@@ -95,6 +100,10 @@ export const productionUiAdapters: UiAdapters = {
       return toUserProfile(await authApi.login(email, password));
     },
     logout: () => authApi.logout(),
+    async updateProfile(input, signal) {
+      return toUserProfile(await authApi.updateProfile(input, signal));
+    },
+    changePassword: (input, signal) => authApi.changePassword(input, signal),
     forgotPassword: (email) => authApi.forgotPassword(email),
     resetPassword: (input) => authApi.resetPassword(input),
   },

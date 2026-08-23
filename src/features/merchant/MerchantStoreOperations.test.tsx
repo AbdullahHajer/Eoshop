@@ -10,7 +10,7 @@ import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
 import { UiAdapterError } from "../../contracts/uiError";
 import MerchantStoreOperations from "../../components/MerchantStoreOperations";
 
-const user: UserProfile = { id: "user-1", fullName: "مالك المتجر", email: "owner@example.test", phone: "", role: "merchant", platformRoles: [], platformPermissions: [] };
+const user: UserProfile = { id: "user-1", fullName: "مالك المتجر", email: "owner@example.test", phone: "", profileRevision: 1, createdAt: null, updatedAt: null, role: "merchant", platformRoles: [], platformPermissions: [] };
 const store = (overrides: Partial<StoreSubmission> = {}): StoreSubmission => ({
   id: "tenant-a", storeName: "متجر صنعاء", businessType: "تجزئة", verificationStatus: "approved", provisioningStatus: "active", publicationStatus: "unpublished", reviewFeedback: null,
   capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },

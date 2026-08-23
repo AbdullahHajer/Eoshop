@@ -8,6 +8,7 @@ use App\Enums\UserStatus;
 use App\Exceptions\PlatformUserConflict;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\IdentityLifecycleLock;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Events\PasswordResetLinkSent;
 use Illuminate\Auth\Passwords\PasswordBroker;
@@ -26,8 +27,6 @@ use Throwable;
 
 class PlatformUserLifecycleService
 {
-    private const LIFECYCLE_LOCK_KEY = 51120260821;
-
     public function __construct(private readonly AdminAuditService $audit) {}
 
     /**
@@ -278,7 +277,7 @@ class PlatformUserLifecycleService
 
     private function acquireLifecycleLock(ConnectionInterface $central): void
     {
-        $central->select('SELECT pg_advisory_xact_lock(?)', [self::LIFECYCLE_LOCK_KEY]);
+        IdentityLifecycleLock::acquire($central);
     }
 
     private function lockActor(User $actor): User

@@ -4,9 +4,12 @@ namespace Tests\Integration;
 
 use App\Enums\SystemRole;
 use App\Enums\UserStatus;
+use App\Exceptions\AccountProfileConflict;
 use App\Exceptions\PlatformUserConflict;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AccountPasswordService;
+use App\Services\AccountProfileService;
 use App\Services\IdentityPasswordResetService;
 use App\Services\PlatformUserLifecycleService;
 use App\Services\RoleAssignmentService;
@@ -14,6 +17,7 @@ use Database\Seeders\IdentitySeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
@@ -166,6 +170,83 @@ class PlatformUserLifecycleConcurrencyTest extends TestCase
         ]);
     }
 
+    public function test_two_profile_writers_from_one_revision_have_one_exact_winner(): void
+    {
+        $target = $this->operator('concurrent-profile@example.test', SystemRole::PlatformReviewer);
+
+        $outcomes = $this->runConcurrent([
+            fn (): User => app(AccountProfileService::class)->update(
+                $target,
+                ['expectedRevision' => 1, 'name' => 'Profile writer A', 'phone' => null],
+                Request::create('/api/account/profile', 'PUT'),
+            ),
+            fn (): User => app(AccountProfileService::class)->update(
+                $target,
+                ['expectedRevision' => 1, 'name' => 'Profile writer B', 'phone' => null],
+                Request::create('/api/account/profile', 'PUT'),
+            ),
+        ]);
+
+        $this->assertSame(['invalid', 'ok'], collect($outcomes)->pluck('status')->sort()->values()->all());
+        $this->assertSame(2, $target->fresh()->profile_revision);
+        $this->assertContains($target->fresh()->name, ['Profile writer A', 'Profile writer B']);
+    }
+
+    public function test_password_change_and_reset_redemption_are_serialized_with_one_credential_winner(): void
+    {
+        $target = $this->operator('concurrent-account-password@example.test', SystemRole::PlatformReviewer);
+        $token = Password::broker()->createToken($target);
+
+        $outcomes = $this->runConcurrent([
+            fn (): User => app(AccountPasswordService::class)->change(
+                $target,
+                'secure-platform-pass-123',
+                'account-change-winner-456',
+                'current-session',
+                Request::create('/api/account/password', 'PUT'),
+            ),
+            fn (): User => app(IdentityPasswordResetService::class)->reset(
+                Request::create('/api/auth/reset-password', 'POST'),
+                $target->email,
+                $token,
+                'reset-winner-password-789',
+            ),
+        ]);
+
+        $this->assertSame(['invalid', 'ok'], collect($outcomes)->pluck('status')->sort()->values()->all());
+        $hash = (string) $target->fresh()->password;
+        $this->assertTrue(
+            Hash::check('account-change-winner-456', $hash) || Hash::check('reset-winner-password-789', $hash)
+        );
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $target->email]);
+    }
+
+    public function test_password_change_and_reset_link_issuance_share_the_identity_lock(): void
+    {
+        Notification::fake();
+        $target = $this->operator('concurrent-account-link@example.test', SystemRole::PlatformReviewer);
+
+        $outcomes = $this->runConcurrent([
+            fn (): User => app(AccountPasswordService::class)->change(
+                $target,
+                'secure-platform-pass-123',
+                'account-after-link-race-456',
+                'current-session',
+                Request::create('/api/account/password', 'PUT'),
+            ),
+            function () use ($target): void {
+                app(IdentityPasswordResetService::class)->requestLink(
+                    Request::create('/api/auth/forgot-password', 'POST'),
+                    $target->email,
+                );
+            },
+        ]);
+
+        $this->assertSame(['ok', 'ok'], collect($outcomes)->pluck('status')->sort()->values()->all());
+        $this->assertTrue(Hash::check('account-after-link-race-456', (string) $target->fresh()->password));
+        $this->assertGreaterThanOrEqual(2, (int) $target->fresh()->session_generation);
+    }
+
     /**
      * @param  list<callable(): mixed>  $operations
      * @return list<array{status: string, detail?: string}>
@@ -197,14 +278,14 @@ class PlatformUserLifecycleConcurrencyTest extends TestCase
                     DB::setDefaultConnection($central);
                     $operation();
                     $result = ['status' => 'ok'];
-                } catch (ValidationException|PlatformUserConflict $exception) {
+                } catch (ValidationException|PlatformUserConflict|AccountProfileConflict $exception) {
                     $result = ['status' => 'invalid', 'detail' => $exception::class];
                 } catch (AuthorizationException $exception) {
                     $result = ['status' => 'forbidden', 'detail' => $exception::class];
                 } catch (Throwable $exception) {
                     $result = ['status' => 'error', 'detail' => $exception::class.':'.$exception->getMessage()];
                 }
-                fwrite($childSocket, json_encode($result, JSON_THROW_ON_ERROR));
+                @fwrite($childSocket, json_encode($result, JSON_THROW_ON_ERROR));
                 fclose($childSocket);
                 exit(0);
             }
@@ -217,17 +298,23 @@ class PlatformUserLifecycleConcurrencyTest extends TestCase
         }
 
         $results = [];
+        $exitStatuses = [];
         foreach ($workers as $worker) {
             $payload = stream_get_contents($worker['socket']);
             fclose($worker['socket']);
             pcntl_waitpid($worker['pid'], $status);
-            $this->assertTrue(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);
-            $decoded = json_decode((string) $payload, true, 512, JSON_THROW_ON_ERROR);
-            $this->assertNotSame('error', $decoded['status'] ?? null, (string) ($decoded['detail'] ?? 'unknown child error'));
-            $results[] = $decoded;
+            $exitStatuses[] = $status;
+            $results[] = json_decode((string) $payload, true, 512, JSON_THROW_ON_ERROR);
         }
 
         DB::purge((string) config('tenancy.database.central_connection'));
+
+        foreach ($exitStatuses as $status) {
+            $this->assertTrue(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);
+        }
+        foreach ($results as $decoded) {
+            $this->assertNotSame('error', $decoded['status'] ?? null, (string) ($decoded['detail'] ?? 'unknown child error'));
+        }
 
         return $results;
     }

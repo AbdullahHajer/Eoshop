@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mapSubmission, provisioningApi } from "./provisioningApi";
+import { mapSubmission, provisioningApi, scrubLegacyPendingSubmission } from "./provisioningApi";
 import { apiClient } from "./apiClient";
 import { ELEGANT_PRESET } from "../types";
 
@@ -58,7 +58,7 @@ describe("provisioningApi", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "store-csrf" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("crypto", { randomUUID: () => "11111111-1111-4111-8111-111111111111" });
+    vi.stubGlobal("crypto", { randomUUID: () => "11111111-1111-4111-8111-111111111111", subtle: { digest: async () => new Uint8Array(32).buffer } });
 
     await expect(provisioningApi.submit({
       storeName: "Store One",
@@ -67,7 +67,9 @@ describe("provisioningApi", () => {
       handle: "store-one",
       planKey: "starter",
       config: { marker: "one" },
-    })).resolves.toEqual(response);
+      draftId: "draft-one",
+      expectedDraftRevision: 3,
+    }, "owner-one")).resolves.toEqual(response);
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/register-store",
@@ -111,6 +113,9 @@ describe("provisioningApi", () => {
         themeStyle: "elegant",
         handle: "store-draft",
         planKey: "starter",
+        onboardingStage: "review",
+        onboardingReadiness: { business: true, design: true, review: true, blockers: [] },
+        nextRequiredStep: "submit",
         config: legacyConfig,
         savedAt: "2026-08-19T12:00:00Z",
         submittedAt: null,
@@ -118,6 +123,8 @@ describe("provisioningApi", () => {
     };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "draft-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...draft, data: { ...draft.data, revision: 1, onboardingStage: "business", onboardingReadiness: { business: true, design: false, review: false, blockers: ["design_incomplete"] }, nextRequiredStep: "design" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...draft, data: { ...draft.data, revision: 2, onboardingStage: "design", onboardingReadiness: { business: true, design: true, review: false, blockers: ["plan_unavailable", "domain_unavailable"] }, nextRequiredStep: "review" } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(draft), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -143,11 +150,11 @@ describe("provisioningApi", () => {
     expect((result.config.customCoupons as Array<{ active: boolean }>)[0].active).toBe(false);
 
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/merchant/store-draft",
+      "/api/merchant/store-draft/review",
       expect.objectContaining({ method: "PUT" }),
     );
     expect(JSON.parse((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string)).toMatchObject({
-      expectedRevision: 0,
+      expectedRevision: 2,
       handle: "store-draft",
       planKey: "starter",
     });
@@ -193,7 +200,7 @@ describe("provisioningApi", () => {
         : Promise.resolve(new Response(JSON.stringify(response), { status: 200 }));
     });
     vi.stubGlobal("localStorage", localStorageMock);
-    vi.stubGlobal("crypto", { randomUUID: () => "22222222-2222-4222-8222-222222222222" });
+    vi.stubGlobal("crypto", { randomUUID: () => "22222222-2222-4222-8222-222222222222", subtle: { digest: async () => new Uint8Array(32).buffer } });
     vi.stubGlobal("fetch", fetchMock);
     const input = {
       storeName: "Store Two",
@@ -202,10 +209,12 @@ describe("provisioningApi", () => {
       handle: "store-two",
       planKey: "pro",
       config: { marker: "two" },
+      draftId: "draft-two",
+      expectedDraftRevision: 5,
     };
 
-    await expect(provisioningApi.submit(input)).rejects.toMatchObject({ category: "network" });
-    await expect(provisioningApi.submit(input)).resolves.toEqual(response);
+    await expect(provisioningApi.submit(input, "owner-two")).rejects.toMatchObject({ category: "network" });
+    await expect(provisioningApi.submit(input, "owner-two")).resolves.toEqual(response);
 
     const mutationHeaders = fetchMock.mock.calls
       .filter(([path]) => path === "/api/register-store")
@@ -214,5 +223,53 @@ describe("provisioningApi", () => {
     expect(mutationHeaders[0]["Idempotency-Key"]).toBe(mutationHeaders[1]["Idempotency-Key"]);
     expect(localStorageMock.setItem).toHaveBeenCalled();
     expect(localStorageMock.removeItem).toHaveBeenCalled();
+  });
+
+  it("recovers a committed submission after reload without storing the canonical payload", async () => {
+    const values = new Map<string, string>([
+      ["eoshop.pending-store-submission.v1", JSON.stringify({ config: { secret: "legacy" } })],
+      ["eoshop.pending-store-submission.v2:owner-recovery:draft-recovery", JSON.stringify({
+        version: 2,
+        ownerId: "owner-recovery",
+        draftId: "draft-recovery",
+        digest: "a".repeat(64),
+        idempotencyKey: "33333333-3333-4333-8333-333333333333",
+      })],
+    ]);
+    const localStorageMock = {
+      get length() { return values.size; },
+      key: vi.fn((index: number) => [...values.keys()][index] ?? null),
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+      removeItem: vi.fn((key: string) => values.delete(key)),
+      clear: vi.fn(() => values.clear()),
+    } as unknown as Storage;
+    const recovered = {
+      id: "tenant-recovery",
+      storeName: "Recovered Store",
+      businessType: "retail",
+      verificationStatus: "pending",
+      provisioningStatus: "not_started",
+      publicationStatus: "requested",
+      reviewFeedback: null,
+      capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
+      internalDomain: null,
+      requestedDomain: "recovered.lvh.me",
+      publicDomain: null,
+      plan: { key: "starter", name: "Starter", activationMode: "automatic" },
+      subscriptionStatus: "active",
+      publicationBlockers: ["review_not_approved"],
+      createdAt: null,
+      activeAt: null,
+      publishedAt: null,
+    };
+    vi.stubGlobal("localStorage", localStorageMock);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: recovered }), { status: 200 })));
+
+    scrubLegacyPendingSubmission();
+    await expect(provisioningApi.recoverCommittedSubmission("owner-recovery")).resolves.toMatchObject({ id: "tenant-recovery" });
+    expect(values.has("eoshop.pending-store-submission.v1")).toBe(false);
+    expect(values.has("eoshop.pending-store-submission.v2:owner-recovery:draft-recovery")).toBe(false);
+    expect(JSON.stringify([...values.values()])).not.toContain("secret");
   });
 });

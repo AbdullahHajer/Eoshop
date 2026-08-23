@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DomainKind;
 use App\Enums\ProvisioningState;
 use App\Enums\StoreDraftStatus;
+use App\Enums\StoreOnboardingStage;
 use App\Enums\SystemRole;
 use App\Enums\TenantMembershipStatus;
 use App\Enums\TenantVerificationStatus;
@@ -64,6 +65,7 @@ class StoreSubmissionService
                     if ($draft->getAttribute('owner_user_id') !== $actor->getKey()
                         || $draft->getAttribute('tenant_id') !== null
                         || $draft->getAttribute('status') !== StoreDraftStatus::Draft
+                        || $draft->getAttribute('onboarding_stage') !== StoreOnboardingStage::Review
                     ) {
                         throw StoreDraftConflict::state();
                     }
@@ -119,6 +121,8 @@ class StoreSubmissionService
                         'tenant_id' => $tenant->getKey(),
                         'status' => StoreDraftStatus::Submitted,
                         'revision' => 1,
+                        'onboarding_stage' => StoreOnboardingStage::Review,
+                        'onboarding_stage_baseline' => StoreOnboardingStage::Review,
                         'store_name' => $tenant->getAttribute('store_name'),
                         'business_type' => $tenant->getAttribute('business_type'),
                         'theme_style' => $tenant->getAttribute('theme_style'),
@@ -132,6 +136,7 @@ class StoreSubmissionService
                     $draft->forceFill([
                         'tenant_id' => $tenant->getKey(),
                         'status' => StoreDraftStatus::Submitted,
+                        'onboarding_stage' => StoreOnboardingStage::Review,
                         'revision' => ((int) $draft->getAttribute('revision')) + 1,
                         'saved_at' => now(),
                         'submitted_at' => now(),

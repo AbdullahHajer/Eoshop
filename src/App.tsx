@@ -12,12 +12,9 @@ import { Product, StoreConfig, ELEGANT_PRESET, TECH_PRESET } from "./types";
 import StorePreview from "./components/StorePreview";
 import ControlPanel from "./components/ControlPanel";
 import type { ControlTab } from "./features/store-builder/controlPanelTypes";
-import RegistrationGateway from "./components/RegistrationGateway";
-import AuthGateway from "./components/AuthGateway";
 import DomainSetupModal from "./components/DomainSetupModal";
 import ServerPricingPlans from "./components/ServerPricingPlans";
 import AdminAuthModal from "./components/AdminAuthModal";
-import ResetPasswordGateway from "./components/ResetPasswordGateway";
 import AppToast, { type AppToastMessage } from "./app/AppToast";
 import type { AppView } from "./app/appTypes";
 import { isCentralFrontendHost } from "./app/hostRouting";
@@ -60,6 +57,9 @@ import {
 } from "./workflows/merchantWorkspaceState";
 import { reconcileCartWithStorefront } from "./workflows/orderState";
 import { usePlatformSettings } from "./adapters/PlatformSettingsContext";
+import AuthRoutePage from "./features/auth/AuthRoutePage";
+import AccountPage from "./features/account/AccountPage";
+import MerchantOnboardingPage from "./features/onboarding/MerchantOnboardingPage";
 
 export default function App() {
   const {
@@ -164,8 +164,7 @@ export default function App() {
   
   // Registered Merchant User Profile State
   const [authUser, setAuthUser] = useState<UserProfile | null>(null);
-  const [isAuthGatewayOpen, setIsAuthGatewayOpen] = useState(false);
-  const [authGatewayMode, setAuthGatewayMode] = useState<"login" | "signup">("signup");
+  const [authRestoring, setAuthRestoring] = useState(true);
   
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [merchantStores, setMerchantStores] = useState<StoreSubmission[]>([]);
@@ -188,13 +187,8 @@ export default function App() {
   const workspaceLoads = useRef(new LatestWorkspaceLoad());
   const draftLoads = useRef(new LatestWorkspaceLoad());
   const draftOperationSequence = useRef(0);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{
-    type: "templates" | "ai" | "builder";
-    data?: any;
-  } | null>(null);
   const workspaceDirty = useMemo(
     () => activeWorkspace !== null && (
       JSON.stringify(config) !== JSON.stringify(activeWorkspace.config)
@@ -267,9 +261,13 @@ export default function App() {
         setAuthUser(profile);
         if (!isCentralFrontendHost(window.location.hostname)) return;
         if (!profile) {
-          if (["merchant", "merchant-new", "merchant-store", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
+          if (["account", "merchant", "merchant-new", "merchant-store", "merchant-correction", "admin"].includes(initialRoute.name)) {
+            window.location.replace(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
+          }
           return;
         }
+
+        if (initialRoute.name === "auth" || initialRoute.name === "account" || initialRoute.name === "merchant-new") return;
 
         if (initialRoute.name === "admin") {
           setAdminSection(initialRoute.section);
@@ -278,7 +276,7 @@ export default function App() {
           return;
         }
 
-        if (canAccessPlatformConsole(profile) && initialRoute.name !== "auth-flow") {
+        if (canAccessPlatformConsole(profile)) {
           const section = safeAdminSection("overview", profile) ?? "overview";
           setAdminSection(section);
           replaceCentralPath(adminPath(section));
@@ -286,8 +284,6 @@ export default function App() {
           setIsAdminOpen(true);
           return;
         }
-
-        if (initialRoute.name === "auth-flow") return;
 
         const builderSections: MerchantStoreSection[] = ["design", "checkout", "pages"];
         const requestedTenantId = initialRoute.name === "merchant-store" && builderSections.includes(initialRoute.section)
@@ -299,13 +295,6 @@ export default function App() {
             setView("merchant_dashboard");
             replaceCentralPath("/app");
           }
-          return;
-        }
-        if (initialRoute.name === "merchant-new") {
-          const restoredDraft = await loadCurrentServerDraft(profile);
-          if (restoredDraft === null) return;
-          setView(restoredDraft ? "builder" : "templates");
-          replaceCentralPath("/app/new");
           return;
         }
         if (initialRoute.name === "merchant-correction") {
@@ -333,8 +322,11 @@ export default function App() {
       .catch(() => {
         setAuthUser(null);
         resetTenantOwnedState();
-        if (["merchant", "merchant-new", "merchant-store", "merchant-correction"].includes(initialRoute.name)) replaceCentralPath("/");
-      });
+        if (["account", "merchant", "merchant-new", "merchant-store", "merchant-correction", "admin"].includes(initialRoute.name)) {
+          window.location.replace(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
+        }
+      })
+      .finally(() => setAuthRestoring(false));
 
     // Dedicated Admin Route Check (/admin or #admin)
     const currentHash = window.location.hash;
@@ -743,86 +735,15 @@ export default function App() {
   };
 
   // Handle template selection
-  const selectTemplate = (type: "elegant" | "tech") => {
-    if (!authUser) {
-      setPendingAction({ type: "templates" });
-      setAuthGatewayMode("login");
-      setIsAuthGatewayOpen(true);
-      triggerToast("سجّل الدخول أولاً لحفظ المتجر باسم حسابك.", "info");
-      return;
-    }
-
-    if (!registeredUser) {
-      setPendingAction({ type: "templates" });
-      setIsRegisterModalOpen(true);
-      triggerToast("يرجى تعبئة بيانات المالك ورابط صفحة المتجر أولاً لتفعيل وتخصيص القوالب 🚀", "info");
-      return;
-    }
-    const defaultData = type === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
-    if (workspaceEditorLocked) return;
-    workspaceEditGeneration.current += 1;
-    setConfig(defaultData);
-    setCart([]);
-    setSelectedCategory("الكل");
-    setView("builder");
-    triggerToast(`تم تفعيل ${type === "elegant" ? "قالب الأناقة العصرية ✨" : "قالب التكنولوجيا والابتكار ⚡"}! جاهز للتخصيص.`, "success");
+  const selectTemplate = (_type: "elegant" | "tech") => {
+    const target = "/app/new/design";
+    window.location.assign(authUser ? target : `/login?returnTo=${encodeURIComponent(target)}`);
   };
 
   // Check registration before taking actions
-  const checkRegistrationAndExecute = (type: "templates" | "ai" | "builder", data?: any) => {
-    if (!authUser) {
-      setPendingAction({ type, data });
-      setAuthGatewayMode("login");
-      setIsAuthGatewayOpen(true);
-      triggerToast("سجّل الدخول أولاً للمتابعة بحساب موثوق.", "info");
-      return;
-    }
-
-    if (!registeredUser) {
-      setPendingAction({ type, data });
-      setIsRegisterModalOpen(true);
-      triggerToast("أكمل بريف المتجر لربط بيانات النشاط بحسابك.", "info");
-      return;
-    }
-
-    if (type === "templates") {
-      setView("templates");
-    } else if (type === "builder") {
-      setView("builder");
-    } else if (type === "ai") {
-      runAiGenerationDirectly(data);
-    }
-  };
-
-  // Handler for successful registration
-  const handleRegistrationSuccess = (userData: typeof registeredUser) => {
-    if (!userData) return;
-    setRegisteredUser(userData);
-    setIsRegisterModalOpen(false);
-
-    // Update store Name from businessName
-    const updatedConfig = {
-      ...config,
-      storeName: userData.businessName
-    };
-    workspaceEditGeneration.current += 1;
-    setConfig(updatedConfig);
-
-    triggerToast("تم تقديم بريف المتجر وتأكيد بيانات المالك بنجاح! 🚀🎉", "success");
-
-    // Execute blocked actions if any
-    if (pendingAction) {
-      if (pendingAction.type === "templates") {
-        setView("templates");
-      } else if (pendingAction.type === "ai") {
-        runAiGenerationDirectly(pendingAction.data);
-      } else if (pendingAction.type === "builder") {
-        setView("builder");
-      }
-      setPendingAction(null);
-    } else {
-      setView("templates");
-    }
+  const checkRegistrationAndExecute = (_type: "templates" | "ai" | "builder", _data?: unknown) => {
+    const target = "/app/new";
+    window.location.assign(authUser ? target : `/login?returnTo=${encodeURIComponent(target)}`);
   };
 
   // Unregister / Log out merchant
@@ -835,6 +756,7 @@ export default function App() {
     if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
     try {
       await auth.logout();
+      provisioning.clearPendingForOwner(authUser?.id ?? "");
     } catch {
       triggerToast("تعذر إنهاء الجلسة على الخادم. تحقق من الاتصال ثم حاول مجددًا.", "error");
       return;
@@ -1258,6 +1180,10 @@ export default function App() {
         updateAdminSettingsDirty(false);
       }
       const route = parseCentralRoute(window.location.pathname);
+      if (route.name === "auth" || route.name === "account" || route.name === "merchant-new") {
+        window.location.reload();
+        return;
+      }
       if (route.name === "admin") {
         setAdminSection(route.section);
         if (authUser) {
@@ -1280,10 +1206,6 @@ export default function App() {
           discardRecoverableWorkspace();
         }
         setView("merchant_dashboard");
-      } else if (route.name === "merchant-new" && authUser) {
-        void loadCurrentServerDraft().then((restored) => {
-          if (restored !== null) setView(restored ? "builder" : "templates");
-        });
       } else if (route.name === "landing") {
         setView(authUser ? "merchant_dashboard" : "landing");
         if (authUser) replaceCentralPath("/app");
@@ -1343,6 +1265,26 @@ export default function App() {
       ?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const routeOwnedPage = isCentralFrontendHost(window.location.hostname)
+    ? parseCentralRoute(window.location.pathname)
+    : { name: "unknown" as const };
+  const routeSessionExpired = (returnTo: string) => {
+    setAuthUser(null);
+    resetTenantOwnedState();
+    replaceCentralPath(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+  };
+  if (routeOwnedPage.name === "auth") {
+    return <AuthRoutePage mode={routeOwnedPage.mode} currentUser={authUser} restoring={authRestoring} onAuthenticated={setAuthUser} />;
+  }
+  if (routeOwnedPage.name === "account") {
+    if (authRestoring || !authUser) return <div dir="rtl" className="grid min-h-screen place-items-center bg-slate-100 font-bold text-slate-600">جاري التحقق من الجلسة...</div>;
+    return <AccountPage user={authUser} onUserChanged={setAuthUser} onLoggedOut={() => { setAuthUser(null); resetTenantOwnedState(); }} onSessionExpired={routeSessionExpired} />;
+  }
+  if (routeOwnedPage.name === "merchant-new") {
+    if (authRestoring || !authUser) return <div dir="rtl" className="grid min-h-screen place-items-center bg-slate-100 font-bold text-slate-600">جاري استعادة حساب التاجر...</div>;
+    return <MerchantOnboardingPage user={authUser} requestedStep={routeOwnedPage.step} onSessionExpired={routeSessionExpired} />;
+  }
+
   return (
     <div dir="rtl" className={`bg-slate-50 text-slate-800 flex flex-col font-sans select-none antialiased ${view === "builder" ? "h-screen max-h-screen overflow-hidden" : "min-h-screen"}`}>
       <AppToast toast={toast} />
@@ -1371,12 +1313,7 @@ export default function App() {
           loading={merchantStoresLoading}
           error={merchantStoresError}
           onReload={reloadMerchantPortal}
-          onCreateStore={() => {
-            pushCentralPath("/app/new");
-            void loadCurrentServerDraft().then((restored) => {
-              if (restored !== null) setView(restored ? "builder" : "templates");
-            });
-          }}
+          onCreateStore={() => window.location.assign("/app/new")}
           onOpenStore={openMerchantStore}
           onCorrectStore={(store) => void openMerchantCorrection(store)}
           onPublish={(store) => publishMerchantStore(store)}
@@ -1478,9 +1415,7 @@ export default function App() {
                   </button>
 
                   <button 
-                    onClick={() => {
-                      setView("templates");
-                    }}
+                    onClick={() => window.location.assign("/app/new")}
                     className="bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-4 py-2.5 rounded-xl shadow-md shadow-sky-500/20 transition font-bold text-xs flex items-center gap-1.5"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -1490,10 +1425,7 @@ export default function App() {
               ) : (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      setAuthGatewayMode("login");
-                      setIsAuthGatewayOpen(true);
-                    }}
+                    onClick={() => window.location.assign("/login")}
                     className="bg-transparent hover:bg-slate-100 text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl transition font-bold text-xs flex items-center gap-1.5"
                   >
                     <LogIn className="w-4 h-4 text-slate-500" />
@@ -1501,10 +1433,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      setAuthGatewayMode("signup");
-                      setIsAuthGatewayOpen(true);
-                    }}
+                    onClick={() => window.location.assign("/register")}
                     className="bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl shadow-md shadow-sky-500/20 transition font-bold text-xs flex items-center gap-1.5"
                   >
                     <User className="w-4 h-4" />
@@ -2558,23 +2487,6 @@ export default function App() {
         />
       )}
 
-      {/* Registration & Business Documents Verification Gateway */}
-      <AnimatePresence>
-        {isRegisterModalOpen && authUser && (
-          <RegistrationGateway
-            isOpen={isRegisterModalOpen}
-            onClose={() => {
-              setIsRegisterModalOpen(false);
-              setPendingAction(null);
-            }}
-            onSuccess={handleRegistrationSuccess}
-            initialStoreName={config.storeName !== "متجر عطور لورين" && config.storeName !== "متجر تك برو" ? config.storeName : ""}
-            currentUser={registeredUser}
-            authenticatedUser={{ fullName: authUser.fullName, email: authUser.email }}
-          />
-        )}
-      </AnimatePresence>
-
       {/* Custom Logout Confirmation Modal */}
       <AnimatePresence>
         {isLogoutConfirmOpen && (
@@ -2677,6 +2589,7 @@ export default function App() {
         businessType={registeredUser?.businessType || "retail"}
         themeStyle={config.themeStyle}
         config={config as unknown as Record<string, unknown>}
+        ownerId={authUser?.id ?? ""}
         draft={activeDraft}
         onDraftChanged={setActiveDraft}
         onReloadDraft={reloadActiveDraft}
@@ -2695,54 +2608,6 @@ export default function App() {
         }}
       />
 
-      {/* Modern Auth & Merchant Profile Gateway */}
-      <AuthGateway
-        isOpen={isAuthGatewayOpen}
-        onClose={() => setIsAuthGatewayOpen(false)}
-        currentUser={authUser}
-        initialMode={authGatewayMode}
-        onLoginSuccess={(user) => {
-          resetTenantOwnedState();
-          setAuthUser(user);
-          if (canAccessPlatformConsole(user)) {
-            const section = safeAdminSection("overview", user) ?? "overview";
-            setPendingAction(null);
-            setIsAuthGatewayOpen(false);
-            setAdminSection(section);
-            replaceCentralPath(adminPath(section));
-            setIsAdminOpen(true);
-            triggerToast("مرحباً بك في مركز إدارة المنصة.", "success");
-            return;
-          }
-          void restoreMerchantState(user).then((outcome) => {
-            if (outcome.status === "error" && !outcome.sessionActive) return;
-            setPendingAction(null);
-            setIsRegisterModalOpen(false);
-            setView("merchant_dashboard");
-            pushCentralPath("/app");
-          });
-          triggerToast(`أهلاً بك يا ${user.fullName ? user.fullName.split(' ')[0] : 'التاجر'} 👋 تم تسجيل الدخول بنجاح`, "success");
-        }}
-        onLogout={async () => {
-          const confirmed = !recoverableWorkspaceChanges || window.confirm("توجد تعديلات أو قيم تعارض غير محفوظة. تسجيل الخروج الآن سيتجاهلها نهائيًا. هل تريد المتابعة؟");
-          if (!mayDiscardDirtyWorkspace(recoverableWorkspaceChanges, confirmed)) return;
-          try {
-            await auth.logout();
-          } catch {
-            triggerToast("تعذر إنهاء الجلسة على الخادم. تحقق من الاتصال ثم حاول مجددًا.", "error");
-            return;
-          }
-          setAuthUser(null);
-          resetTenantOwnedState();
-          setView("landing");
-          replaceCentralPath("/");
-          triggerToast("تم تسجيل الخروج وإنهاء الجلسة بنجاح", "info");
-        }}
-        onStartStoreCreation={() => {
-          setView("templates");
-        }}
-      />
-
       {/* Super Admin Protected Auth Gate */}
       <AdminAuthModal
         isOpen={isAdminAuthModalOpen}
@@ -2758,7 +2623,6 @@ export default function App() {
         }}
       />
 
-      <ResetPasswordGateway />
     </div>
   );
 }

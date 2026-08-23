@@ -10,6 +10,7 @@ interface DomainSetupModalProps {
   businessType: string;
   themeStyle: "elegant" | "tech";
   config: Record<string, unknown>;
+  ownerId: string;
   draft?: StoreDraft | null;
   onDraftChanged?: (draft: StoreDraft) => void;
   onReloadDraft?: () => Promise<void>;
@@ -38,6 +39,7 @@ export default function DomainSetupModal({
   businessType,
   themeStyle,
   config,
+  ownerId,
   draft,
   onDraftChanged,
   onReloadDraft,
@@ -172,7 +174,7 @@ export default function DomainSetupModal({
         setPendingLifecycleDraft(savedDraft);
       }
       const response = savedDraft.tenantId
-        ? await provisioning.resubmit(savedDraft.tenantId, savedDraft.revision)
+        ? await provisioning.resubmit(savedDraft.tenantId, savedDraft.revision, ownerId)
         : await provisioning.submit({
           storeName: savedDraft.storeName,
           businessType: savedDraft.businessType,
@@ -182,7 +184,7 @@ export default function DomainSetupModal({
           config: savedDraft.config,
           draftId: savedDraft.id,
           expectedDraftRevision: savedDraft.revision,
-        });
+        }, ownerId);
       setPendingLifecycleDraft(null);
       onSubmitted?.(response.data);
       onClose();

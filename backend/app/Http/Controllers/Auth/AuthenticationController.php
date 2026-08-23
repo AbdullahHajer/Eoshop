@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureActiveUserSession;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\AuthenticatedUserResource;
 use App\Models\User;
+use App\Services\AuthenticatedSessionBinder;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthenticationController extends Controller
 {
+    public function __construct(private readonly AuthenticatedSessionBinder $sessions) {}
+
     public function csrf(Request $request): JsonResponse
     {
         return response()->json([
@@ -70,7 +72,7 @@ class AuthenticationController extends Controller
         $guard = Auth::guard('web');
         $guard->login($user);
         $request->session()->regenerate(true);
-        $this->bindSessionToPassword($request, $guard, $user);
+        $this->sessions->bind($request, $guard, $user);
         $user->load('platformRoles');
 
         return response()->json([
@@ -114,7 +116,7 @@ class AuthenticationController extends Controller
             ]);
         }
 
-        $this->bindSessionToPassword($request, $guard, $user);
+        $this->sessions->bind($request, $guard, $user);
         $user->forceFill(['last_login_at' => now()])->save();
         $user->load('platformRoles');
 
@@ -135,17 +137,5 @@ class AuthenticationController extends Controller
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-    }
-
-    private function bindSessionToPassword(Request $request, SessionGuard $guard, User $user): void
-    {
-        $request->session()->put(
-            'password_hash_'.Auth::getDefaultDriver(),
-            $guard->hashPasswordForCookie($user->getAuthPassword()),
-        );
-        $request->session()->put(
-            EnsureActiveUserSession::SESSION_GENERATION_KEY,
-            (int) $user->getAttribute('session_generation'),
-        );
     }
 }
