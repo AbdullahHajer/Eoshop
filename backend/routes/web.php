@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\PlatformOverviewController;
 use App\Http\Controllers\Admin\PlatformSettingsController as AdminPlatformSettingsController;
@@ -102,11 +103,21 @@ Route::middleware('central.domain')->group(function (): void {
     });
 
     Route::prefix('api')->middleware('auth')->group(function (): void {
+        Route::put('/account/profile', [AccountController::class, 'updateProfile'])
+            ->middleware('throttle:merchant.mutations');
+        Route::put('/account/password', [AccountController::class, 'changePassword'])
+            ->middleware('throttle:auth.password-reset');
         Route::get('/domains/availability', [DomainAvailabilityController::class, 'show'])
             ->middleware('throttle:domain.availability');
         Route::get('/merchant/stores', [MerchantStoreController::class, 'index']);
+        Route::get('/merchant/store-drafts/{draft}/submission', [MerchantStoreController::class, 'recoverSubmission'])
+            ->whereUuid('draft');
         Route::get('/merchant/store-draft', [MerchantStoreDraftController::class, 'current']);
-        Route::put('/merchant/store-draft', [MerchantStoreDraftController::class, 'saveCurrent'])
+        Route::put('/merchant/store-draft/business', [MerchantStoreDraftController::class, 'saveBusiness'])
+            ->middleware('throttle:merchant.mutations');
+        Route::put('/merchant/store-draft/design', [MerchantStoreDraftController::class, 'saveDesign'])
+            ->middleware('throttle:merchant.mutations');
+        Route::put('/merchant/store-draft/review', [MerchantStoreDraftController::class, 'saveReview'])
             ->middleware('throttle:merchant.mutations');
         Route::get('/merchant/stores/{tenant}/draft', [MerchantStoreDraftController::class, 'correction'])
             ->can('editStoreDraft', 'tenant');

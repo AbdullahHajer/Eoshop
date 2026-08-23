@@ -27,6 +27,20 @@ class DomainReservationService
                 ->exists();
     }
 
+    public function assertAvailable(string $handle): void
+    {
+        $domain = PublicStoreHandle::domain($handle);
+        $this->lockHostname($domain);
+        if (Domain::query()->where('domain', $domain)->exists()
+            || DomainReservation::query()
+                ->where('domain', $domain)
+                ->whereIn('status', [DomainReservationStatus::Reserved, DomainReservationStatus::Active])
+                ->exists()
+        ) {
+            throw StoreSubmissionConflict::domainUnavailable();
+        }
+    }
+
     public function reserve(Tenant $tenant, string $handle, User $actor): DomainReservation
     {
         $domain = PublicStoreHandle::domain($handle);

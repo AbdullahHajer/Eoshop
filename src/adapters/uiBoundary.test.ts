@@ -34,7 +34,14 @@ describe("UI adapter architecture boundary", () => {
   });
 
   it("keeps extracted feature panels dependent on leaf props rather than the coordinator or adapters", () => {
+    const routeScreens = new Set([
+      "features/account/AccountPage.tsx",
+      "features/auth/AuthRoutePage.tsx",
+      "features/onboarding/MerchantOnboardingPage.tsx",
+    ]);
     const violations = componentSources(join(sourceRoot, "features")).flatMap((path) => {
+      const relativePath = path.slice(sourceRoot.length + 1).replaceAll("\\", "/");
+      if (routeScreens.has(relativePath)) return [];
       const source = readFileSync(path, "utf8");
       const importsAdapterContext = /UiAdaptersContext|\buseUiAdapters\b/.test(source);
       const importsCoordinator = /from\s+["'][^"']*components\/ControlPanel["']/.test(source);

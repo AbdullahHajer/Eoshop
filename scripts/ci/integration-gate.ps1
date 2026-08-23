@@ -773,6 +773,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $draftLifecycleMigration = 'database/migrations/system/2026_08_19_000010_create_store_drafts_and_merchant_publication.php'
     $sessionGenerationMigration = 'database/migrations/system/2026_08_21_000011_add_session_generation_to_users.php'
     $platformSettingsMigration = 'database/migrations/system/2026_08_22_000012_create_platform_settings.php'
+    $guidedOnboardingMigration = 'database/migrations/system/2026_08_23_000013_add_guided_account_and_onboarding.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$guidedOnboardingMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$platformSettingsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$sessionGenerationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$draftLifecycleMigration --force --no-interaction
@@ -820,6 +822,12 @@ VALUES (
     Invoke-Compose exec -T backend php artisan migrate --path=$draftLifecycleMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$sessionGenerationMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$platformSettingsMigration --force --no-interaction
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-c', "UPDATE plans SET features = to_json(to_json(features::text)::text) WHERE key = 'starter';"
+    )
+    Invoke-Compose exec -T backend php artisan migrate --path=$guidedOnboardingMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan db:seed --class=Database\Seeders\IdentitySeeder --force --no-interaction
     $draftAdoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
@@ -828,6 +836,33 @@ VALUES (
     if ($draftAdoptionResult -ne 'submitted:1:1:WP 5.5 Adopted Draft') {
         throw "WP 5.5 server-draft adoption failed. Received: $draftAdoptionResult"
     }
+    $guidedAdoptionResult = (Get-ComposeOutput -Arguments @(
+        'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-tAc', "SELECT d.onboarding_stage || ':' || d.onboarding_stage_baseline || ':' || u.profile_revision::text || ':' || json_typeof(p.features) FROM store_submissions s JOIN store_drafts d ON d.id = s.store_draft_id JOIN users u ON u.id = s.submitted_by_user_id JOIN plans p ON p.key = 'starter' WHERE s.tenant_id = '$adoptionTenantId';"
+    )).Trim()
+    if ($guidedAdoptionResult -ne 'review:review:1:array') {
+        throw "WP 5.13 onboarding/profile/plan adoption failed. Received: $guidedAdoptionResult"
+    }
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-c', "UPDATE users SET profile_revision = 2 WHERE id = '$draftAdoptionUserId';"
+    )
+    $guidedRollbackRefused = $false
+    try {
+        Invoke-Compose exec -T backend php artisan migrate:rollback --path=$guidedOnboardingMigration --force --no-interaction
+    }
+    catch {
+        $guidedRollbackRefused = $true
+    }
+    if (-not $guidedRollbackRefused) {
+        throw 'WP 5.13 destructive rollback was not refused after profile progress.'
+    }
+    Invoke-Compose -Arguments @(
+        'exec', '-T', 'db', 'psql', '-v', 'ON_ERROR_STOP=1',
+        '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
+        '-c', "UPDATE users SET profile_revision = 1 WHERE id = '$draftAdoptionUserId';"
+    )
     $adoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
         '-tAc', "SELECT t.provisioning_status || ':' || r.schema_origin FROM tenants t JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$adoptionTenantId';"

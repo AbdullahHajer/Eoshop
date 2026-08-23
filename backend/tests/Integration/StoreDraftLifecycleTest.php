@@ -84,14 +84,23 @@ class StoreDraftLifecycleTest extends TestCase
         $this->startBrowserSessionAs($owner);
         $this->getJson('/api/merchant/store-draft')->assertOk()->assertJsonPath('data', null);
 
-        $saved = $this->putJson('/api/merchant/store-draft', $this->draftPayload('first', 0))
-            ->assertCreated()
+        $saved = $this->putJson('/api/merchant/store-draft/business', [
+            'expectedRevision' => 0,
+            'storeName' => 'Store first',
+            'businessType' => 'retail',
+        ])
+            ->assertOk()
             ->assertJsonPath('data.status', StoreDraftStatus::Draft->value)
             ->assertJsonPath('data.revision', 1)
+            ->assertJsonPath('data.onboardingStage', 'business')
             ->assertJsonPath('data.storeName', 'Store first');
         $draftId = (string) $saved->json('data.id');
 
-        $this->putJson('/api/merchant/store-draft', $this->draftPayload('stale', 0))
+        $this->putJson('/api/merchant/store-draft/business', [
+            'expectedRevision' => 0,
+            'storeName' => 'Store stale',
+            'businessType' => 'retail',
+        ])
             ->assertConflict()
             ->assertJsonPath('code', 'draft_revision_conflict')
             ->assertJsonPath('current.id', $draftId)
@@ -196,11 +205,29 @@ class StoreDraftLifecycleTest extends TestCase
         );
     }
 
+    public function test_committed_submission_is_recoverable_by_its_owner_draft_only(): void
+    {
+        $owner = $this->createUser('submission-recovery@example.test');
+        $draft = $this->saveDraft($owner, 'recovery', 'submission-recovery', 'starter');
+        $tenant = $this->submitDraft($owner, $draft, 'recovery');
+
+        $this->startBrowserSessionAs($owner);
+        $this->getJson("/api/merchant/store-drafts/{$draft->id}/submission")
+            ->assertOk()
+            ->assertJsonPath('data.id', $tenant->id)
+            ->assertJsonPath('data.storeName', 'Store recovery');
+
+        $outsider = $this->createUser('submission-recovery-outsider@example.test');
+        $this->startBrowserSessionAs($outsider);
+        $this->getJson("/api/merchant/store-drafts/{$draft->id}/submission")->assertNotFound();
+    }
+
     public function test_rejection_requires_owner_correction_and_resubmission_is_exactly_replayable(): void
     {
         $owner = $this->createUser('correction-owner@example.test');
         $draft = $this->saveDraft($owner, 'initial', 'correction-shop', 'starter');
         $tenant = $this->submitDraft($owner, $draft, 'initial');
+        $submittedRevision = (int) $draft->refresh()->revision;
         $reviewer = $this->createPlatformUser('correction-reviewer@example.test', SystemRole::PlatformReviewer);
         $manager = $this->createPlatformUser('correction-manager@example.test', SystemRole::PlatformSuperAdmin);
 
@@ -212,7 +239,8 @@ class StoreDraftLifecycleTest extends TestCase
 
         $draft->refresh();
         $this->assertSame(StoreDraftStatus::CorrectionRequired, $draft->status);
-        $this->assertSame(3, $draft->revision);
+        $correctionRevision = $submittedRevision + 1;
+        $this->assertSame($correctionRevision, $draft->revision);
         $this->startBrowserSessionAs($manager);
         $this->patchJson("/api/admin/stores/{$tenant->id}/status", [
             'status' => TenantVerificationStatus::Pending->value,
@@ -221,26 +249,27 @@ class StoreDraftLifecycleTest extends TestCase
         $this->startBrowserSessionAs($owner);
         $corrected = $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $this->draftPayload(
             'corrected',
-            3,
+            $correctionRevision,
             'corrected-shop',
             'starter',
         ))->assertOk()
-            ->assertJsonPath('data.revision', 4)
+            ->assertJsonPath('data.revision', $correctionRevision + 1)
             ->assertJsonPath('data.status', StoreDraftStatus::CorrectionRequired->value);
         $this->assertSame('corrected-shop', $corrected->json('data.handle'));
 
         $key = (string) Str::uuid();
+        $correctedRevision = $correctionRevision + 1;
         $this->withHeader('Idempotency-Key', $key)
-            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => 4])
+            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => $correctedRevision])
             ->assertOk()
             ->assertJsonPath('data.verificationStatus', TenantVerificationStatus::Pending->value)
             ->assertJsonPath('meta.replayed', false);
         $this->withHeader('Idempotency-Key', $key)
-            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => 4])
+            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => $correctedRevision])
             ->assertOk()
             ->assertJsonPath('meta.replayed', true);
         $this->withHeader('Idempotency-Key', $key)
-            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => 5])
+            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => $correctedRevision + 1])
             ->assertConflict()
             ->assertJsonPath('code', 'resubmission_idempotency_conflict');
 
@@ -250,7 +279,7 @@ class StoreDraftLifecycleTest extends TestCase
         $this->assertSame('corrected-shop', $submission->payload_snapshot['handle']);
         $this->assertDatabaseCount('store_resubmissions', 1);
         $this->assertSame(StoreDraftStatus::Submitted, $draft->refresh()->status);
-        $this->assertSame(5, $draft->revision);
+        $this->assertSame($correctedRevision + 1, $draft->revision);
     }
 
     public function test_any_active_exact_owner_can_correct_but_staff_outsiders_and_suspended_members_cannot(): void
@@ -264,6 +293,7 @@ class StoreDraftLifecycleTest extends TestCase
             'status' => TenantVerificationStatus::Rejected->value,
             'reason' => 'Correction required.',
         ])->assertOk();
+        $correctionRevision = (int) $draft->refresh()->revision;
 
         $staff = $this->createUser('membership-staff@example.test');
         $staffRole = Role::query()->where('key', SystemRole::MerchantStaff->value)->firstOrFail();
@@ -273,7 +303,7 @@ class StoreDraftLifecycleTest extends TestCase
             $this->startBrowserSessionAs($denied);
             $this->getJson("/api/merchant/stores/{$tenant->id}/draft")->assertForbidden();
             $this->withHeader('Idempotency-Key', (string) Str::uuid())
-                ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => 3])
+                ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => $correctionRevision])
                 ->assertForbidden();
         }
 
@@ -290,10 +320,10 @@ class StoreDraftLifecycleTest extends TestCase
         $this->startBrowserSessionAs($coOwner);
         $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $this->draftPayload(
             'co-owner-correction',
-            3,
+            $correctionRevision,
             'membership-shop',
             'starter',
-        ))->assertOk()->assertJsonPath('data.revision', 4);
+        ))->assertOk()->assertJsonPath('data.revision', $correctionRevision + 1);
         $this->assertSame($owner->id, $draft->refresh()->owner_user_id);
     }
 
@@ -308,16 +338,18 @@ class StoreDraftLifecycleTest extends TestCase
             'status' => TenantVerificationStatus::Rejected->value,
             'reason' => 'Select the requested package.',
         ])->assertOk();
+        $correctionRevision = (int) $draft->refresh()->revision;
 
         $this->startBrowserSessionAs($owner);
         $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $this->draftPayload(
             'pro',
-            3,
+            $correctionRevision,
             'plan-change-shop',
             'pro',
         ))->assertOk();
+        $correctedRevision = $correctionRevision + 1;
         $this->withHeader('Idempotency-Key', (string) Str::uuid())
-            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => 4])
+            ->postJson("/api/merchant/stores/{$tenant->id}/resubmit", ['expectedRevision' => $correctedRevision])
             ->assertOk()
             ->assertJsonPath('data.plan.key', 'pro')
             ->assertJsonPath('data.subscriptionStatus', 'pending_activation');
@@ -398,8 +430,21 @@ class StoreDraftLifecycleTest extends TestCase
     private function saveDraft(User $owner, string $label, string $handle, string $plan): StoreDraft
     {
         $this->startBrowserSessionAs($owner);
-        $response = $this->putJson('/api/merchant/store-draft', $this->draftPayload($label, 0, $handle, $plan))
-            ->assertCreated();
+        $business = $this->putJson('/api/merchant/store-draft/business', [
+            'expectedRevision' => 0,
+            'storeName' => 'Store '.$label,
+            'businessType' => 'retail',
+        ])->assertOk();
+        $design = $this->putJson('/api/merchant/store-draft/design', [
+            'expectedRevision' => (int) $business->json('data.revision'),
+            'themeStyle' => 'elegant',
+            'config' => $this->storeConfig($label),
+        ])->assertOk();
+        $response = $this->putJson('/api/merchant/store-draft/review', [
+            'expectedRevision' => (int) $design->json('data.revision'),
+            'handle' => $handle,
+            'planKey' => $plan,
+        ])->assertOk()->assertJsonPath('data.onboardingStage', 'review');
 
         return StoreDraft::query()->findOrFail((string) $response->json('data.id'));
     }

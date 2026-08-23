@@ -169,9 +169,9 @@ export default function MerchantPortal({
             <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500">
               <ShoppingBag className="h-4 w-4" /> متاجري
             </div>
-            <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-400">
-              <Settings2 className="h-4 w-4" /> الحساب <span className="mr-auto text-[9px]">قريبًا</span>
-            </div>
+            <a href="/app/account" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-sky-700">
+              <Settings2 className="h-4 w-4" /> الحساب والأمان
+            </a>
           </nav>
         </aside>
 

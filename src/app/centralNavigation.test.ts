@@ -8,11 +8,16 @@ afterEach(() => window.history.replaceState({}, "", "/"));
 describe("central navigation", () => {
   it("recognizes the merchant shell and exact store design route", () => {
     expect(parseCentralRoute("/app")).toEqual({ name: "merchant" });
-    expect(parseCentralRoute("/app/new")).toEqual({ name: "merchant-new" });
+    expect(parseCentralRoute("/app/new")).toEqual({ name: "merchant-new", step: "business" });
+    expect(parseCentralRoute("/app/new/design")).toEqual({ name: "merchant-new", step: "design" });
+    expect(parseCentralRoute("/app/new/review")).toEqual({ name: "merchant-new", step: "review" });
     expect(parseCentralRoute("/app/stores/tenant%201")).toEqual({ name: "merchant-store", tenantId: "tenant 1", section: "overview" });
     expect(parseCentralRoute("/app/stores/tenant%201/design")).toEqual({ name: "merchant-store", tenantId: "tenant 1", section: "design" });
     expect(parseCentralRoute("/app/stores/tenant/orders")).toEqual({ name: "merchant-store", tenantId: "tenant", section: "orders" });
-    expect(parseCentralRoute("/reset-password")).toEqual({ name: "auth-flow" });
+    expect(parseCentralRoute("/login")).toEqual({ name: "auth", mode: "login" });
+    expect(parseCentralRoute("/register")).toEqual({ name: "auth", mode: "register" });
+    expect(parseCentralRoute("/forgot-password")).toEqual({ name: "auth", mode: "forgot" });
+    expect(parseCentralRoute("/reset-password")).toEqual({ name: "auth", mode: "reset" });
     expect(parseCentralRoute("/admin")).toEqual({ name: "admin", section: "overview" });
     expect(parseCentralRoute("/admin/stores")).toEqual({ name: "admin", section: "stores" });
     expect(parseCentralRoute("/admin/users")).toEqual({ name: "admin", section: "users" });

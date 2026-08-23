@@ -17,6 +17,9 @@ const merchant: UserProfile = {
   fullName: "تاجر تجريبي",
   email: "merchant@example.com",
   phone: "+967700000000",
+  profileRevision: 1,
+  createdAt: null,
+  updatedAt: null,
   role: "merchant",
   platformRoles: [],
   platformPermissions: [],
@@ -146,6 +149,7 @@ describe("current interface behavior", () => {
 
     renderInterface(
       <DomainSetupModal
+        ownerId="01MERCHANT"
         isOpen
         onClose={vi.fn()}
         storeName="متجري"
@@ -179,7 +183,7 @@ describe("current interface behavior", () => {
       planKey: "starter",
       draftId: "draft-1",
       expectedDraftRevision: 1,
-    }));
+    }), "01MERCHANT");
     expect(onSubmitted).toHaveBeenCalledTimes(1);
   });
 
@@ -210,7 +214,7 @@ describe("current interface behavior", () => {
 
     const Harness = () => {
       const [draft, setDraft] = React.useState<Awaited<ReturnType<UiAdapters["provisioning"]["saveDraft"]>> | null>(null);
-      return <DomainSetupModal isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={savedDraft.storeName} businessType={savedDraft.businessType} themeStyle="elegant" config={savedDraft.config} />;
+      return <DomainSetupModal ownerId="01MERCHANT" isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={savedDraft.storeName} businessType={savedDraft.businessType} themeStyle="elegant" config={savedDraft.config} />;
     };
     renderInterface(
       <Harness />,
@@ -226,7 +230,7 @@ describe("current interface behavior", () => {
 
     await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
     expect(saveDraft).toHaveBeenCalledTimes(1);
-    expect(submit).toHaveBeenNthCalledWith(2, submit.mock.calls[0][0]);
+    expect(submit).toHaveBeenNthCalledWith(2, submit.mock.calls[0][0], "01MERCHANT");
   });
 
   it("offers an explicit server reload after a draft revision conflict", async () => {
@@ -237,7 +241,7 @@ describe("current interface behavior", () => {
     const user = userEvent.setup();
 
     renderInterface(
-      <DomainSetupModal isOpen onClose={vi.fn()} onReloadDraft={reloadDraft} storeName="متجر متعارض" businessType="تجزئة" themeStyle="elegant" config={{ storeName: "متجر متعارض" }} />,
+      <DomainSetupModal ownerId="01MERCHANT" isOpen onClose={vi.fn()} onReloadDraft={reloadDraft} storeName="متجر متعارض" businessType="تجزئة" themeStyle="elegant" config={{ storeName: "متجر متعارض" }} />,
       createFakeUiAdapters({ plans: { list: listPlans, domainAvailability: availability }, provisioning: { saveDraft } }),
     );
 
@@ -273,7 +277,7 @@ describe("current interface behavior", () => {
 
     const Harness = () => {
       const [draft, setDraft] = React.useState({ ...correction, revision: 3 });
-      return <DomainSetupModal isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={correction.storeName} businessType={correction.businessType} themeStyle="elegant" config={correction.config} />;
+      return <DomainSetupModal ownerId="01MERCHANT" isOpen onClose={vi.fn()} draft={draft} onDraftChanged={setDraft} storeName={correction.storeName} businessType={correction.businessType} themeStyle="elegant" config={correction.config} />;
     };
     renderInterface(
       <Harness />,
@@ -287,8 +291,8 @@ describe("current interface behavior", () => {
 
     await waitFor(() => expect(resubmit).toHaveBeenCalledTimes(2));
     expect(saveCorrection).toHaveBeenCalledTimes(1);
-    expect(resubmit).toHaveBeenNthCalledWith(1, correction.tenantId, correction.revision);
-    expect(resubmit).toHaveBeenNthCalledWith(2, correction.tenantId, correction.revision);
+    expect(resubmit).toHaveBeenNthCalledWith(1, correction.tenantId, correction.revision, "01MERCHANT");
+    expect(resubmit).toHaveBeenNthCalledWith(2, correction.tenantId, correction.revision, "01MERCHANT");
   });
 
   it("retains the current server-pricing headings without a screen redesign", async () => {
@@ -315,6 +319,7 @@ describe("current interface behavior", () => {
 
     renderInterface(
       <DomainSetupModal
+        ownerId="01MERCHANT"
         isOpen
         onClose={vi.fn()}
         storeName="متجري"

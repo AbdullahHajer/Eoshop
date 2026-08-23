@@ -107,6 +107,14 @@ export interface StoreDraft {
   tenantId: string | null;
   status: "draft" | "submitted" | "correction_required";
   revision: number;
+  onboardingStage: "business" | "design" | "review";
+  onboardingReadiness: {
+    business: boolean;
+    design: boolean;
+    review: boolean;
+    blockers: string[];
+  } | null;
+  nextRequiredStep: "business" | "design" | "review" | "submit" | null;
   storeName: string;
   businessType: string;
   themeStyle: "elegant" | "tech";
@@ -142,6 +150,19 @@ function mapDraft(value: unknown): StoreDraft {
     tenantId: nullableStringField(dto, "tenantId", "مسودة المتجر"),
     status: enumField(dto, "status", ["draft", "submitted", "correction_required"] as const, "مسودة المتجر"),
     revision: numberField(dto, "revision", "مسودة المتجر"),
+    onboardingStage: enumField(dto, "onboardingStage", ["business", "design", "review"] as const, "مسودة المتجر"),
+    onboardingReadiness: dto.onboardingReadiness === null ? null : (() => {
+      const readiness = record(dto.onboardingReadiness, "جاهزية مسودة المتجر");
+      return {
+        business: booleanField(readiness, "business", "جاهزية مسودة المتجر"),
+        design: booleanField(readiness, "design", "جاهزية مسودة المتجر"),
+        review: booleanField(readiness, "review", "جاهزية مسودة المتجر"),
+        blockers: stringArrayField(readiness, "blockers", "جاهزية مسودة المتجر"),
+      };
+    })(),
+    nextRequiredStep: dto.nextRequiredStep === null
+      ? null
+      : enumField(dto, "nextRequiredStep", ["business", "design", "review", "submit"] as const, "مسودة المتجر"),
     storeName: stringField(dto, "storeName", "مسودة المتجر"),
     businessType: stringField(dto, "businessType", "مسودة المتجر"),
     themeStyle: enumField(dto, "themeStyle", ["elegant", "tech"] as const, "مسودة المتجر"),
@@ -154,12 +175,25 @@ function mapDraft(value: unknown): StoreDraft {
 }
 
 interface PendingSubmission {
-  fingerprint: string;
+  version: 2;
+  ownerId: string;
+  draftId: string;
+  digest: string;
   idempotencyKey: string;
 }
 
-const pendingStorageKey = "eoshop.pending-store-submission.v1";
+const legacyPendingStorageKey = "eoshop.pending-store-submission.v1";
 let volatilePending: PendingSubmission | null = null;
+
+export function scrubLegacyPendingSubmission(): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(legacyPendingStorageKey);
+  } catch {
+    // Browser storage is optional; server state remains authoritative.
+  }
+}
+
+scrubLegacyPendingSubmission();
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -171,8 +205,21 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-function fingerprint(input: StoreSubmissionInput): string {
-  return JSON.stringify(canonicalize(input));
+async function fingerprint(input: StoreSubmissionInput): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(canonicalize(input)));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function pendingStorageKey(ownerId: string, draftId: string): string {
+  return `eoshop.pending-store-submission.v2:${ownerId}:${draftId}`;
+}
+
+function sameDigest(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return difference === 0;
 }
 
 function storage(): Storage | null {
@@ -183,25 +230,26 @@ function storage(): Storage | null {
   }
 }
 
-function acquireIdempotencyKey(input: StoreSubmissionInput): PendingSubmission {
-  const requestFingerprint = fingerprint(input);
+async function acquireIdempotencyKey(input: StoreSubmissionInput, ownerId: string, draftId: string): Promise<PendingSubmission> {
+  const requestDigest = await fingerprint(input);
   const persistentStorage = storage();
   let pending = volatilePending;
 
   if (persistentStorage) {
     try {
-      pending = JSON.parse(persistentStorage.getItem(pendingStorageKey) || "null") as PendingSubmission | null;
+      persistentStorage.removeItem(legacyPendingStorageKey);
+      pending = JSON.parse(persistentStorage.getItem(pendingStorageKey(ownerId, draftId)) || "null") as PendingSubmission | null;
     } catch {
       pending = null;
     }
   }
 
-  if (!pending || pending.fingerprint !== requestFingerprint) {
-    pending = { fingerprint: requestFingerprint, idempotencyKey: crypto.randomUUID() };
+  if (!pending || pending.version !== 2 || pending.ownerId !== ownerId || pending.draftId !== draftId || !sameDigest(pending.digest, requestDigest)) {
+    pending = { version: 2, ownerId, draftId, digest: requestDigest, idempotencyKey: crypto.randomUUID() };
   }
 
   volatilePending = pending;
-  persistentStorage?.setItem(pendingStorageKey, JSON.stringify(pending));
+  persistentStorage?.setItem(pendingStorageKey(ownerId, draftId), JSON.stringify(pending));
 
   return pending;
 }
@@ -212,18 +260,73 @@ function clearPendingSubmission(pending: PendingSubmission): void {
   if (!persistentStorage) return;
 
   try {
-    const stored = JSON.parse(persistentStorage.getItem(pendingStorageKey) || "null") as PendingSubmission | null;
-    if (stored?.idempotencyKey === pending.idempotencyKey) persistentStorage.removeItem(pendingStorageKey);
+    const key = pendingStorageKey(pending.ownerId, pending.draftId);
+    const stored = JSON.parse(persistentStorage.getItem(key) || "null") as PendingSubmission | null;
+    if (stored?.idempotencyKey === pending.idempotencyKey) persistentStorage.removeItem(key);
   } catch {
-    persistentStorage.removeItem(pendingStorageKey);
+    persistentStorage.removeItem(pendingStorageKey(pending.ownerId, pending.draftId));
   }
 }
 
+function pendingSubmissionsForOwner(ownerId: string): PendingSubmission[] {
+  const candidates: PendingSubmission[] = [];
+  if (volatilePending?.ownerId === ownerId) candidates.push(volatilePending);
+  const persistentStorage = storage();
+  if (!persistentStorage) return candidates;
+
+  const prefix = `eoshop.pending-store-submission.v2:${ownerId}:`;
+  for (let index = 0; index < persistentStorage.length; index += 1) {
+    const key = persistentStorage.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    try {
+      const pending = JSON.parse(persistentStorage.getItem(key) || "null") as PendingSubmission | null;
+      if (pending?.version === 2 && pending.ownerId === ownerId && typeof pending.draftId === "string"
+        && typeof pending.digest === "string" && typeof pending.idempotencyKey === "string"
+        && !candidates.some((candidate) => candidate.draftId === pending.draftId)) candidates.push(pending);
+    } catch {
+      persistentStorage.removeItem(key);
+    }
+  }
+  return candidates;
+}
+
 export const provisioningApi = {
+  clearPendingForOwner(ownerId: string): void {
+    if (volatilePending?.ownerId === ownerId) volatilePending = null;
+    const persistentStorage = storage();
+    if (!persistentStorage) return;
+    const prefix = `eoshop.pending-store-submission.v2:${ownerId}:`;
+    const remove: string[] = [];
+    for (let index = 0; index < persistentStorage.length; index += 1) {
+      const key = persistentStorage.key(index);
+      if (key?.startsWith(prefix) || key?.startsWith(`eoshop.pending-store-resubmission.v2:${ownerId}:`)) remove.push(key);
+    }
+    remove.forEach((key) => persistentStorage.removeItem(key));
+    persistentStorage.removeItem(legacyPendingStorageKey);
+  },
+
   async currentDraft(signal?: AbortSignal): Promise<StoreDraft | null> {
     const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft", { signal });
     const envelope = record(response, "استجابة المسودة الحالية");
     return envelope.data === null ? null : mapDraft(envelope.data);
+  },
+
+  async recoverCommittedSubmission(ownerId: string, signal?: AbortSignal): Promise<StoreSubmission | null> {
+    for (const pending of pendingSubmissionsForOwner(ownerId)) {
+      try {
+        const response = await apiClient.request<{ data: unknown }>(
+          `/api/merchant/store-drafts/${encodeURIComponent(pending.draftId)}/submission`,
+          { signal },
+        );
+        const submission = mapSubmission(record(response, "استعادة طلب المتجر").data);
+        clearPendingSubmission(pending);
+        return submission;
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 404) continue;
+        throw caught;
+      }
+    }
+    return null;
   },
 
   async correctionDraft(tenantId: string, signal?: AbortSignal): Promise<StoreDraft> {
@@ -232,11 +335,43 @@ export const provisioningApi = {
   },
 
   async saveDraft(input: StoreDraftInput): Promise<StoreDraft> {
-    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft", {
+    const businessResponse = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/business", {
       method: "PUT",
-      body: input,
+      body: {
+        expectedRevision: input.expectedRevision,
+        storeName: input.storeName,
+        businessType: input.businessType,
+      },
     });
-    return mapDraft(record(response, "استجابة حفظ المسودة").data);
+    let draft = mapDraft(record(businessResponse, "استجابة حفظ بيانات النشاط").data);
+    const designResponse = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/design", {
+      method: "PUT",
+      body: { expectedRevision: draft.revision, themeStyle: input.themeStyle, config: input.config },
+    });
+    draft = mapDraft(record(designResponse, "استجابة حفظ تصميم المسودة").data);
+    if (input.handle && input.planKey) {
+      const reviewResponse = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/review", {
+        method: "PUT",
+        body: { expectedRevision: draft.revision, handle: input.handle, planKey: input.planKey },
+      });
+      draft = mapDraft(record(reviewResponse, "استجابة حفظ مراجعة المسودة").data);
+    }
+    return draft;
+  },
+
+  async saveBusiness(input: { expectedRevision: number; storeName: string; businessType: string }, signal?: AbortSignal): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/business", { method: "PUT", body: input, signal });
+    return mapDraft(record(response, "استجابة حفظ بيانات النشاط").data);
+  },
+
+  async saveDesign(input: { expectedRevision: number; themeStyle: "elegant" | "tech"; config: Record<string, unknown> }, signal?: AbortSignal): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/design", { method: "PUT", body: input, signal });
+    return mapDraft(record(response, "استجابة حفظ تصميم المتجر").data);
+  },
+
+  async saveReview(input: { expectedRevision: number; handle: string; planKey: string }, signal?: AbortSignal): Promise<StoreDraft> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/review", { method: "PUT", body: input, signal });
+    return mapDraft(record(response, "استجابة حفظ مراجعة المتجر").data);
   },
 
   async saveCorrection(tenantId: string, input: StoreDraftInput): Promise<StoreDraft> {
@@ -256,8 +391,9 @@ export const provisioningApi = {
     return data.map(mapSubmission);
   },
 
-  async submit(input: StoreSubmissionInput): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
-    const pending = acquireIdempotencyKey(input);
+  async submit(input: StoreSubmissionInput, ownerId: string, signal?: AbortSignal): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
+    if (!input.draftId) throw new ApiError("يتطلب إرسال المتجر مسودة خادم محفوظة.", "validation", 422);
+    const pending = await acquireIdempotencyKey(input, ownerId, input.draftId);
     const response = await apiClient.request<StoreSubmissionResponse>("/api/register-store", {
       method: "POST",
       body: {
@@ -272,6 +408,7 @@ export const provisioningApi = {
       },
       headers: { "Idempotency-Key": pending.idempotencyKey },
       retrySafety: "idempotent",
+      signal,
     });
 
     clearPendingSubmission(pending);
@@ -281,8 +418,8 @@ export const provisioningApi = {
     return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار طلب المتجر") } };
   },
 
-  async resubmit(tenantId: string, expectedRevision: number): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
-    const storageKey = `eoshop.pending-store-resubmission.v1:${tenantId}`;
+  async resubmit(tenantId: string, expectedRevision: number, ownerId: string): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
+    const storageKey = `eoshop.pending-store-resubmission.v2:${ownerId}:${tenantId}`;
     let idempotencyKey: string = crypto.randomUUID();
     try {
       const pending = JSON.parse(localStorage.getItem(storageKey) || "null") as { revision?: number; key?: string } | null;
