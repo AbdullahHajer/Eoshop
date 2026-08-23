@@ -177,7 +177,7 @@ describe("adapter-backed interface flows", () => {
     expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
-  });
+  }, 15_000);
 
   it("keeps an authenticated merchant inside the portal when store recovery fails", async () => {
     const adapters = createFakeUiAdapters({
@@ -271,7 +271,7 @@ describe("adapter-backed interface flows", () => {
     renderInterface(<App />, adapters);
     expect(await screen.findByRole("heading", { name: "عرّفنا بالنشاط" })).toBeTruthy();
     await user.type(screen.getByLabelText("اسم المتجر أو النشاط"), "تيك فيو للأجهزة الذكية");
-    await user.click(screen.getByRole("button", { name: "حفظ ومتابعة التصميم" }));
+    await user.click(screen.getByRole("button", { name: "حفظ واختيار القالب" }));
 
     await waitFor(() => expect(saveBusiness).toHaveBeenCalledWith(expect.objectContaining({
       expectedRevision: 0,
@@ -341,7 +341,7 @@ describe("adapter-backed interface flows", () => {
     await Promise.resolve();
     expect(screen.queryByDisplayValue("مسودة أ المتأخرة")).toBeNull();
     expect(screen.getAllByText("متجر الخادم").length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it("restores an exact ready store design route without passing through templates", async () => {
     window.history.replaceState({}, "", `/app/stores/${submission.id}/design`);

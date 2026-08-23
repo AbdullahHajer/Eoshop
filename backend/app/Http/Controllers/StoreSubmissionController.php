@@ -28,7 +28,9 @@ class StoreSubmissionController extends Controller
             return response()->json(['message' => $exception->getMessage()], 409);
         }
 
-        return (new StoreSubmissionResource($result['tenant']))
+        return (new StoreSubmissionResource(
+            $result['tenant']->load(MerchantStoreController::relations())
+        ))
             ->additional(['meta' => ['replayed' => $result['replayed']]])
             ->response()
             ->setStatusCode($result['replayed'] ? 200 : 201);

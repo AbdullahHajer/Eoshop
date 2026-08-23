@@ -169,6 +169,9 @@ export default function MerchantPortal({
             <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500">
               <ShoppingBag className="h-4 w-4" /> متاجري
             </div>
+            <button type="button" onClick={onCreateStore} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700">
+              <Plus className="h-4 w-4" /> إنشاء متجر جديد
+            </button>
             <a href="/app/account" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-sky-700">
               <Settings2 className="h-4 w-4" /> الحساب والأمان
             </a>

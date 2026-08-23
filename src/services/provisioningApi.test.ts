@@ -87,6 +87,103 @@ describe("provisioningApi", () => {
     });
   });
 
+  it("retains the bounded recovery receipt when a successful response projection is incomplete", async () => {
+    const values = new Map<string, string>();
+    const localStorageMock = {
+      get length() { return values.size; },
+      key: vi.fn((index: number) => [...values.keys()][index] ?? null),
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+      removeItem: vi.fn((key: string) => values.delete(key)),
+      clear: vi.fn(() => values.clear()),
+    } as unknown as Storage;
+    const incomplete = {
+      data: {
+        id: "tenant-incomplete",
+        storeName: "Incomplete Store",
+        businessType: "retail",
+        verificationStatus: "pending",
+        provisioningStatus: "not_started",
+        publicationStatus: "requested",
+        reviewFeedback: null,
+        capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false },
+        internalDomain: "store-tenant-incomplete.example.test",
+        requestedDomain: "incomplete.example.test",
+        // publicDomain is intentionally omitted to reproduce the Pilot defect.
+        plan: { key: "starter", name: "Starter", activationMode: "automatic" },
+        subscriptionStatus: "active",
+        publicationBlockers: ["review_not_approved"],
+        createdAt: null,
+        activeAt: null,
+        publishedAt: null,
+      },
+      meta: { replayed: false },
+    };
+    vi.stubGlobal("localStorage", localStorageMock);
+    vi.stubGlobal("crypto", { randomUUID: () => "12121212-1212-4212-8212-121212121212", subtle: { digest: async () => new Uint8Array(32).buffer } });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "projection-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(incomplete), { status: 201 })));
+
+    await expect(provisioningApi.submit({
+      storeName: "Incomplete Store",
+      businessType: "retail",
+      themeStyle: "elegant",
+      handle: "incomplete",
+      planKey: "starter",
+      config: { marker: "incomplete" },
+      draftId: "draft-incomplete",
+      expectedDraftRevision: 3,
+    }, "owner-incomplete")).rejects.toMatchObject({ category: "unexpected" });
+
+    const recoveryKey = "eoshop.pending-store-submission.v2:owner-incomplete:draft-incomplete";
+    expect([...values.keys()]).toEqual([recoveryKey]);
+    expect(localStorageMock.removeItem).not.toHaveBeenCalledWith(recoveryKey);
+  });
+
+  it("retains the resubmission receipt when a successful response projection is incomplete", async () => {
+    const values = new Map<string, string>();
+    const localStorageMock = {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+      removeItem: vi.fn((key: string) => values.delete(key)),
+    } as unknown as Storage;
+    const incomplete = {
+      data: {
+        id: "tenant-resubmit-incomplete",
+        storeName: "Resubmit Store",
+        businessType: "retail",
+        verificationStatus: "pending",
+        provisioningStatus: "not_started",
+        publicationStatus: "requested",
+        reviewFeedback: null,
+        capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false },
+        internalDomain: null,
+        requestedDomain: "resubmit.example.test",
+        // publicDomain is intentionally omitted to keep mapping fail-closed.
+        plan: { key: "starter", name: "Starter", activationMode: "automatic" },
+        subscriptionStatus: "active",
+        publicationBlockers: ["review_not_approved"],
+        createdAt: null,
+        activeAt: null,
+        publishedAt: null,
+      },
+      meta: { replayed: false },
+    };
+    vi.stubGlobal("localStorage", localStorageMock);
+    vi.stubGlobal("crypto", { randomUUID: () => "13131313-1313-4313-8313-131313131313" });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "resubmit-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(incomplete), { status: 200 })));
+
+    await expect(provisioningApi.resubmit("tenant-resubmit-incomplete", 7, "owner-resubmit"))
+      .rejects.toMatchObject({ category: "unexpected" });
+
+    const recoveryKey = "eoshop.pending-store-resubmission.v2:owner-resubmit:tenant-resubmit-incomplete";
+    expect(values.has(recoveryKey)).toBe(true);
+    expect(localStorageMock.removeItem).not.toHaveBeenCalledWith(recoveryKey);
+  });
+
   it("saves and maps the authenticated server draft with its optimistic revision", async () => {
     const legacyConfig = {
       ...ELEGANT_PRESET,

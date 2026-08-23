@@ -17,6 +17,8 @@ use App\Models\User;
 use App\Services\RoleAssignmentService;
 use App\Services\StoreSubmissionService;
 use App\Services\TenantProvisioner;
+use App\Support\StoreOnboardingAppearance;
+use App\Support\StoreOnboardingBaseline;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -162,7 +164,7 @@ class StoreDraftLifecycleTest extends TestCase
         $owner = $this->createUser('concurrent-submit@example.test');
         $draft = $this->saveDraft($owner, 'concurrent', 'concurrent-submit', 'starter');
         $key = (string) Str::uuid();
-        $payload = $this->submissionPayload('concurrent', 'concurrent-submit', 'starter') + [
+        $payload = $this->submissionPayloadForDraft($draft) + [
             'draftId' => $draft->id,
             'expectedDraftRevision' => $draft->revision,
             'idempotencyKey' => $key,
@@ -183,7 +185,7 @@ class StoreDraftLifecycleTest extends TestCase
         $owner = $this->createUser('suspended-replay@example.test');
         $draft = $this->saveDraft($owner, 'suspended-replay', 'suspended-replay', 'starter');
         $key = (string) Str::uuid();
-        $payload = $this->submissionPayload('suspended-replay', 'suspended-replay', 'starter') + [
+        $payload = $this->submissionPayloadForDraft($draft) + [
             'draftId' => $draft->id,
             'expectedDraftRevision' => $draft->revision,
             'idempotencyKey' => $key,
@@ -438,7 +440,7 @@ class StoreDraftLifecycleTest extends TestCase
         $design = $this->putJson('/api/merchant/store-draft/design', [
             'expectedRevision' => (int) $business->json('data.revision'),
             'themeStyle' => 'elegant',
-            'config' => $this->storeConfig($label),
+            'config' => StoreOnboardingAppearance::extract($this->storeConfig($label)),
         ])->assertOk();
         $response = $this->putJson('/api/merchant/store-draft/review', [
             'expectedRevision' => (int) $design->json('data.revision'),
@@ -452,13 +454,24 @@ class StoreDraftLifecycleTest extends TestCase
     private function submitDraft(User $owner, StoreDraft $draft, string $label, ?string $idempotencyKey = null): Tenant
     {
         $this->startBrowserSessionAs($owner);
-        $payload = $this->submissionPayload($label, (string) $draft->handle, (string) $draft->plan_key) + [
+        $payload = $this->submissionPayloadForDraft($draft) + [
             'draftId' => $draft->id,
             'expectedDraftRevision' => $draft->revision,
         ];
         $response = $this->withHeader('Idempotency-Key', $idempotencyKey ?? (string) Str::uuid())
             ->postJson('/api/register-store', $payload)
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonStructure([
+                'data' => [
+                    'internalDomain',
+                    'requestedDomain',
+                    'publicDomain',
+                    'plan',
+                    'subscriptionStatus',
+                    'publicationBlockers',
+                ],
+                'meta' => ['replayed'],
+            ]);
         $tenant = Tenant::query()->findOrFail((string) $response->json('data.id'));
         $this->tenantIds[] = $tenant->id;
 
@@ -605,9 +618,22 @@ class StoreDraftLifecycleTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function storeConfig(string $label): array
+    private function submissionPayloadForDraft(StoreDraft $draft): array
     {
         return [
+            'storeName' => $draft->store_name,
+            'businessType' => $draft->business_type,
+            'themeStyle' => (string) $draft->theme_style,
+            'handle' => $draft->handle,
+            'planKey' => $draft->plan_key,
+            'config' => $draft->config,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function storeConfig(string $label): array
+    {
+        return array_replace(StoreOnboardingBaseline::make('Store '.$label), [
             'storeName' => 'Store '.$label,
             'slogan' => 'Server-owned draft',
             'logoIcon' => 'S',
@@ -615,10 +641,8 @@ class StoreDraftLifecycleTest extends TestCase
             'secondaryColor' => '#334455',
             'themeStyle' => 'elegant',
             'bannerText' => 'WP 5.5 '.$label,
-            'products' => [],
             'fontFamily' => 'Cairo',
             'phone' => '+967700000000',
-            'currency' => 'YER',
-        ];
+        ]);
     }
 }
