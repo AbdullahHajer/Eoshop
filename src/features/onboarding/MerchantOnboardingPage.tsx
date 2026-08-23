@@ -1,8 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Building2, Check, Globe2, LayoutTemplate, Loader2, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Check,
+  Globe2,
+  LayoutTemplate,
+  Loader2,
+  Palette,
+  PencilLine,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { useUiAdapters } from "../../adapters/UiAdaptersContext";
 import { isUiError, uiErrorMessage, type StoreDraft, type StorePlan, type UserProfile } from "../../adapters/uiAdapters";
-import { ELEGANT_PRESET, TECH_PRESET, type StoreConfig } from "../../types";
+import { storeOnboardingAppearance } from "../../contracts/storeOnboardingAppearance";
+import type { StoreConfig } from "../../types";
+import OnboardingStorePreview from "./OnboardingStorePreview";
+import { createTemplateConfig, createTemplatePreviewConfig, ONBOARDING_TEMPLATES, type OnboardingTemplateKey } from "./storeTemplates";
 
 type Step = "business" | "design" | "review";
 
@@ -13,6 +28,8 @@ interface MerchantOnboardingPageProps {
 }
 
 const stepPath: Record<Step, string> = { business: "/app/new", design: "/app/new/design", review: "/app/new/review" };
+const stepRank: Record<Step, number> = { business: 1, design: 2, review: 3 };
+const fontOptions = ["Cairo", "Tajawal", "Almarai", "Alexandria", "IBM Plex Sans Arabic"];
 
 export default function MerchantOnboardingPage({ user, requestedStep, onSessionExpired }: MerchantOnboardingPageProps) {
   const { provisioning, plans: planActions } = useUiAdapters();
@@ -20,8 +37,8 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
   const [draft, setDraft] = useState<StoreDraft | null>(null);
   const [storeName, setStoreName] = useState("");
   const [businessType, setBusinessType] = useState("تجزئة");
-  const [theme, setTheme] = useState<"elegant" | "tech">("elegant");
-  const [config, setConfig] = useState<StoreConfig>(ELEGANT_PRESET);
+  const [theme, setTheme] = useState<OnboardingTemplateKey>("elegant");
+  const [config, setConfig] = useState<StoreConfig>(() => createTemplateConfig(ONBOARDING_TEMPLATES[0], ""));
   const [plans, setPlans] = useState<StorePlan[]>([]);
   const [planKey, setPlanKey] = useState("starter");
   const [handle, setHandle] = useState("");
@@ -40,21 +57,39 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
     setStoreName(value.storeName);
     setBusinessType(value.businessType);
     setTheme(value.themeStyle);
-    setConfig(value.config);
+    const template = ONBOARDING_TEMPLATES.find((candidate) => candidate.key === value.themeStyle) ?? ONBOARDING_TEMPLATES[0];
+    setConfig(value.onboardingStage === "business"
+      ? createTemplateConfig(template, value.storeName, value.config)
+      : value.config);
     setHandle(value.handle ?? "");
     setPlanKey(value.planKey ?? "starter");
   };
 
+  const selectedTemplate = useMemo(
+    () => ONBOARDING_TEMPLATES.find((template) => template.key === theme) ?? ONBOARDING_TEMPLATES[0],
+    [theme],
+  );
+  const persistedConfig = useMemo(() => ({
+    ...config,
+    storeName: storeName.trim() || config.storeName,
+    themeStyle: theme,
+  }), [config, storeName, theme]);
+  const previewConfig = useMemo(
+    () => createTemplatePreviewConfig(selectedTemplate, persistedConfig),
+    [persistedConfig, selectedTemplate],
+  );
+
   const dirty = useMemo(() => {
     if (!draft) return storeName.trim() !== "";
     if (step === "business") return storeName.trim() !== draft.storeName || businessType !== draft.businessType;
-    if (step === "design") return theme !== draft.themeStyle || JSON.stringify(config) !== JSON.stringify(draft.config);
+    if (step === "design") return theme !== draft.themeStyle || JSON.stringify(persistedConfig) !== JSON.stringify(draft.config);
     return handle.trim().toLowerCase() !== (draft.handle ?? "") || planKey !== (draft.planKey ?? "starter");
-  }, [businessType, config, draft, handle, planKey, step, storeName, theme]);
+  }, [businessType, draft, handle, persistedConfig, planKey, step, storeName, theme]);
 
   const navigate = (target: Step, persisted = false) => {
     if (!persisted && dirty && !window.confirm("توجد تعديلات غير محفوظة في هذه الخطوة. هل تريد تجاهلها؟")) return;
     setStep(target);
+    setError("");
     window.history.pushState({}, "", stepPath[target]);
   };
 
@@ -101,8 +136,7 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
         const required = current.nextRequiredStep === "business" || current.nextRequiredStep === "design" || current.nextRequiredStep === "review"
           ? current.nextRequiredStep
           : requestedStep;
-        const rank: Record<Step, number> = { business: 1, design: 2, review: 3 };
-        if (rank[requestedStep] > rank[required]) {
+        if (stepRank[requestedStep] > stepRank[required]) {
           setStep(required);
           window.history.replaceState({}, "", stepPath[required]);
         }
@@ -152,11 +186,16 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
     return () => window.removeEventListener("beforeunload", guard);
   }, [dirty, saving]);
 
-  const selectTheme = (value: "elegant" | "tech") => {
+  const selectTemplate = (key: OnboardingTemplateKey) => {
     if (saving) return;
-    const preset = value === "elegant" ? ELEGANT_PRESET : TECH_PRESET;
-    setTheme(value);
-    setConfig({ ...preset, storeName: draft?.storeName || storeName, themeStyle: value });
+    const template = ONBOARDING_TEMPLATES.find((candidate) => candidate.key === key) ?? ONBOARDING_TEMPLATES[0];
+    setTheme(key);
+    setConfig((current) => createTemplateConfig(template, storeName, current));
+  };
+
+  const updateConfig = <K extends keyof StoreConfig>(key: K, value: StoreConfig[K]) => {
+    if (saving) return;
+    setConfig((current) => ({ ...current, [key]: value, storeName: storeName.trim() || current.storeName, themeStyle: theme }));
   };
 
   const saveBusiness = async (event: React.FormEvent) => {
@@ -182,7 +221,11 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
     setSaving(true);
     setError("");
     try {
-      const saved = await provisioning.saveDesign({ expectedRevision: draft.revision, themeStyle: theme, config }, controller.signal);
+      const saved = await provisioning.saveDesign({
+        expectedRevision: draft.revision,
+        themeStyle: theme,
+        config: storeOnboardingAppearance(persistedConfig),
+      }, controller.signal);
       if (sequence !== operationSequence.current) return;
       applyDraft(saved);
       navigate("review", true);
@@ -210,7 +253,7 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
       if (sequence !== operationSequence.current) return;
       applyDraft(ready);
       setPendingSubmission(true);
-      await provisioning.submit({
+      const submitted = await provisioning.submit({
         storeName: ready.storeName,
         businessType: ready.businessType,
         themeStyle: ready.themeStyle,
@@ -222,12 +265,12 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
       }, user.id, controller.signal);
       if (sequence !== operationSequence.current) return;
       setPendingSubmission(false);
-      window.location.assign("/app");
+      window.location.assign(`/app/stores/${encodeURIComponent(submitted.data.id)}/overview`);
     } catch (caught) {
       handleFailure(caught, pendingSubmission
         ? "تعذر تأكيد نتيجة الإرسال. أعد المحاولة لاستعادة العملية نفسها دون تكرار المتجر."
         : "تعذر حفظ المراجعة أو إرسال المتجر.", sequence);
-      if (!isUiError(caught, "network") && !isUiError(caught, "server")) setPendingSubmission(false);
+      if (!isUiError(caught, "network") && !isUiError(caught, "server") && !isUiError(caught, "unexpected")) setPendingSubmission(false);
     } finally {
       if (sequence === operationSequence.current) setSaving(false);
     }
@@ -240,26 +283,139 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
 
   return (
     <main dir="rtl" className="min-h-screen bg-slate-100 px-4 py-6 sm:px-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1500px]">
         <header className="mb-6 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold text-sky-300">تهيئة متجر جديد</p><h1 className="mt-1 text-2xl font-black">من بيانات النشاط إلى طلب جاهز للمراجعة</h1></div><a href="/app" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold"><ArrowRight className="h-4 w-4" />بوابة التاجر</a></div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">{(["business", "design", "review"] as Step[]).map((item, index) => <div key={item} className={`rounded-2xl border p-3 ${item === step ? "border-sky-400 bg-sky-500/20" : "border-white/10 bg-white/5"}`}><span className="text-xs text-slate-300">الخطوة {index + 1}</span><p className="mt-1 font-black">{item === "business" ? "بيانات النشاط" : item === "design" ? "اختيار التصميم" : "العنوان والباقة"}</p></div>)}</div>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div><p className="text-xs font-bold text-sky-300">تهيئة متجر جديد</p><h1 className="mt-1 text-2xl font-black">شاهد متجرك وخصصه قبل إرسال الطلب</h1></div>
+            <a href="/app" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold"><ArrowRight className="h-4 w-4" />بوابة التاجر</a>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {(["business", "design", "review"] as Step[]).map((item, index) => (
+              <div key={item} className={`rounded-2xl border p-3 ${item === step ? "border-sky-400 bg-sky-500/20" : stepRank[item] < stepRank[step] ? "border-emerald-400/40 bg-emerald-400/10" : "border-white/10 bg-white/5"}`}>
+                <span className="flex items-center gap-1 text-xs text-slate-300">{stepRank[item] < stepRank[step] && <Check className="h-3.5 w-3.5 text-emerald-300" />}الخطوة {index + 1}</span>
+                <p className="mt-1 font-black">{item === "business" ? "بيانات النشاط" : item === "design" ? "القالب والتخصيص" : "المعاينة والإرسال"}</p>
+              </div>
+            ))}
+          </div>
         </header>
 
         {error && <div role="alert" className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
 
-        {step === "business" && <form onSubmit={saveBusiness} className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><SectionTitle icon={Building2} title="عرّفنا بالنشاط" text="هذه البيانات تُحفظ الآن في مسودة الخادم، ويمكنك استكمالها لاحقًا من أي جهاز." /><label className="mt-7 block text-sm font-bold">اسم المتجر أو النشاط<input value={storeName} onChange={(event) => setStoreName(event.target.value)} required minLength={2} maxLength={255} className={inputClass} /></label><label className="mt-5 block text-sm font-bold">نوع النشاط<select value={businessType} onChange={(event) => setBusinessType(event.target.value)} className={inputClass}>{["تجزئة", "أغذية ومشروبات", "أزياء", "عطور وبخور", "إلكترونيات", "خدمات", "أخرى"].map((item) => <option key={item}>{item}</option>)}</select></label><button disabled={saving} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 py-3.5 text-sm font-black text-white disabled:opacity-50">حفظ ومتابعة التصميم<ArrowLeft className="h-4 w-4" /></button></form>}
+        {step === "business" && (
+          <form onSubmit={saveBusiness} className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <SectionTitle icon={Building2} title="عرّفنا بالنشاط" text="سنستخدم هذه البيانات لبناء مسودة متجرك. تُحفظ على الخادم ويمكنك استكمالها لاحقًا من أي جهاز." />
+            <label className="mt-7 block text-sm font-bold">اسم المتجر أو النشاط<input value={storeName} onChange={(event) => setStoreName(event.target.value)} required minLength={2} maxLength={255} className={inputClass} /></label>
+            <label className="mt-5 block text-sm font-bold">نوع النشاط<select value={businessType} onChange={(event) => setBusinessType(event.target.value)} className={inputClass}>{["تجزئة", "أغذية ومشروبات", "أزياء", "عطور وبخور", "إلكترونيات", "خدمات", "أخرى"].map((item) => <option key={item}>{item}</option>)}</select></label>
+            <div className="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-xs leading-6 text-sky-900"><Sparkles className="mb-2 h-5 w-5" />في الخطوة التالية ستختار قالبًا وتشاهد متجرًا فعليًا وتعدل هويته قبل الإرسال.</div>
+            <button disabled={saving} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 py-3.5 text-sm font-black text-white disabled:opacity-50">حفظ واختيار القالب<ArrowLeft className="h-4 w-4" /></button>
+          </form>
+        )}
 
-        {step === "design" && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><SectionTitle icon={LayoutTemplate} title="اختر نقطة بداية مناسبة" text="سنحفظ نسخة التصميم على الخادم. بعد تجهيز المتجر تستطيع تخصيص الهوية والمنتجات بالتفصيل." /><div className="mt-7 grid gap-5 md:grid-cols-2">{(["elegant", "tech"] as const).map((item) => { const preset = item === "elegant" ? ELEGANT_PRESET : TECH_PRESET; return <button type="button" key={item} onClick={() => selectTheme(item)} className={`relative overflow-hidden rounded-3xl border-2 p-5 text-right transition ${theme === item ? "border-sky-500 ring-4 ring-sky-100" : "border-slate-200 hover:border-slate-300"}`}><div className="h-32 rounded-2xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${preset.primaryColor}, ${preset.secondaryColor})` }}><p className="text-3xl">{preset.logoIcon}</p><p className="mt-3 font-black">{item === "elegant" ? "الأناقة العصرية" : "التقنية والابتكار"}</p></div>{theme === item && <span className="absolute left-8 top-8 rounded-full bg-white p-1 text-sky-600"><Check className="h-4 w-4" /></span>}<p className="mt-4 text-xs leading-6 text-slate-500">ألوان وخطوط أساسية قابلة للتعديل لاحقًا من لوحة المتجر.</p></button>; })}</div><div className="mt-7 flex flex-wrap gap-3"><button type="button" disabled={saving} onClick={() => navigate("business")} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">السابق</button><button type="button" disabled={saving} onClick={() => void saveDesign()} className="flex-1 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50">حفظ التصميم والمتابعة</button></div></section>}
+        {step === "design" && (
+          <section className="space-y-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <SectionTitle icon={LayoutTemplate} title="اختر قالبًا وشاهد النتيجة" text="القوالب نقاط بداية آمنة. التغييرات التي تجريها هنا تُحفظ داخل مسودة متجرك قبل الانتقال." />
+              <div className="mt-7 grid gap-5 lg:grid-cols-2">
+                {ONBOARDING_TEMPLATES.map((template) => <TemplateCard key={template.key} template={template} selected={theme === template.key} onSelect={() => selectTemplate(template.key)} />)}
+              </div>
+            </div>
 
-        {step === "review" && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><SectionTitle icon={Globe2} title="العنوان والباقة ثم الإرسال" text="العنوان لا يُحجز في هذه الشاشة؛ الحجز الذري يحدث عند إرسال الطلب النهائي فقط." /><div className="mt-7 grid gap-6 lg:grid-cols-2"><div><label className="block text-sm font-bold">معرّف عنوان المتجر<input disabled={pendingSubmission} value={handle} onChange={(event) => setHandle(event.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} minLength={3} maxLength={50} dir="ltr" className={`${inputClass} text-left`} /></label><p className={`mt-2 text-xs font-bold ${availability?.available ? "text-emerald-700" : "text-slate-500"}`}>{checking ? "جاري التحقق..." : availability ? availability.available ? `متاح الآن: ${availability.domain}` : "العنوان غير متاح حاليًا." : "3–50 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة داخلية."}</p></div><div><label className="block text-sm font-bold">الباقة<select disabled={pendingSubmission} value={planKey} onChange={(event) => setPlanKey(event.target.value)} className={inputClass}>{plans.map((plan) => <option key={plan.key} value={plan.key}>{plan.name}</option>)}</select></label>{selectedPlan && <p className="mt-2 text-xs leading-6 text-slate-500">{selectedPlan.maxProducts === null ? "منتجات غير محدودة" : `حتى ${selectedPlan.maxProducts} منتجات`} — {selectedPlan.activationMode === "automatic" ? "تفعيل تلقائي بعد الموافقة" : "يتطلب تفعيل الإدارة"}</p>}</div></div><div className="mt-7 flex gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><ShieldCheck className="h-5 w-5 shrink-0" /><p>الإرسال ينشئ طلب مراجعة فقط. لا يصبح المتجر عامًا إلا بعد الموافقة والتجهيز وتفعيل الاشتراك والنشر.</p></div>{pendingSubmission && <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-900">نتيجة المحاولة السابقة غير مؤكدة. الضغط مرة أخرى يستعيد العملية نفسها بمفتاح idempotency، دون حفظ المسودة مرة أخرى.</p>}<div className="mt-7 flex flex-wrap gap-3"><button type="button" disabled={saving || pendingSubmission} onClick={() => navigate("design")} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">السابق</button><button type="button" disabled={saving || (!pendingSubmission && !availability?.available)} onClick={() => void submit()} className="flex-1 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50">{saving ? "جاري الحفظ والإرسال..." : pendingSubmission ? "استعادة نتيجة الإرسال" : "حفظ المراجعة وإرسال الطلب"}</button></div></section>}
+            <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
+              <aside className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-5">
+                <SectionTitle icon={Palette} title="خصص هوية متجرك" text="غيّر العناصر الأساسية وشاهد النتيجة فورًا." compact />
+                <label className="block text-sm font-bold">الشعار النصي أو الرمز<input value={config.logoIcon} onChange={(event) => updateConfig("logoIcon", event.target.value.slice(0, 8))} maxLength={8} className={inputClass} /></label>
+                <label className="block text-sm font-bold">العبارة التعريفية<input value={config.slogan} onChange={(event) => updateConfig("slogan", event.target.value)} maxLength={160} className={inputClass} /></label>
+                <label className="block text-sm font-bold">شريط الإعلان<input value={config.bannerText} onChange={(event) => updateConfig("bannerText", event.target.value)} maxLength={180} className={inputClass} /></label>
+                <div className="grid grid-cols-2 gap-3">
+                  <ColorField label="اللون الرئيسي" value={config.primaryColor} onChange={(value) => updateConfig("primaryColor", value)} />
+                  <ColorField label="اللون المساند" value={config.secondaryColor} onChange={(value) => updateConfig("secondaryColor", value)} />
+                </div>
+                <label className="block text-sm font-bold">الخط<select value={config.fontFamily} onChange={(event) => updateConfig("fontFamily", event.target.value)} className={inputClass}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select></label>
+                <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-sm font-bold"><span>إظهار واجهة ترحيبية كبيرة</span><input type="checkbox" checked={config.showHeroBanner === true} onChange={(event) => updateConfig("showHeroBanner", event.target.checked)} className="h-5 w-5 accent-sky-600" /></label>
+                {config.showHeroBanner && <label className="block text-sm font-bold">عنوان الواجهة الترحيبية<input value={config.heroBannerTitle ?? ""} onChange={(event) => updateConfig("heroBannerTitle", event.target.value)} maxLength={180} className={inputClass} /></label>}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">إضافة المنتجات ورفع ملفات الشعار وإعداد الدفع تتم بعد تجهيز المتجر، حتى تبقى البيانات مرتبطة بقاعدة متجر جاهزة.</div>
+              </aside>
+              <React.Fragment key={`design-${selectedTemplate.key}`}>
+                <OnboardingStorePreview config={previewConfig} />
+              </React.Fragment>
+            </div>
+
+            <div className="flex flex-wrap gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <button type="button" disabled={saving} onClick={() => navigate("business")} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">السابق</button>
+              <button type="button" disabled={saving} onClick={() => void saveDesign()} className="flex-1 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50">{saving ? "جاري حفظ التصميم..." : "حفظ التصميم والانتقال للمعاينة النهائية"}</button>
+            </div>
+          </section>
+        )}
+
+        {step === "review" && (
+          <section className="space-y-6">
+            <div className="grid items-start gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+              <div className="space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <SectionTitle icon={Globe2} title="راجع الطلب قبل الإرسال" text="تأكد من الهوية والعنوان والباقة. لن يصبح المتجر عامًا بمجرد الإرسال." compact />
+                  <div className="mt-6 space-y-3">
+                    <SummaryRow label="اسم المتجر" value={storeName} onEdit={() => navigate("business")} />
+                    <SummaryRow label="نوع النشاط" value={businessType} onEdit={() => navigate("business")} />
+                    <SummaryRow label="القالب" value={selectedTemplate.name} onEdit={() => navigate("design")} />
+                    <SummaryRow label="الخط" value={config.fontFamily} onEdit={() => navigate("design")} />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h2 className="text-lg font-black">العنوان والباقة</h2>
+                  <label className="mt-5 block text-sm font-bold">معرّف عنوان المتجر<input disabled={pendingSubmission} value={handle} onChange={(event) => setHandle(event.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} minLength={3} maxLength={50} dir="ltr" className={`${inputClass} text-left`} /></label>
+                  <p className={`mt-2 text-xs font-bold ${availability?.available ? "text-emerald-700" : availability ? "text-rose-700" : "text-slate-500"}`}>{checking ? "جاري التحقق..." : availability ? availability.available ? `متاح الآن: ${availability.domain}` : "العنوان مستخدم؛ جرّب اسمًا مختلفًا." : "3–50 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة داخلية."}</p>
+                  <label className="mt-5 block text-sm font-bold">الباقة<select disabled={pendingSubmission} value={planKey} onChange={(event) => setPlanKey(event.target.value)} className={inputClass}>{plans.map((plan) => <option key={plan.key} value={plan.key}>{plan.name}</option>)}</select></label>
+                  {selectedPlan && <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-600"><p className="font-black text-slate-900">{selectedPlan.name}</p><p>{selectedPlan.maxProducts === null ? "منتجات غير محدودة" : `حتى ${selectedPlan.maxProducts} منتجات`} — {selectedPlan.activationMode === "automatic" ? "تفعيل تلقائي بعد الموافقة" : "يتطلب تفعيل الإدارة"}</p>{selectedPlan.features.length > 0 && <ul className="mt-2 list-inside list-disc">{selectedPlan.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}</div>}
+                </div>
+
+                <div className="flex gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><ShieldCheck className="h-5 w-5 shrink-0" /><p>الإرسال ينشئ طلب مراجعة فقط. بعد الموافقة يبدأ تجهيز قاعدة المتجر، ثم يظهر لك إجراء النشر والرابط من بوابة التاجر.</p></div>
+                {pendingSubmission && <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-900">نتيجة المحاولة السابقة غير مؤكدة. الضغط مرة أخرى يستعيد العملية نفسها دون إنشاء متجر مكرر.</p>}
+              </div>
+              <React.Fragment key={`review-${selectedTemplate.key}`}>
+                <OnboardingStorePreview config={previewConfig} compact />
+              </React.Fragment>
+            </div>
+
+            <div className="flex flex-wrap gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <button type="button" disabled={saving || pendingSubmission} onClick={() => navigate("design")} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">السابق</button>
+              <button type="button" disabled={saving || (!pendingSubmission && !availability?.available)} onClick={() => void submit()} className="flex-1 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50">{saving ? "جاري الحفظ والإرسال..." : pendingSubmission ? "استعادة نتيجة الإرسال" : "تأكيد التصميم وإرسال طلب المراجعة"}</button>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
 }
 
-function SectionTitle({ icon: Icon, title, text }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string }) {
-  return <div className="flex items-start gap-4"><span className="rounded-2xl bg-sky-100 p-3 text-sky-700"><Icon className="h-6 w-6" /></span><div><h2 className="text-xl font-black text-slate-950">{title}</h2><p className="mt-1 text-sm leading-7 text-slate-500">{text}</p></div></div>;
+function TemplateCard({ template, selected, onSelect }: { key?: React.Key; template: (typeof ONBOARDING_TEMPLATES)[number]; selected: boolean; onSelect: () => void }) {
+  return (
+    <button type="button" onClick={onSelect} aria-pressed={selected} className={`overflow-hidden rounded-3xl border-2 text-right transition ${selected ? "border-sky-500 ring-4 ring-sky-100" : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"}`}>
+      <div className="p-4" style={{ backgroundColor: template.appearance.bgColor }}>
+        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: template.appearance.borderColor }}>
+          <div className="flex items-center justify-between px-3 py-2" style={{ backgroundColor: template.appearance.secondaryColor, color: "white" }}><span className="text-lg">{template.appearance.logoIcon}</span><span className="text-[9px] font-black">{template.name}</span><span className="h-1.5 w-8 rounded-full bg-white/40" /></div>
+          <div className="m-2 rounded-xl p-3 text-white" style={{ background: `linear-gradient(135deg, ${template.appearance.primaryColor}, ${template.appearance.secondaryColor})` }}><p className="text-xs font-black">{template.appearance.heroBannerTitle || template.appearance.slogan}</p><div className="mt-2 h-1.5 w-20 rounded-full bg-white/50" /></div>
+          <div className="grid grid-cols-3 gap-2 p-2">{template.previewProducts.map((color) => <span key={color} className="h-12 rounded-lg" style={{ backgroundColor: color }} />)}</div>
+        </div>
+      </div>
+      <div className="flex items-start justify-between gap-3 p-5">
+        <div><div className="flex items-center gap-2"><h3 className="font-black">{template.name}</h3><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{template.category}</span></div><p className="mt-2 text-xs leading-6 text-slate-500">{template.description}</p><p className="mt-2 text-[11px] font-bold text-sky-700">مناسب لـ: {template.bestFor}</p></div>
+        {selected && <span className="rounded-full bg-sky-600 p-1.5 text-white"><Check className="h-4 w-4" /></span>}
+      </div>
+    </button>
+  );
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="block text-xs font-bold">{label}<span className="mt-2 flex items-center gap-2 rounded-2xl border border-slate-200 p-2"><input type="color" value={value} onChange={(event) => onChange(event.target.value.toUpperCase())} className="h-9 w-12 cursor-pointer rounded-lg border-0 bg-transparent" /><span dir="ltr" className="text-[11px] text-slate-500">{value}</span></span></label>;
+}
+
+function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
+  return <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3"><div><p className="text-[10px] font-bold text-slate-500">{label}</p><p className="mt-1 text-sm font-black">{value || "—"}</p></div><button type="button" onClick={onEdit} className="rounded-xl p-2 text-sky-700 hover:bg-sky-100" aria-label={`تعديل ${label}`}><PencilLine className="h-4 w-4" /></button></div>;
+}
+
+function SectionTitle({ icon: Icon, title, text, compact = false }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string; compact?: boolean }) {
+  return <div className="flex items-start gap-4"><span className="rounded-2xl bg-sky-100 p-3 text-sky-700"><Icon className="h-6 w-6" /></span><div><h2 className={`${compact ? "text-lg" : "text-xl"} font-black text-slate-950`}>{title}</h2><p className="mt-1 text-sm leading-7 text-slate-500">{text}</p></div></div>;
 }
 
 function LoadingScreen() {

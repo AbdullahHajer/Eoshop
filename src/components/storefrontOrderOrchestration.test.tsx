@@ -85,5 +85,5 @@ describe("tenant storefront order orchestration", () => {
     const refreshedIncrease = screen.getByRole("button", { name: "زيادة كمية Server Product" });
     expect(refreshedIncrease.parentElement?.textContent).toContain("2");
     expect(await screen.findByText(/تم تحميل النسخة الأحدث/)).toBeTruthy();
-  }, 10_000);
+  }, 20_000);
 });

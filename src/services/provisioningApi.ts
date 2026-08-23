@@ -1,6 +1,7 @@
 import { apiClient, ApiError } from "./apiClient";
 import { booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
 import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
+import { storeOnboardingAppearance, type StoreOnboardingAppearance } from "../contracts/storeOnboardingAppearance";
 import type { StoreConfig } from "../types";
 
 export interface StoreSubmission {
@@ -346,7 +347,11 @@ export const provisioningApi = {
     let draft = mapDraft(record(businessResponse, "استجابة حفظ بيانات النشاط").data);
     const designResponse = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/design", {
       method: "PUT",
-      body: { expectedRevision: draft.revision, themeStyle: input.themeStyle, config: input.config },
+      body: {
+        expectedRevision: draft.revision,
+        themeStyle: input.themeStyle,
+        config: storeOnboardingAppearance(input.config as unknown as StoreConfig),
+      },
     });
     draft = mapDraft(record(designResponse, "استجابة حفظ تصميم المسودة").data);
     if (input.handle && input.planKey) {
@@ -364,7 +369,7 @@ export const provisioningApi = {
     return mapDraft(record(response, "استجابة حفظ بيانات النشاط").data);
   },
 
-  async saveDesign(input: { expectedRevision: number; themeStyle: "elegant" | "tech"; config: Record<string, unknown> }, signal?: AbortSignal): Promise<StoreDraft> {
+  async saveDesign(input: { expectedRevision: number; themeStyle: "elegant" | "tech"; config: StoreOnboardingAppearance }, signal?: AbortSignal): Promise<StoreDraft> {
     const response = await apiClient.request<{ data: unknown }>("/api/merchant/store-draft/design", { method: "PUT", body: input, signal });
     return mapDraft(record(response, "استجابة حفظ تصميم المتجر").data);
   },
@@ -411,11 +416,19 @@ export const provisioningApi = {
       signal,
     });
 
-    clearPendingSubmission(pending);
-
     const envelope = record(response, "استجابة طلب المتجر");
     const meta = record(envelope.meta, "بيانات تكرار طلب المتجر");
-    return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار طلب المتجر") } };
+    const result = {
+      data: mapSubmission(envelope.data),
+      meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار طلب المتجر") },
+    };
+
+    // A 2xx response is authoritative only after its complete resource
+    // projection is mapped. Keeping the bounded receipt on a malformed or
+    // truncated response lets the same owner recover the committed operation.
+    clearPendingSubmission(pending);
+
+    return result;
   },
 
   async resubmit(tenantId: string, expectedRevision: number, ownerId: string): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
@@ -434,10 +447,14 @@ export const provisioningApi = {
       headers: { "Idempotency-Key": idempotencyKey },
       retrySafety: "idempotent",
     });
-    try { localStorage.removeItem(storageKey); } catch { /* optional recovery */ }
     const envelope = record(response, "استجابة إعادة إرسال المتجر");
     const meta = record(envelope.meta, "بيانات تكرار إعادة الإرسال");
-    return { data: mapSubmission(envelope.data), meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار إعادة الإرسال") } };
+    const result = {
+      data: mapSubmission(envelope.data),
+      meta: { replayed: booleanField(meta, "replayed", "بيانات تكرار إعادة الإرسال") },
+    };
+    try { localStorage.removeItem(storageKey); } catch { /* optional recovery */ }
+    return result;
   },
 
   async publish(tenantId: string): Promise<StoreSubmission> {

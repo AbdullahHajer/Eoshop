@@ -5,6 +5,7 @@ namespace Tests\Integration;
 use App\Enums\UserStatus;
 use App\Models\Plan;
 use App\Models\User;
+use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Database\QueryException;
@@ -122,7 +123,7 @@ class AccountOnboardingTest extends TestCase
         $this->putJson('/api/merchant/store-draft/design', [
             'expectedRevision' => 1,
             'themeStyle' => 'elegant',
-            'config' => StoreOnboardingBaseline::make('متجر غير محفوظ'),
+            'config' => StoreOnboardingAppearance::extract(StoreOnboardingBaseline::make('متجر غير محفوظ')),
         ])->assertUnprocessable()->assertJsonPath('code', 'onboarding_prerequisite_missing');
 
         $business = $this->putJson('/api/merchant/store-draft/business', [
@@ -144,10 +145,26 @@ class AccountOnboardingTest extends TestCase
             ->where('action', 'merchant.store_onboarding.saved')->count());
 
         $config = (array) $business->json('data.config');
+        $this->putJson('/api/merchant/store-draft/design', [
+            'expectedRevision' => 1,
+            'themeStyle' => 'tech',
+            'config' => StoreOnboardingAppearance::extract($config) + [
+                'products' => [[
+                    'name' => 'منتج لا يجوز حفظه من التهيئة',
+                    'price' => 1,
+                ]],
+            ],
+        ])->assertUnprocessable();
+        $this->assertSame(1, (int) $business->json('data.revision'));
+        $storedConfig = json_decode((string) DB::table('store_drafts')
+            ->where('owner_user_id', $owner->getKey())
+            ->value('config'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame([], $storedConfig['products'] ?? null);
+
         $design = $this->putJson('/api/merchant/store-draft/design', [
             'expectedRevision' => 1,
             'themeStyle' => 'tech',
-            'config' => $config,
+            'config' => StoreOnboardingAppearance::extract($config),
         ])->assertOk()
             ->assertJsonPath('data.revision', 2)
             ->assertJsonPath('data.onboardingStage', 'design')

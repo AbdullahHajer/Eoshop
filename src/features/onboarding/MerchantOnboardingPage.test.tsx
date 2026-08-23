@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
 import { createFakeUiAdapters } from "../../adapters/testing/fakeUiAdapters";
 import type { StoreDraft, UserProfile } from "../../adapters/uiAdapters";
-import { ELEGANT_PRESET } from "../../types";
 import MerchantOnboardingPage from "./MerchantOnboardingPage";
+import { createTemplateConfig, ONBOARDING_TEMPLATES } from "./storeTemplates";
 import { ApiError } from "../../services/apiClient";
 
 const user: UserProfile = {
@@ -37,7 +37,7 @@ const businessDraft: StoreDraft = {
   themeStyle: "elegant",
   handle: null,
   planKey: null,
-  config: { ...ELEGANT_PRESET, storeName: "Guided Store" },
+  config: createTemplateConfig(ONBOARDING_TEMPLATES[0], "Guided Store"),
   savedAt: null,
   submittedAt: null,
 };
@@ -78,13 +78,43 @@ describe("MerchantOnboardingPage", () => {
 
     render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="review" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
 
-    expect(await screen.findByRole("heading", { name: "اختر نقطة بداية مناسبة" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "اختر قالبًا وشاهد النتيجة" })).toBeTruthy();
     expect(window.location.pathname).toBe("/app/new/design");
-    await userEvent.click(screen.getByRole("button", { name: "حفظ التصميم والمتابعة" }));
-    await waitFor(() => expect(saveDesign).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 1 }), expect.any(AbortSignal)));
-    expect(await screen.findByRole("heading", { name: "العنوان والباقة ثم الإرسال" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /التقنية والابتكار/ }));
+    const slogan = screen.getByRole("textbox", { name: "العبارة التعريفية" });
+    await userEvent.clear(slogan);
+    await userEvent.type(slogan, "هوية تقنية مخصصة قبل الإرسال");
+    await userEvent.click(screen.getByRole("button", { name: "معاينة الجوال" }));
+    await userEvent.click(screen.getByRole("button", { name: "حفظ التصميم والانتقال للمعاينة النهائية" }));
+    await waitFor(() => expect(saveDesign).toHaveBeenCalledWith(expect.objectContaining({
+      expectedRevision: 1,
+      themeStyle: "tech",
+      config: expect.objectContaining({ slogan: "هوية تقنية مخصصة قبل الإرسال" }),
+    }), expect.any(AbortSignal)));
+    expect(saveDesign.mock.calls[0][0].config).not.toHaveProperty("products");
+    expect(saveDesign.mock.calls[0][0].config).not.toHaveProperty("currency");
+    expect(await screen.findByRole("heading", { name: "راجع الطلب قبل الإرسال" })).toBeTruthy();
     expect(window.location.pathname).toBe("/app/new/review");
-  });
+  }, 30_000);
+
+  it("keeps sample products preview-only and resets preview interactions when the template changes", async () => {
+    window.history.replaceState({}, "", "/app/new/design");
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(businessDraft) },
+      plans: { list: vi.fn().mockResolvedValue([starter]) },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="design" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+
+    expect(await screen.findByText("عطر ليالي صنعاء")).toBeTruthy();
+    await userEvent.click(screen.getAllByTitle("أضف للسلة")[0]);
+    expect(screen.getAllByText("عطر ليالي صنعاء").length).toBeGreaterThan(1);
+
+    await userEvent.click(screen.getByRole("button", { name: /التقنية والابتكار/ }));
+
+    expect((await screen.findAllByText("سماعة لاسلكية")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("عطر ليالي صنعاء")).toBeNull();
+  }, 30_000);
 
   it("starts a new draft even when the owner already has stores instead of imposing a UI-only one-store limit", async () => {
     window.history.replaceState({}, "", "/app/new");
@@ -119,8 +149,8 @@ describe("MerchantOnboardingPage", () => {
       plans: { list: vi.fn().mockResolvedValue([starter]) },
     });
     render(<UiAdaptersProvider adapters={saveAdapters}><MerchantOnboardingPage user={user} requestedStep="design" onSessionExpired={saveExpired} /></UiAdaptersProvider>);
-    await screen.findByRole("heading", { name: "اختر نقطة بداية مناسبة" });
-    await userEvent.click(screen.getByRole("button", { name: "حفظ التصميم والمتابعة" }));
+    await screen.findByRole("heading", { name: "اختر قالبًا وشاهد النتيجة" });
+    await userEvent.click(screen.getByRole("button", { name: "حفظ التصميم والانتقال للمعاينة النهائية" }));
     await waitFor(() => expect(saveExpired).toHaveBeenCalledWith("/app/new/design"));
   });
 

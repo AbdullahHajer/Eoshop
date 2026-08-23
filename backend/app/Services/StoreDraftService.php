@@ -14,6 +14,7 @@ use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PublicStoreHandle;
+use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -131,9 +132,12 @@ class StoreDraftService
                 }
                 $this->assertExpectedRevision($draft, (int) $input['expectedRevision']);
 
-                $config = $input['config'];
-                $config['storeName'] = (string) $draft->getAttribute('store_name');
-                $config['themeStyle'] = $input['themeStyle'];
+                $config = StoreOnboardingAppearance::merge(
+                    (array) $draft->getAttribute('config'),
+                    (string) $draft->getAttribute('store_name'),
+                    $input['themeStyle'],
+                    $input['config'],
+                );
                 $validator = StoreWorkspaceContract::validator($config, null);
                 if ($validator->fails()) {
                     throw ValidationException::withMessages($validator->errors()->toArray());
