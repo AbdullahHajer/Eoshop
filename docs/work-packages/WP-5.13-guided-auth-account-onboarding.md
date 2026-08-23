@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.13 |
-| Status | Implementation complete; delivery in progress |
+| Status | Complete and merged |
 | Started | 2026-08-23 |
 | Branch | `codex/wp-5.13-guided-onboarding-profile` |
 | Base | Protected `main` at `0853669f` |
@@ -99,8 +99,8 @@ Replace the remaining modal/local-only entry journey with reload-safe authentica
 - [x] Record exact immutable verification evidence and retained debt.
 - [x] Obtain final independent read-only approval.
 - [x] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass required CI and merge.
-- [ ] Record PR, final head, merge commit and protected-main CI before marking complete.
+- [x] Push, open PR, pass required CI and merge.
+- [x] Record PR, final head, merge commit and protected-main CI before marking complete.
 
 ## Acceptance criteria
 
