@@ -96,9 +96,10 @@ Replace the remaining modal/local-only entry journey with reload-safe authentica
 
 ### T5 — Evidence and delivery
 
-- [ ] Record exact immutable verification evidence and retained debt.
+- [x] Record exact immutable verification evidence and retained debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately, push, open PR, pass required CI and merge.
+- [x] Commit implementation and evidence separately.
+- [ ] Push, open PR, pass required CI and merge.
 - [ ] Record PR, final head, merge commit and protected-main CI before marking complete.
 
 ## Acceptance criteria
