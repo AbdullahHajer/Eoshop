@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.13 — Guided authentication, merchant account and onboarding |
-| Status | Implementation verified; delivery in progress |
+| Status | Complete and merged |
 | Verified | 2026-08-23 |
 | Branch | `codex/wp-5.13-guided-onboarding-profile` |
 | Base | `0853669f` |
@@ -73,6 +73,8 @@
 ## Delivery status
 
 - Implementation is recorded separately in `093f43422468fbc4f7a054d843d66c7c1aabc5fc`.
-- Evidence commit: pending.
-- Pull request and protected CI: pending.
-- Merge and protected-main verification: pending.
+- Evidence is recorded separately in `66589e93459b5b348d1cd2871872b1a83698786f`.
+- Pull request [#50](https://github.com/sas-prog1/Eoshop/pull/50) was merged from final head `66589e93459b5b348d1cd2871872b1a83698786f`.
+- Pull-request CI run [32645561584](https://github.com/sas-prog1/Eoshop/actions/runs/32645561584) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `a3d8d742fe446d95981e6d6d474ef05a40dd713d`.
+- Protected-main CI run [32645892017](https://github.com/sas-prog1/Eoshop/actions/runs/32645892017) passed the same four required jobs after merge.
