@@ -67,7 +67,7 @@ Turn the secure three-stage onboarding foundation into a merchant-friendly visua
 
 - [x] Record immutable evidence and retained debt.
 - [x] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately.
+- [x] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
