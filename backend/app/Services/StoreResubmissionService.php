@@ -21,6 +21,7 @@ use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Support\CanonicalPayload;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -92,8 +93,10 @@ class StoreResubmissionService
                     throw StoreDraftConflict::revision();
                 }
 
+                $centralDraftConfig = StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config'));
+                $provisioningConfig = StorefrontSectionLayout::forProvisioning($centralDraftConfig);
                 $workspace = StoreWorkspaceContract::validator(
-                    $draft->getAttribute('config'),
+                    $provisioningConfig,
                     $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
                 );
                 if ($workspace->fails()) {
@@ -121,7 +124,7 @@ class StoreResubmissionService
                         'handle' => $nextReservation->getAttribute('handle'),
                         'planKey' => $plan->getKey(),
                         'themeStyle' => $draft->getAttribute('theme_style'),
-                        'config' => $draft->getAttribute('config'),
+                        'config' => $provisioningConfig,
                         'owner' => [
                             'id' => $lockedActor->getKey(),
                             'name' => $lockedActor->getAttribute('name'),
@@ -142,6 +145,7 @@ class StoreResubmissionService
                 $resultRevision = $expectedRevision + 1;
                 $draft->forceFill([
                     'status' => StoreDraftStatus::Submitted,
+                    'config' => $centralDraftConfig,
                     'revision' => $resultRevision,
                     'saved_at' => now(),
                     'submitted_at' => now(),

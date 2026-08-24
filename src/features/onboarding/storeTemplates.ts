@@ -97,7 +97,7 @@ export const ONBOARDING_TEMPLATES: OnboardingTemplate[] = [
       cardBgColor: "#FFFFFF",
       borderColor: "#E2E8F0",
       fontFamily: "Tajawal",
-      bannerText: "تقنية موثوقة وتجربة شراء واضحة",
+      bannerText: "واجهة تقنية وتجربة شراء واضحة",
       showHeroBanner: true,
       heroBannerTitle: "التقنية التي تناسب يومك",
       heroBannerSubtitle: "اعرض المواصفات والمزايا بأسلوب مباشر وحديث",

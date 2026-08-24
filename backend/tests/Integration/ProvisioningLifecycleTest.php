@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\RoleAssignmentService;
 use App\Services\TenantProvisioner;
 use App\Services\TenantProvisioningExecutor;
+use App\Support\StorefrontSectionLayout;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -270,6 +271,30 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(ProvisioningState::Retrying, $run->refresh()->status);
         $this->assertSame(ProvisioningState::Retrying->value, $tenant->refresh()->provisioning_status);
         $this->assertSame(0, $tenant->run(static fn (): int => DB::table('store_configs')->count()));
+    }
+
+    public function test_worker_ignores_central_layout_claims_and_initializes_the_server_default(): void
+    {
+        [$tenant] = $this->submitAndApprove('central-layout-ignored');
+        $run = ProvisioningRun::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $this->schemas[] = (string) $run->schema_name;
+        $submission = StoreSubmission::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $payload = $submission->payload_snapshot;
+        $payload['config']['homeSections'] = [
+            ['id' => 'about', 'visible' => true],
+            ['id' => 'featured_products', 'visible' => false],
+            ['id' => 'categories', 'visible' => false],
+            ['id' => 'trust', 'visible' => false],
+            ['id' => 'hero', 'visible' => false],
+        ];
+        $submission->forceFill(['payload_snapshot' => $payload])->save();
+
+        app(TenantProvisioner::class)->provision((string) $run->id, 1, 3);
+
+        $tenant->run(function (): void {
+            $stored = json_decode((string) DB::table('store_configs')->where('is_current', true)->value('config_json'), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame(StorefrontSectionLayout::defaults(), $stored['homeSections']);
+        });
     }
 
     public function test_worker_rejects_malformed_media_in_a_legacy_queued_submission(): void

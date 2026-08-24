@@ -6,6 +6,7 @@ use App\Exceptions\InventoryConflict;
 use App\Exceptions\ProductCatalogConflict;
 use App\Exceptions\StoreAssetConflict;
 use App\Exceptions\StoreWorkspaceConflict;
+use App\Exceptions\StoreWorkspaceValidation;
 use App\Http\Requests\UpdateStoreWorkspaceRequest;
 use App\Models\Tenant;
 use App\Models\User;
@@ -54,6 +55,11 @@ class MerchantWorkspaceController extends Controller
             );
 
             return response()->json(['data' => $workspace]);
+        } catch (StoreWorkspaceValidation $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $exception->errorCode,
+            ], 422);
         } catch (StoreWorkspaceConflict|StoreAssetConflict|ProductCatalogConflict|InventoryConflict $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),

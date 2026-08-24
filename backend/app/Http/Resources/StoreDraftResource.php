@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\StoreOnboardingStage;
 use App\Models\StoreDraft;
 use App\Services\StoreOnboardingReadiness;
+use App\Support\StorefrontSectionLayout;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -38,7 +39,7 @@ class StoreDraftResource extends JsonResource
             'themeStyle' => $this->getAttribute('theme_style'),
             'handle' => $this->getAttribute('handle'),
             'planKey' => $this->getAttribute('plan_key'),
-            'config' => $this->getAttribute('config'),
+            'config' => StorefrontSectionLayout::withoutLayout((array) $this->getAttribute('config')),
             'savedAt' => $savedAt instanceof CarbonInterface ? $savedAt->toIso8601String() : null,
             'submittedAt' => $submittedAt instanceof CarbonInterface ? $submittedAt->toIso8601String() : null,
         ];

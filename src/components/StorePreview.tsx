@@ -2,14 +2,15 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   ShoppingBag, Phone, ChevronLeft, ChevronRight, Search, Plus, Minus, X, Check, ArrowRight,
-  Mail, MapPin, Clock, MessageSquare, Send, Sparkles, Heart, ShieldCheck, Truck, CreditCard,
-  Instagram, Twitter, Video, Camera, Share2, Cpu, Zap, Activity, Shield, Terminal, Wifi, Box,
+  Mail, MapPin, Clock, MessageSquare, Send, Sparkles, Heart, Truck, CreditCard,
+  Instagram, Twitter, Video, Camera, Share2, Cpu, Zap, Box,
   Home, Info, Wallet, Copy, FileText, Printer, CheckCircle2, Building, QrCode, Tag, ExternalLink, Lock,
-  Headphones
 } from "lucide-react";
 import { StoreConfig, Product } from "../types";
 import type { CreateOrderInput, OrderReceipt } from "../adapters/uiAdapters";
 import ProductArt from "./ProductArt";
+import StorefrontHome from "./StorefrontHome";
+import StorefrontProductDetail from "./StorefrontProductDetail";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 
@@ -149,16 +150,19 @@ export default function StorePreview({
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const publishedProducts = config.products.filter((product) => product.status !== "archived" && product.status !== "draft");
+  const detailProduct = publishedProducts.find((product) => product.id === selectedProduct?.id) ?? publishedProducts[0] ?? null;
+
   // Categories list
   const categories = ["الكل"];
-  config.products.forEach((p) => {
+  publishedProducts.forEach((p) => {
     if (p.category && !categories.includes(p.category)) {
       categories.push(p.category);
     }
   });
 
   // Filter products by category AND search query
-  const displayedProducts = config.products.filter((p) => {
+  const displayedProducts = publishedProducts.filter((p) => {
     const matchesCategory = selectedCategory === "الكل" || p.category === selectedCategory;
     const matchesSearch = searchQuery.trim() === "" || 
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -189,16 +193,9 @@ export default function StorePreview({
         >
           {!isElegant ? (
             <div className="max-w-7xl mx-auto w-full flex items-center justify-between text-[11px] leading-normal">
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="bg-sky-500/20 text-sky-300 border border-sky-400/30 px-2.5 py-0.5 rounded-full font-mono text-[10px] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span>تِك فيو V2.4 ⚡</span>
-                </span>
-                <span className="text-slate-400">|</span>
-                <span className="text-slate-300 flex items-center gap-1 font-bold">
-                  <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-                  <span>ضمان رسمي 24 شهراً معتمد</span>
-                </span>
+              <div className="hidden sm:flex items-center gap-2 text-slate-300">
+                <ShoppingBag className="h-3.5 w-3.5 text-sky-400" />
+                <span>{publishedProducts.length} منتج منشور</span>
               </div>
               <motion.p
                 animate={{ opacity: [0.85, 1, 0.85] }}
@@ -210,7 +207,7 @@ export default function StorePreview({
               {canonicalPhone && <div className="hidden lg:flex items-center gap-3 text-slate-300">
                 <a href={`tel:${canonicalPhone}`} className="hover:text-sky-300 transition flex items-center gap-1">
                   <Phone className="w-3 h-3 text-sky-400" />
-                  <span>دعم العملاء المباشر</span>
+                  <span>اتصال هاتفي متاح</span>
                 </a>
               </div>}
             </div>
@@ -273,7 +270,7 @@ export default function StorePreview({
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-500 font-extrabold truncate max-w-[180px] md:max-w-xs">
-                    {config.slogan || "أحدث ابتكارات التكنولوجيا والملحقات"}
+                    {config.slogan || `مرحباً بكم في ${config.storeName}`}
                   </p>
                 </div>
               </div>
@@ -326,7 +323,7 @@ export default function StorePreview({
                 {[
                   { id: "home", label: "الرئيسية", icon: Zap },
                   { id: "products", label: "الأجهزة", icon: Box },
-                  { id: "about", label: "الضمان", icon: ShieldCheck },
+                  { id: "about", label: "عن المتجر", icon: Info },
                   { id: "contact", label: "الدعم", icon: MessageSquare }
                 ].map((item) => {
                   const isActive = storePage === item.id;
@@ -456,8 +453,8 @@ export default function StorePreview({
             {[
               { id: "home", label: "الرئيسية", icon: "🏠" },
               { id: "products", label: "كتالوج المنتجات", icon: "🛍️" },
-              { id: "about", label: "عن المتجر والضمان", icon: "📖" },
-              { id: "contact", label: "الدعم الفني", icon: "📞" }
+              { id: "about", label: "عن المتجر", icon: "📖" },
+              { id: "contact", label: "التواصل", icon: "📞" }
             ].map((nav) => {
               const isActive = storePage === nav.id;
               return (
@@ -516,638 +513,23 @@ export default function StorePreview({
       <div className="flex-1">
 
         {/* 1. HOME PAGE (الرئيسية) */}
+        {/* 1. HOME PAGE (الرئيسية) */}
         {storePage === "home" && (
-          !isElegant ? (
-            /* ==================================================== */
-            /* TECH & MODERN DEVICES TEMPLATE UNIQUE HOMEPAGE DESIGN */
-            /* ==================================================== */
-            <div className="space-y-10 animate-fadeIn pb-12">
-              {/* 1. FUTURISTIC TECH HERO HUB */}
-              <section className="relative overflow-hidden py-8 sm:py-12 md:py-14 px-4 md:px-6 bg-slate-950 text-white rounded-3xl mx-2 sm:mx-4 md:mx-6 shadow-2xl border border-slate-800">
-                {/* Background Ambient Cyber Glows */}
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:2rem_2rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-25 pointer-events-none" />
-
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
-                  <div className="text-right space-y-4 flex-1 w-full">
-                    {/* Cyber Status Header Pills */}
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 font-bold">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                        <span>STATION: ONLINE ⚡</span>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300">
-                        ضمان معتمد 24M 🛡️
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300">
-                        توصيل فوري 🚀
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {config.logoUrl ? (
-                        <img 
-                          src={config.logoUrl} 
-                          alt={config.storeName} 
-                          style={{ height: `${Math.min(110, Math.max(36, (config.logoSize || 48) * 1.2))}px` }} 
-                          className="w-auto max-w-[280px] object-contain shrink-0 filter drop-shadow-md" 
-                          referrerPolicy="no-referrer" 
-                        />
-                      ) : config.logoIcon ? (
-                        <span 
-                          style={{ 
-                            width: `${Math.min(80, Math.max(36, (config.logoSize || 48) * 1.1))}px`,
-                            height: `${Math.min(80, Math.max(36, (config.logoSize || 48) * 1.1))}px`,
-                            fontSize: `${Math.max(18, (config.logoSize || 48) * 0.55)}px`
-                          }}
-                          className="rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-sky-500/25 border border-sky-400/40 shrink-0"
-                        >
-                          {config.logoIcon}
-                        </span>
-                      ) : null}
-                      <div>
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white leading-tight">
-                          منصة {config.storeName}
-                        </h2>
-                        <span className="text-xs text-sky-400 font-bold tracking-wide">
-                          TECH INNOVATION HUB // V2.5
-                        </span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed font-medium">
-                      {config.slogan}. أحدث الأجهزة الذكية والملحقات التقنية بأعلى معايير الجودة والأمان مع ضمان استبدال رسمي 24 شهراً.
-                    </p>
-
-                    {/* Quick Categories Pills */}
-                    <div className="flex flex-wrap gap-1.5 pt-1 text-xs">
-                      {categories.slice(0, 5).map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => {
-                            setSelectedCategory(cat);
-                            setStorePage("products");
-                          }}
-                          className="px-3 py-1 rounded-xl bg-slate-800/90 hover:bg-sky-500/20 hover:border-sky-400 border border-slate-700 text-slate-200 text-[11px] font-bold transition flex items-center gap-1"
-                        >
-                          <span>⚡</span>
-                          <span>{cat}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Action CTAs */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 w-full sm:w-auto">
-                      <button
-                        onClick={() => setStorePage("products")}
-                        className="px-6 py-3.5 rounded-xl font-black text-xs text-white bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 shadow-lg shadow-sky-500/20 active:scale-95 transition flex items-center justify-center gap-2"
-                      >
-                        <Cpu className="w-4 h-4" />
-                        <span>استكشف كتالوج الأجهزة العصرية 🛍️</span>
-                      </button>
-                      <button
-                        onClick={() => setStorePage("contact")}
-                        className="px-5 py-3.5 rounded-xl font-bold text-xs text-slate-200 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 transition flex items-center justify-center gap-2"
-                      >
-                        <Phone className="w-4 h-4 text-sky-400" />
-                        <span>الدعم الفني والخدمات 💬</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hero Featured Image / Art */}
-                  <div className="w-44 h-44 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-3xl bg-slate-900 border-2 border-sky-500/40 p-3 shadow-2xl relative shrink-0 overflow-hidden group">
-                    <ProductArt keyword={config.products[0]?.imageKeyword || "default"} primaryColor="#0284c7" imageUrl={config.products[0]?.imageUrl} />
-                    <div className="absolute top-2 right-2 bg-slate-950/80 backdrop-blur border border-sky-400/40 text-sky-300 font-mono font-extrabold text-[9px] px-2.5 py-1 rounded-full shadow z-10 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-400" />
-                      <span>ابتكار مميز 🔥</span>
-                    </div>
-                    <div className="absolute bottom-2 left-2 right-2 bg-slate-950/90 backdrop-blur p-2 rounded-xl border border-slate-800 text-center z-10">
-                      <p className="text-[10px] font-bold text-slate-200 truncate">{config.products[0]?.name || "المنتج المميز"}</p>
-                      <p className="text-xs font-black text-sky-400">{config.products[0]?.price} {config.currency}</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* 2. HIGH-TECH SPECS & FEATURES MATRIX */}
-              <section className="max-w-7xl mx-auto px-4">
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { icon: Cpu, title: "معالجات ذكية عالية الأداء", desc: "كفاءة سرعة استجابة فائقة", tag: "AI POWERED" },
-                    { icon: ShieldCheck, title: "ضمان رسمي 24 شهراً", desc: "استبدال فوري وصيانة معتمدة", tag: "24M WARRANTY" },
-                    { icon: Zap, title: "شحن سريع Turbo 65W", desc: "دعم الشحن الذكي الآمن", tag: "TURBO CHARGE" },
-                    { icon: Headphones, title: "عزل ضوضاء فعال ANC", desc: "صوت محيطي نقي بوضوح 360°", tag: "HI-RES AUDIO" }
-                  ].map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-sky-300 hover:shadow-md transition text-right space-y-2 group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 border border-sky-200 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white transition duration-300">
-                          <item.icon className="w-4 h-4" />
-                        </div>
-                        <span className="text-[9px] font-mono font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
-                          {item.tag}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-sky-600 transition">{item.title}</h4>
-                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* 3. INTERACTIVE CATEGORIES SHOWCASE GRID */}
-              <section className="max-w-7xl mx-auto px-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                  <div>
-                    <span className="text-[10px] font-mono font-extrabold text-sky-600 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
-                      CATEGORIES // أقسام المتجر
-                    </span>
-                    <h3 className="font-black text-base md:text-lg text-slate-900 mt-1">
-                      استكشف أقسام وتخصصات الأجهزة الذكية ⚡
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setStorePage("products")}
-                    className="text-xs font-bold text-sky-700 hover:text-sky-900 underline flex items-center gap-1 shrink-0"
-                  >
-                    <span>كافة الأقسام</span>
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {categories.map((cat, idx) => {
-                    const count = cat === "الكل" ? config.products.length : config.products.filter(p => p.category === cat).length;
-                    return (
-                      <div
-                        key={cat}
-                        onClick={() => {
-                          setSelectedCategory(cat);
-                          setStorePage("products");
-                        }}
-                        className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 hover:border-sky-400 hover:shadow-lg transition cursor-pointer group flex flex-col justify-between space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/30 flex items-center justify-center font-bold text-sm group-hover:scale-110 transition">
-                            {idx === 0 ? "⚡" : idx === 1 ? "🎧" : idx === 2 ? "⌚" : idx === 3 ? "🔌" : "💻"}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
-                            {count} عنصر
-                          </span>
-                        </div>
-                        <div>
-                          <h4 className="font-extrabold text-xs text-white group-hover:text-sky-300 transition">{cat}</h4>
-                          <p className="text-[10px] text-slate-400 mt-0.5">تصفح التشكيلة ➔</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* 4. FEATURED PRODUCTS GRID WITH TECH STYLING */}
-              <section className="max-w-7xl mx-auto px-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                  <div>
-                    <span className="text-[10px] font-mono font-extrabold text-sky-600 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
-                      HARDWARE // الأجهزة المختارة
-                    </span>
-                    <h3 className="font-black text-base md:text-lg text-slate-900 mt-1">
-                      الابتكارات والأجهزة الأكثر طلباً 🔥
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setStorePage("products")}
-                    className="text-xs font-bold text-sky-700 hover:text-sky-900 underline flex items-center gap-1 shrink-0"
-                  >
-                    <span>تصفح الكل ({config.products.length})</span>
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                  {config.products.slice(0, 4).map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-2xl border border-slate-200 bg-white flex flex-col justify-between overflow-hidden group hover:border-sky-400 hover:shadow-xl transition duration-300"
-                    >
-                      <div
-                        onClick={() => handleOpenProductProfile(p)}
-                        className="aspect-square w-full p-3 sm:p-4 flex items-center justify-center cursor-pointer relative bg-slate-900 group-hover:bg-slate-950 transition overflow-hidden"
-                      >
-                        <ProductArt keyword={p.imageKeyword} primaryColor="#0284c7" imageUrl={p.imageUrl} />
-                        
-                        <span className="absolute top-2.5 right-2.5 text-[9px] font-mono font-bold px-2 py-0.5 rounded-md backdrop-blur bg-sky-500/20 text-sky-300 border border-sky-400/40">
-                          {p.category}
-                        </span>
-
-                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[9px] text-slate-300 font-mono opacity-0 group-hover:opacity-100 transition duration-300 bg-black/70 backdrop-blur px-2 py-1 rounded-lg">
-                          <span>⚡ VERIFIED</span>
-                          <span className="text-amber-400 font-bold">★ 4.9</span>
-                        </div>
-                      </div>
-
-                      <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between text-right space-y-2">
-                        <div>
-                          <h4
-                            onClick={() => handleOpenProductProfile(p)}
-                            className="font-extrabold text-xs text-slate-900 truncate hover:text-sky-600 cursor-pointer transition"
-                          >
-                            {p.name}
-                          </h4>
-                          <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 font-medium">{p.description}</p>
-                          
-                          <div className="flex flex-wrap items-center gap-1 mt-2 text-[9px]">
-                            <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-bold">🛡️ ضمان 24M</span>
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">⚡ شحن مجاني</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-1">
-                          <div>
-                            <span className="font-black text-sm text-sky-600 block leading-none">
-                              {p.price} <span className="text-[10px] text-slate-500">{config.currency}</span>
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => addToCart(p)}
-                            className="p-2 rounded-xl bg-slate-900 hover:bg-sky-600 text-white font-bold text-xs transition shadow active:scale-95 flex items-center gap-1"
-                            title="أضف للسلة"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span className="text-[10px] hidden sm:inline">إضافة</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* 5. TECH ECOSYSTEM & QUALITY STANDARDS BANNER */}
-              <section className="max-w-7xl mx-auto px-4">
-                <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white border border-slate-800 shadow-2xl space-y-6 text-right relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4 relative z-10">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-400/30 px-3 py-1 rounded-full inline-block">
-                        ECOSYSTEM // معايير الاعتماد الفني
-                      </span>
-                      <h3 className="font-black text-base md:text-xl text-white mt-1">
-                        منظومة الجودة والتوافق الفني المعتمدة لأجهزتنا
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-sky-300 bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 shrink-0 font-bold">
-                      <Cpu className="w-4 h-4 text-sky-400" />
-                      <span>اختبار أداء بنسبة 100% قبل الشحن</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
-                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2 hover:border-sky-400 transition">
-                      <div className="flex items-center justify-between">
-                        <Zap className="w-5 h-5 text-amber-400" />
-                        <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded">VERIFIED</span>
-                      </div>
-                      <h4 className="font-extrabold text-xs text-white">شحن فائق ونظام بطاريات أمن</h4>
-                      <p className="text-[11px] font-sans text-slate-300 leading-relaxed">دعم معايير الشحن الذكي والمجالات المغناطيسية لحماية عمر البطارية طويلاً.</p>
-                    </div>
-
-                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2 hover:border-sky-400 transition">
-                      <div className="flex items-center justify-between">
-                        <Shield className="w-5 h-5 text-sky-400" />
-                        <span className="text-[10px] font-mono text-sky-300 font-bold bg-sky-500/20 border border-sky-400/30 px-2 py-0.5 rounded">24 MONTHS</span>
-                      </div>
-                      <h4 className="font-extrabold text-xs text-white">ضمان استبدال مباشر فورياً</h4>
-                      <p className="text-[11px] font-sans text-slate-300 leading-relaxed">تغطية شاملة ضد العيوب المصنعية مع صيانة واستبدال فوري بدون تعقيدات.</p>
-                    </div>
-
-                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2 hover:border-sky-400 transition">
-                      <div className="flex items-center justify-between">
-                        <Box className="w-5 h-5 text-indigo-400" />
-                        <span className="text-[10px] font-mono text-indigo-300 font-bold bg-indigo-500/20 border border-indigo-400/30 px-2 py-0.5 rounded">EXPRESS</span>
-                      </div>
-                      <h4 className="font-extrabold text-xs text-white">تغليف آمن ومقاوم للظروف</h4>
-                      <p className="text-[11px] font-sans text-slate-300 leading-relaxed">تعبئة ممتصة للصدمات ومقاومة للحرارة والرطوبة أثناء رحلة الشحن.</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* 6. TECH INNOVATION LAB DOSSIER (ABOUT US CARD) */}
-              <section className="max-w-7xl mx-auto px-4">
-                <div className="p-6 md:p-8 rounded-3xl bg-white border border-slate-200 shadow-md flex flex-col md:flex-row items-center gap-6 text-right transition hover:border-sky-300">
-                  {config.aboutImage && (
-                    <div className="w-full md:w-56 h-48 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-inner bg-slate-900">
-                      <img src={config.aboutImage} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                  )}
-                  <div className="space-y-3 flex-1">
-                    <span className="text-[10px] font-mono font-bold bg-sky-100 text-sky-800 border border-sky-300 px-3 py-1 rounded-full inline-block">
-                      DOSSIER // عن مركز الابتكار والرؤية 🔬
-                    </span>
-                    <h3 className="font-black text-lg text-slate-900">
-                      {config.aboutTitle || `قصتنا ورؤيتنا في ${config.storeName}`}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3 font-medium">
-                      {config.aboutText || config.slogan}
-                    </p>
-
-                    <div className="flex flex-wrap gap-3 pt-2 text-[11px] font-mono text-slate-700 border-t border-slate-100">
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span>+50,000 عميل موثوق</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-sky-500" />
-                        <span>100% منتجات أصلية</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                        <span>دعم فني 24/7</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setStorePage("about")}
-                      className="text-xs font-extrabold text-sky-700 hover:text-sky-900 underline inline-flex items-center gap-1 pt-1"
-                    >
-                      <span>استكشاف كافة تفاصيل المركز والتراخيص ➔</span>
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </div>
-          ) : (
-            /* ELEGANT TEMPLATE HOMEPAGE DESIGN */
-            <div className="space-y-10 animate-fadeIn pb-12">
-              {/* HERO BANNER IMAGE DIRECTLY BELOW HEADER (الصفحة الرئيسية فقط - قالب الأناقة العصرية) */}
-              {(config.showHeroBanner !== false) && (
-                <section className="relative w-full overflow-hidden shadow-sm group">
-                  <div className="relative w-full h-56 sm:h-72 md:h-80 lg:h-[360px] bg-slate-900 overflow-hidden">
-                    <img 
-                      src={config.heroBannerImage || "https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&w=1600&q=80"} 
-                      alt={config.heroBannerTitle || "Hero Banner"} 
-                      className="w-full h-full object-cover object-center transform group-hover:scale-105 transition duration-700 opacity-90"
-                      referrerPolicy="no-referrer"
-                    />
-                    {/* Elegant Dark Gradient Overlay with Text & CTA */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10 flex flex-col justify-end p-6 sm:p-10 md:p-12 text-white text-right">
-                      <div className="max-w-7xl mx-auto w-full space-y-2.5 sm:space-y-3.5">
-                        {config.heroBannerBadge && (
-                          <span 
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-black shadow-lg border border-white/20 backdrop-blur-md"
-                            style={{ backgroundColor: primaryColor, color: "#ffffff" }}
-                          >
-                            <span>{config.heroBannerBadge}</span>
-                          </span>
-                        )}
-                        
-                        <h2 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black leading-tight text-white drop-shadow-md">
-                          {config.heroBannerTitle || config.storeName}
-                        </h2>
-                        
-                        {(config.heroBannerSubtitle || config.slogan) && (
-                          <p className="text-xs sm:text-sm md:text-base text-slate-200 max-w-2xl leading-relaxed font-medium drop-shadow-sm">
-                            {config.heroBannerSubtitle || config.slogan}
-                          </p>
-                        )}
-
-                        {config.heroBannerButtonText && (
-                          <div className="pt-2">
-                            <button
-                              onClick={() => setStorePage("products")}
-                              className="px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-black text-white shadow-xl transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-white/20"
-                              style={{ backgroundColor: primaryColor }}
-                            >
-                              <span>{config.heroBannerButtonText}</span>
-                              <ChevronLeft className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* Hero Showcase */}
-              <section className="relative overflow-hidden py-10 md:py-14 px-4 md:px-6 border-b" style={{ borderColor: "#f2eae1" }}>
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative z-10">
-                  <div className="text-right space-y-3 sm:space-y-4 flex-1 w-full">
-                    <span 
-                      className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] sm:text-xs font-black tracking-wide shadow-2xs"
-                      style={{ backgroundColor: `${primaryColor}20`, color: primaryColor }}
-                    >
-                      <span>متجر رسمي وموثّق ✨</span>
-                    </span>
-                    
-                    <div className="flex items-center gap-2.5 sm:gap-3">
-                      {config.logoUrl ? (
-                        <img 
-                          src={config.logoUrl} 
-                          alt={config.storeName} 
-                          style={{ height: `${Math.min(110, Math.max(36, (config.logoSize || 48) * 1.2))}px` }} 
-                          className="w-auto max-w-[280px] object-contain shrink-0 filter drop-shadow-sm" 
-                          referrerPolicy="no-referrer" 
-                        />
-                      ) : config.logoIcon ? (
-                        <span 
-                          style={{ 
-                            width: `${Math.min(80, Math.max(36, (config.logoSize || 48) * 1.1))}px`,
-                            height: `${Math.min(80, Math.max(36, (config.logoSize || 48) * 1.1))}px`,
-                            borderColor: `${primaryColor}50`,
-                            fontSize: `${Math.max(18, (config.logoSize || 48) * 0.55)}px`
-                          }}
-                          className="rounded-2xl flex items-center justify-center shadow-2xs border shrink-0 bg-white"
-                        >
-                          {config.logoIcon}
-                        </span>
-                      ) : null}
-                      <h2 className="text-xl sm:text-2xl md:text-4xl font-black leading-tight" style={{ color: secondaryColor }}>
-                        مرحباً بكم في {config.storeName}
-                      </h2>
-                    </div>
-
-                    <p className="text-xs sm:text-sm text-slate-600 max-w-xl leading-relaxed">
-                      {config.slogan}. اكتشف معنا أرقى التشكيلات المبتكرة المنتقاة بعناية فائقة لتلبي ذوقك وتناسب أسلوب حياتك.
-                    </p>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2 w-full sm:w-auto">
-                      <button
-                        onClick={() => setStorePage("products")}
-                        className="px-5 py-3 rounded-xl font-black text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 text-white"
-                        style={{ backgroundColor: primaryColor }}
-                      >
-                        <span>تصفح الأجهزة والمنتجات 🛍️</span>
-                      </button>
-                      <button
-                        onClick={() => setStorePage("contact")}
-                        className="px-4 py-3 rounded-xl font-bold text-xs border transition flex items-center justify-center hover:bg-slate-400/10"
-                        style={{ borderColor: "#e5d5c5" }}
-                      >
-                        <span>الدعم الفني والخدمات 💬</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hero Featured Image/Art */}
-                  <div className="w-36 h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-3xl flex items-center justify-center p-2 sm:p-3 shadow-xl relative shrink-0 overflow-hidden bg-white"
-                       style={{ border: `2px solid ${primaryColor}40` }}>
-                    <ProductArt keyword={config.products[0]?.imageKeyword || "default"} primaryColor={primaryColor} imageUrl={config.products[0]?.imageUrl} />
-                    <div className="absolute -bottom-2.5 -left-1 text-white font-extrabold text-[9px] sm:text-[10px] px-3 py-1 rounded-full shadow-md z-10 bg-emerald-500">
-                      أفضل مبيعاً 🔥
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Trust Features Bar */}
-              <section className="max-w-7xl mx-auto px-4">
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                  {[
-                    { icon: Truck, title: "توصيل آمن وسريع", desc: "شحن مجاني لكافة المناطق" },
-                    { icon: ShieldCheck, title: "ضمان رسمـي سنتين", desc: "منتجات معتمدة 100% مع ضمان فوري" },
-                    { icon: CreditCard, title: "دفع آمن بالكامل", desc: "مدى، فيزا، والدفع عند الاستلام" },
-                    { icon: Phone, title: "دعم فني وتواصل", desc: "فريق متخصص متواجد للإجابة" }
-                  ].map((ft, idx) => (
-                    <div 
-                      key={idx}
-                      className="p-3 sm:p-4 rounded-2xl border text-right space-y-1 transition hover:shadow-md"
-                      style={{ 
-                        backgroundColor: cardBgColor,
-                        borderColor: borderColor
-                      }}
-                    >
-                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center mb-1.5"
-                           style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                        <ft.icon className="w-4 h-4" />
-                      </div>
-                      <h4 className="font-extrabold text-xs text-slate-900 leading-tight" style={{ color: secondaryColor }}>{ft.title}</h4>
-                      <p className="text-[10px] text-slate-500 leading-normal font-medium">{ft.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Featured Products Section */}
-              <section className="max-w-7xl mx-auto px-4 space-y-4">
-                <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "#f2eae1" }}>
-                  <div>
-                    <h3 className="font-extrabold text-sm sm:text-base flex items-center gap-1.5" style={{ color: secondaryColor }}>
-                      <span>تشكيلة المنتجات المميزة 🔥</span>
-                    </h3>
-                    <p className="text-[11px] text-slate-500">تصفح أبرز المنتجات الأكثر طلباً لهذا الشهر</p>
-                  </div>
-                  <button
-                    onClick={() => setStorePage("products")}
-                    className="text-xs font-bold underline flex items-center gap-1 hover:opacity-80 shrink-0"
-                    style={{ color: primaryColor }}
-                  >
-                    <span>عرض الكل ({config.products.length})</span>
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Grid of items */}
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                  {config.products.slice(0, 4).map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-2xl border flex flex-col justify-between overflow-hidden group transition hover:shadow-md"
-                      style={{ 
-                        backgroundColor: cardBgColor,
-                        borderColor: borderColor
-                      }}
-                    >
-                      <div 
-                        onClick={() => handleOpenProductProfile(p)}
-                        className="aspect-square w-full p-3 sm:p-4 flex items-center justify-center cursor-pointer relative bg-gradient-to-br from-slate-50 to-amber-50/20 hover:from-amber-50/40 hover:to-orange-50/30 transition"
-                      >
-                        <ProductArt keyword={p.imageKeyword} primaryColor={primaryColor} imageUrl={p.imageUrl} />
-                        <span className="absolute top-2 right-2 text-[9px] px-2 py-0.5 rounded-full font-bold backdrop-blur truncate max-w-[85%] bg-black/60 text-white">
-                          {p.category}
-                        </span>
-                      </div>
-
-                      <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between text-right space-y-2">
-                        <div>
-                          <h4 
-                            onClick={() => handleOpenProductProfile(p)}
-                            className="font-bold text-xs truncate hover:underline cursor-pointer"
-                            style={{ color: secondaryColor }}
-                          >
-                            {p.name}
-                          </h4>
-                          <p className="text-[10px] line-clamp-1 mt-0.5 opacity-80" style={{ color: textColor }}>{p.description}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1 gap-1">
-                          <span className="font-black text-xs sm:text-sm whitespace-nowrap" style={{ color: primaryColor }}>
-                            {p.price} {config.currency}
-                          </span>
-                          <button
-                            onClick={() => addToCart(p)}
-                            className="p-1.5 rounded-lg font-bold text-xs transition shrink-0 text-white hover:opacity-90 shadow-xs"
-                            style={{ backgroundColor: primaryColor }}
-                            title="أضف للسلة"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* About Us Preview Card */}
-              <section className="max-w-7xl mx-auto px-4">
-                <div 
-                  className="p-6 md:p-8 rounded-3xl border flex flex-col md:flex-row items-center gap-6 text-right transition hover:shadow-md"
-                  style={{ 
-                    backgroundColor: cardBgColor,
-                    borderColor: borderColor
-                  }}
-                >
-                  {config.aboutImage && (
-                    <div className="w-full md:w-52 h-44 rounded-2xl overflow-hidden shrink-0 border border-slate-200">
-                      <img src={config.aboutImage} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                  )}
-                  <div className="space-y-3 flex-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"
-                          style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                      عن متجرنا 📖
-                    </span>
-                    <h3 className="font-black text-lg" style={{ color: secondaryColor }}>
-                      {config.aboutTitle || `قصتنا في ${config.storeName}`}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
-                      {config.aboutText || config.slogan}
-                    </p>
-                    <button
-                      onClick={() => setStorePage("about")}
-                      className="text-xs font-bold underline inline-flex items-center gap-1 pt-1"
-                      style={{ color: primaryColor }}
-                    >
-                      <span>معرفة المزيد عن قصتنا ورؤيتنا ➔</span>
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </div>
-          )
+          <StorefrontHome
+            config={config}
+            isElegant={isElegant}
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            onOpenProducts={() => setStorePage("products")}
+            onOpenAbout={() => setStorePage("about")}
+            onSelectCategory={(category) => {
+              setSelectedCategory(category);
+              setStorePage("products");
+            }}
+            onOpenProduct={handleOpenProductProfile}
+            onAddProduct={addToCart}
+          />
         )}
-
         {/* 2. PRODUCTS PAGE (المنتجات) */}
         {storePage === "products" && (
           <div className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-fadeIn pb-12">
@@ -1157,7 +539,7 @@ export default function StorePreview({
                 <h2 className={`font-black text-xl ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
                   معرض جميع المنتجات المعروضة
                 </h2>
-                <p className="text-xs text-slate-500">استعرض وتصفح أحدث الخيارات المتوفرة لدينا</p>
+                <p className="text-xs text-slate-500">استعرض المنتجات المنشورة في المتجر</p>
               </div>
 
               {/* Embedded Search Input */}
@@ -1287,114 +669,21 @@ export default function StorePreview({
 
         {/* 3. ABOUT US PAGE (من نحن) */}
         {storePage === "about" && (
-          <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fadeIn pb-12 text-right">
-            {/* Header Title */}
-            <div className="text-center space-y-2 border-b pb-6" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider inline-block ${
-                !isElegant ? "bg-sky-100 text-sky-800 border border-sky-300/80 font-mono" : ""
-              }`}
-                    style={{ backgroundColor: isElegant ? `${primaryColor}15` : undefined, color: isElegant ? primaryColor : undefined }}>
-                {!isElegant ? "DOSSIER // عن مختبر الابتكار 🔬" : "من نحن 📖"}
-              </span>
-              <h2 className={`text-2xl md:text-3xl font-black ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
-                {config.aboutTitle || `عن متجر ${config.storeName}`}
-              </h2>
-              <p className="text-xs text-slate-500 max-w-lg mx-auto">
-                {!isElegant ? "تعرف على معايير الجودة والتطوير التكنولوجي وسلسلة التوريد المعتمدة لدينا." : "تعرف على قصتنا وقيمنا ورؤيتنا المستقبلية في عالم التجارة والابتكار."}
-              </p>
-            </div>
-
-            {/* Main Content & Image */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-              {config.aboutImage && (
-                <div className={`rounded-3xl overflow-hidden border shadow-sm aspect-4/3 ${
-                  !isElegant ? "bg-white border-sky-300" : "bg-slate-100"
-                }`}
-                     style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}>
-                  <img src={config.aboutImage} alt="عن المتجر" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </div>
-              )}
-
+          <div className="mx-auto max-w-6xl space-y-7 px-4 py-10 text-right animate-fadeIn">
+            <header className="space-y-2 border-b border-slate-200 pb-6 text-center">
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black" style={{ color: primaryColor }}>من نحن</span>
+              <h2 className="text-2xl font-black md:text-3xl" style={{ color: secondaryColor }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2>
+              <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">{config.aboutText?.trim() || config.slogan}</p>
+            </header>
+            <div className={`grid gap-6 ${config.aboutImage ? "md:grid-cols-2 md:items-center" : ""}`}>
+              {config.aboutImage && <img src={config.aboutImage} alt="" className="aspect-video w-full rounded-3xl border border-slate-200 object-cover" referrerPolicy="no-referrer" />}
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className={`font-extrabold text-base flex items-center gap-2 ${!isElegant ? "font-mono text-sky-800" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
-                    <span>{!isElegant ? "⚡" : "✨"}</span>
-                    <span>{!isElegant ? "شغف الابتكار والتميز التكنولوجي" : "قصة التأسيس والشغف"}</span>
-                  </h3>
-                  <p className={`text-xs md:text-sm leading-relaxed p-4 rounded-2xl border ${
-                    !isElegant ? "bg-white border-slate-200 text-slate-700 shadow-xs" : "bg-slate-400/5 border-slate-300/10 text-slate-600"
-                  }`}>
-                    {config.aboutText || config.slogan}
-                  </p>
-                </div>
-
-                {config.aboutVision && (
-                  <div className="space-y-2 pt-2">
-                    <h3 className={`font-extrabold text-base flex items-center gap-2 ${!isElegant ? "font-mono text-sky-800" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
-                      <span>🎯</span>
-                      <span>{!isElegant ? "رؤيتنا التقنية المستقبلية" : "رؤيتنا ورسالتنا"}</span>
-                    </h3>
-                    <p className={`text-xs leading-relaxed p-4 rounded-2xl border ${
-                      !isElegant ? "bg-white border-slate-200 text-slate-700 shadow-xs" : "bg-slate-400/5 border-slate-300/10 text-slate-600"
-                    }`}>
-                      {config.aboutVision}
-                    </p>
-                  </div>
-                )}
+                {config.aboutVision?.trim() && <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black" style={{ color: primaryColor }}>رؤية المتجر</h3><p className="mt-3 text-sm leading-7 text-slate-600">{config.aboutVision}</p></section>}
+                <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black text-slate-900">بيانات منشورة</h3><div className="mt-3 space-y-2 text-xs text-slate-600">{config.address?.trim() && <p><strong>العنوان:</strong> {config.address}</p>}{config.workingHours?.trim() && <p><strong>ساعات العمل:</strong> {config.workingHours}</p>}{!config.address?.trim() && !config.workingHours?.trim() && <p>لم يضف المتجر معلومات إضافية بعد.</p>}</div></section>
               </div>
             </div>
-
-            {/* Core Values */}
-            <div className="space-y-4 pt-4">
-              <h3 className={`font-extrabold text-base text-center ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
-                {!isElegant ? "ركائز منظومتنا التقنية" : "قيمنا وركائزنا الأساسية"}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { icon: Cpu, title: !isElegant ? "اختبارات جودة العتاد" : "الجودة والأصالة", desc: !isElegant ? "تخضع جميع القطع لفحوصات دقيقة لضمان أعلى مستويات الأداء." : "نلتزم بأعلى معايير الدقة والاتقان في كافة المنتجات والخيارات المعروضة." },
-                  { icon: ShieldCheck, title: !isElegant ? "ضمان رسمي مشفر" : "ثقة العملاء", desc: !isElegant ? "سلسلة توريد موثوقة وضمان سنتين حقيقي لكافة الأجهزة والقطع." : "رضاكم وراحتكم هي غايتنا الأولى عبر خدمات دعم متكاملة ومستمرة." },
-                  { icon: Zap, title: !isElegant ? "توصيل لوجستي آلي" : "السرعة والسهولة", desc: !isElegant ? "معالجة فورية للطلبات وتتبع لمسار الشحنة حتى باب المنزل." : "تجربة تسوق سلسة من الطلب بنقرة واحدة حتى التوصيل السريع لكرت المشتريات." }
-                ].map((val, idx) => (
-                  <div 
-                    key={idx}
-                    className={`p-5 rounded-2xl border text-center space-y-2 transition ${
-                      !isElegant ? "bg-white border-slate-200 hover:border-sky-300 hover:shadow-sm" : "bg-slate-400/5"
-                    }`}
-                    style={{ borderColor: isElegant ? "#f2eae1" : undefined }}
-                  >
-                    <div className={`w-10 h-10 rounded-xl mx-auto flex items-center justify-center ${
-                      !isElegant ? "bg-sky-50 text-sky-600 border border-sky-200" : ""
-                    }`}
-                         style={{ backgroundColor: isElegant ? `${primaryColor}20` : undefined, color: isElegant ? primaryColor : undefined }}>
-                      <val.icon className="w-5 h-5" />
-                    </div>
-                    <h4 className={`font-bold text-xs ${!isElegant ? "font-mono text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>{val.title}</h4>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">{val.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Cyber Stats Counter Bar */}
-            {!isElegant && (
-              <div className="p-6 rounded-3xl bg-slate-900 border border-sky-500/30 grid grid-cols-3 gap-4 text-center font-mono text-white shadow-md">
-                <div>
-                  <div className="text-xl md:text-2xl font-black text-sky-400">+50,000</div>
-                  <div className="text-[10px] text-slate-300 mt-1">جهاز مفعل ومسلم 📦</div>
-                </div>
-                <div>
-                  <div className="text-xl md:text-2xl font-black text-emerald-400">99.9%</div>
-                  <div className="text-[10px] text-slate-300 mt-1">دقة الشحنات والالتزام 🎯</div>
-                </div>
-                <div>
-                  <div className="text-xl md:text-2xl font-black text-indigo-300">24 شهر</div>
-                  <div className="text-[10px] text-slate-300 mt-1">ضمان معتمد شاملاً 🛡️</div>
-                </div>
-              </div>
-            )}
           </div>
         )}
-
         {/* 4. CONTACT US PAGE (تواصل معنا) */}
         {storePage === "contact" && (() => {
           const phone = canonicalContactTarget(config.phone);
@@ -1426,436 +715,17 @@ export default function StorePreview({
           );
         })()}
 
-        {/* 5. PRODUCT PROFILE PAGE (بروفايل المنتَج الشامل) */}
-        {storePage === "product" && (() => {
-          const currentProduct = selectedProduct || config.products[0];
-          if (!currentProduct) return null;
-
-          const allImages: string[] = [];
-          if (currentProduct.imageUrl && currentProduct.imageUrl.trim() !== "") {
-            allImages.push(currentProduct.imageUrl);
-          }
-          if (currentProduct.imageUrls && currentProduct.imageUrls.length > 0) {
-            currentProduct.imageUrls.forEach(url => {
-              if (url && url.trim() !== "" && !allImages.includes(url)) {
-                allImages.push(url);
-              }
-            });
-          }
-
-          const relatedProducts = config.products.filter(p => p.id !== currentProduct.id).slice(0, 4);
-
-          return (
-            <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8 animate-fadeIn pb-16 text-right">
-              {/* Top Navigation / Breadcrumbs & Back Button */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4"
-                   style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-                <button
-                  onClick={() => setStorePage("products")}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition shadow-2xs hover:shadow-xs w-fit ${
-                    !isElegant ? "bg-white border-slate-300 text-slate-800 hover:border-sky-400 font-mono" : "bg-white hover:bg-slate-50"
-                  }`}
-                  style={{ borderColor: isElegant ? "#e5d5c5" : undefined }}
-                >
-                  <ArrowRight className="w-4 h-4 text-sky-600" />
-                  <span>العودة لجميع المنتجات</span>
-                </button>
-
-                {/* Breadcrumbs */}
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium overflow-x-auto">
-                  <span onClick={() => setStorePage("home")} className="cursor-pointer hover:underline">الرئيسية</span>
-                  <ChevronLeft className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  <span onClick={() => setStorePage("products")} className="cursor-pointer hover:underline">المنتجات</span>
-                  <ChevronLeft className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  <span className="text-slate-400 truncate">{currentProduct.category}</span>
-                  <ChevronLeft className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  <span className={`font-bold truncate ${!isElegant ? "text-sky-900 font-mono" : "text-slate-900"}`}>{currentProduct.name}</span>
-                </div>
-              </div>
-
-              {/* Main Product Showcase Block (2-column layout) */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-                
-                {/* Right Column: Gallery & Art (5 cols) */}
-                <div className="md:col-span-5 space-y-4">
-                  <div className={`aspect-square w-full rounded-3xl p-6 flex items-center justify-center border relative overflow-hidden shadow-sm group ${
-                    !isElegant ? "bg-gradient-to-br from-white via-sky-50/60 to-blue-50/40 border-sky-200" : "bg-white"
-                  }`}
-                       style={{ borderColor: isElegant ? `${primaryColor}40` : undefined }}>
-                    
-                    {allImages.length > 0 ? (
-                      <img 
-                        src={allImages[activeImageIndex] || allImages[0]} 
-                        alt={currentProduct.name}
-                        className="w-full h-full object-cover rounded-2xl transition-all duration-300 group-hover:scale-105"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <ProductArt keyword={currentProduct.imageKeyword} primaryColor={primaryColor} imageUrl={currentProduct.imageUrl} />
-                    )}
-
-                    {/* Badge */}
-                    <span className={`absolute top-4 right-4 text-[10px] px-3 py-1 rounded-full font-bold shadow-2xs ${
-                      !isElegant ? "bg-sky-100 text-sky-900 border border-sky-300 font-mono" : "bg-black/60 text-white backdrop-blur"
-                    }`}>
-                      {!isElegant ? "⚡ ضمان معتمد 24 شهر" : "منتج أصلي 100% ✨"}
-                    </span>
-                  </div>
-
-                  {/* Thumbnails list if multiple images */}
-                  {allImages.length > 1 && (
-                    <div className="flex flex-wrap gap-2 justify-center pt-1">
-                      {allImages.map((imgUrl, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveImageIndex(idx)}
-                          className={`w-12 h-12 rounded-xl overflow-hidden border-2 transition shrink-0 ${
-                            idx === activeImageIndex 
-                              ? "border-sky-600 scale-105 shadow-xs" 
-                              : "border-slate-200 opacity-60 hover:opacity-100"
-                          }`}
-                        >
-                          <img src={imgUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Trust Highlights under gallery */}
-                  <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
-                    !isElegant ? "bg-white border-sky-200 text-slate-700 font-mono shadow-2xs" : "bg-slate-400/5 border-slate-200"
-                  }`}>
-                    <div className="flex items-center gap-2 text-sky-800 font-bold">
-                      <Truck className="w-4 h-4 text-sky-600 shrink-0" />
-                      <span>توصيل سريع مجاني لجميع مناطق المملكة 🚚</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>ضمان استبدال مباشر سنتين ضد العيوب المصنعية</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <CreditCard className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>دفع آمن ومحمي 100% (مدى، فيزا، والدفع عند الاستلام)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Left Column: Product Specification & Console (7 cols) */}
-                <div className="md:col-span-7 space-y-6">
-                  
-                  {/* Category & Availability Badge */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span 
-                      className={`text-xs px-3 py-1 rounded-full font-bold inline-block ${
-                        !isElegant ? "bg-sky-100 text-sky-800 border border-sky-300 font-mono" : ""
-                      }`}
-                      style={{ backgroundColor: isElegant ? `${primaryColor}20` : undefined, color: isElegant ? primaryColor : undefined }}
-                    >
-                      {currentProduct.category}
-                    </span>
-
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      <span>متوفر في المخزون (جاهز للشحن الفوري)</span>
-                    </span>
-                  </div>
-
-                  {/* Product Title */}
-                  <div className="space-y-2">
-                    <h1 
-                      className={`text-xl md:text-2xl font-black leading-tight ${!isElegant ? "text-slate-900 font-mono" : ""}`}
-                      style={{ color: isElegant ? secondaryColor : undefined }}
-                    >
-                      {currentProduct.name}
-                    </h1>
-
-                    {/* Rating & Reviews Bar */}
-                    <div className="flex items-center gap-3 text-xs text-slate-600 font-semibold pt-1">
-                      <div className="flex items-center gap-1 text-amber-500">
-                        <span>⭐⭐⭐⭐⭐</span>
-                        <span className="font-bold text-slate-900 mr-1">4.9 / 5.0</span>
-                      </div>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-slate-500">(32 تقييم مشتري معتمد)</span>
-                      <span className="text-slate-300 hidden sm:inline">•</span>
-                      <span className="text-emerald-700 font-mono text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 hidden sm:inline-block">🔥 تم طلب هذا المنتج 140+ مرة</span>
-                    </div>
-                  </div>
-
-                  {/* Price Tag */}
-                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
-                    !isElegant ? "bg-gradient-to-r from-sky-50 via-white to-blue-50/50 border-sky-200" : "bg-slate-400/5 border-slate-200"
-                  }`}>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block">السعر الإجمالي:</span>
-                      <div className={`text-2xl md:text-3xl font-black ${!isElegant ? "text-sky-800 font-mono" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
-                        {currentProduct.price} {config.currency}
-                      </div>
-                    </div>
-
-                    <div className="text-left space-y-0.5 text-[11px] text-slate-500">
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block">شامل الضريبة 15%</span>
-                      <p className="text-[10px] text-slate-400">توصيل مجاني لطلبات المتجر</p>
-                    </div>
-                  </div>
-
-                  {/* Full Description Box */}
-                  <div className="space-y-2">
-                    <h3 className="font-extrabold text-xs text-slate-700 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-sky-600" />
-                      <span>وصف وتفاصيل المنتج الشاملة:</span>
-                    </h3>
-                    <p className={`text-xs md:text-sm text-slate-700 leading-relaxed p-4 rounded-2xl border ${
-                      !isElegant ? "bg-white border-slate-200 shadow-2xs" : "bg-white border-slate-200"
-                    }`}>
-                      {currentProduct.description}
-                    </p>
-                  </div>
-
-                  {/* Spec Highlights Grid */}
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
-                      <span className="text-[10px] text-slate-400 block font-mono">// الجودة والأصالة</span>
-                      <p className="text-xs font-bold text-slate-800">أصلي معتمد 100%</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
-                      <span className="text-[10px] text-slate-400 block font-mono">// الضمان والخدمة</span>
-                      <p className="text-xs font-bold text-slate-800">24 شهراً شاملاً الاستبدال</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
-                      <span className="text-[10px] text-slate-400 block font-mono">// محتويات العلبة</span>
-                      <p className="text-xs font-bold text-slate-800">المنتج + الملحقات والضمان</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
-                      <span className="text-[10px] text-slate-400 block font-mono">// سرعة الشحن</span>
-                      <p className="text-xs font-bold text-slate-800">خلال 24 إلى 48 ساعة</p>
-                    </div>
-                  </div>
-
-                  {/* Quantity Stepper & Buy Console */}
-                  <div className="space-y-4 pt-2 border-t" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-                    
-                    {/* Quantity selection row */}
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-xs font-bold text-slate-700">حدد الكمية المطلوبة:</span>
-                      
-                      <div className="flex items-center gap-3 border rounded-xl p-1 bg-white shadow-2xs"
-                           style={{ borderColor: isElegant ? "#e5d5c5" : "#cbd5e1" }}>
-                        <button
-                          onClick={() => setProductQty(prev => Math.max(1, prev - 1))}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-700"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-
-                        <span className="w-8 text-center font-bold text-sm text-slate-900 font-mono">
-                          {productQty}
-                        </span>
-
-                        <button
-                          onClick={() => setProductQty(prev => prev + 1)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-700"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="text-xs font-bold text-slate-600">
-                        المجموع: <span className="text-sky-700 font-black text-sm font-mono">{currentProduct.price * productQty} {config.currency}</span>
-                      </div>
-                    </div>
-
-                    {/* Added Success Banner Notification */}
-                    {addedSuccess && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold flex items-center justify-between animate-fadeIn">
-                        <span className="flex items-center gap-1.5">
-                          <Check className="w-4 h-4 text-emerald-600" />
-                          <span>تمت إضافة ({productQty}) قطعة من المنتج إلى السلة بنجاح! 🎉</span>
-                        </span>
-                        <button 
-                          onClick={() => setIsCartDrawerOpen(true)} 
-                          className="underline text-emerald-900 hover:text-black shrink-0 text-[11px]"
-                        >
-                          عرض السلة ➔
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Primary Buttons Row */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                      <button
-                        onClick={() => handleAddToCartWithQty(currentProduct, productQty)}
-                        className={`flex-1 py-3.5 rounded-xl font-bold text-xs md:text-sm text-white shadow-md transition hover:scale-[1.01] flex items-center justify-center gap-2 ${
-                          !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 font-mono shadow-sm" : "hover:opacity-90"
-                        }`}
-                        style={{ backgroundColor: isElegant ? primaryColor : undefined }}
-                      >
-                        <ShoppingBag className="w-4 h-4" />
-                        <span>أضف إلى السلة 🛒</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          handleAddToCartWithQty(currentProduct, productQty);
-                          setIsCartDrawerOpen(false);
-                          setStorePage("checkout");
-                          const container = document.getElementById("store-preview-scroll-container");
-                          if (container) {
-                            container.scrollTo({ top: 0, behavior: "smooth" });
-                          }
-                        }}
-                        className={`px-6 py-3.5 rounded-xl border font-bold text-xs md:text-sm transition flex items-center justify-center gap-2 cursor-pointer ${
-                          !isElegant ? "border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100 font-mono shadow-2xs" : "bg-stone-900 text-white hover:bg-black"
-                        }`}
-                      >
-                        <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-                        <span>شراء مباشر الآن ⚡</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setCopiedLink(true);
-                          setTimeout(() => setCopiedLink(false), 2500);
-                        }}
-                        className="p-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition shrink-0 flex items-center justify-center"
-                        title="مشاركة المنتج"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {copiedLink && (
-                      <p className="text-[11px] text-sky-700 font-bold text-center animate-fadeIn">
-                        ✓ تم نسخ رابط المنتج لمشاركته بنجاح!
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Detailed Specs & Reviews Tabs Section */}
-              <div className="pt-8 space-y-4">
-                <div className="flex border-b gap-2 text-xs font-bold" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-                  <button
-                    onClick={() => setActiveTab("specs")}
-                    className={`pb-3 px-4 transition border-b-2 ${
-                      activeTab === "specs" 
-                        ? (isElegant ? "border-amber-600 text-amber-900" : "border-sky-600 text-sky-800 font-mono") 
-                        : "border-transparent text-slate-400 hover:text-slate-600"
-                    }`}
-                  >
-                    تفاصيل ومواصفات المنتج 📋
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("shipping")}
-                    className={`pb-3 px-4 transition border-b-2 ${
-                      activeTab === "shipping" 
-                        ? (isElegant ? "border-amber-600 text-amber-900" : "border-sky-600 text-sky-800 font-mono") 
-                        : "border-transparent text-slate-400 hover:text-slate-600"
-                    }`}
-                  >
-                    سياسة الشحن والضمان 🚚
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("reviews")}
-                    className={`pb-3 px-4 transition border-b-2 ${
-                      activeTab === "reviews" 
-                        ? (isElegant ? "border-amber-600 text-amber-900" : "border-sky-600 text-sky-800 font-mono") 
-                        : "border-transparent text-slate-400 hover:text-slate-600"
-                    }`}
-                  >
-                    تقييمات العملاء (32) ⭐
-                  </button>
-                </div>
-
-                <div className="p-6 rounded-2xl bg-white border border-slate-200/90 text-xs text-slate-700 space-y-4 shadow-2xs">
-                  {activeTab === "specs" && (
-                    <div className="space-y-3 leading-relaxed">
-                      <h4 className="font-extrabold text-sm text-slate-900">المعلومات الفنية والمواصفات الكاملة:</h4>
-                      <p>{currentProduct.description}</p>
-                      <ul className="list-disc list-inside space-y-1.5 text-slate-600 pt-1">
-                        <li>منتج تم فحصه واختباره بدقة لضمان أعلى معايير الكفاءة والاستدامة.</li>
-                        <li>تغليف فاخر واقٍ ممتص للصدمات لحماية المنتج أثناء مراحل الشحن.</li>
-                        <li>دعم متكامل من فريق خدمة العملاء للمساعدة في الاستخدام والدعم الفني.</li>
-                      </ul>
-                    </div>
-                  )}
-
-                  {activeTab === "shipping" && (
-                    <div className="space-y-3 leading-relaxed">
-                      <h4 className="font-extrabold text-sm text-slate-900">معلومات التوصيل والضمان المعتمد:</h4>
-                      <p>• الشحن الفوري متوفر لكافة مناطق ومدن المملكة العربية السعودية ودول الخليج.</p>
-                      <p>• يستغرق التوصيل بين 24 إلى 48 ساعة للمدن الرئيسية و3 أيام عمل لجميع المناطق الأخرى.</p>
-                      <p>• ضمان معتمد سنتين يشمل الاستبدال المباشر في حال وجود أي عيوب تصنيعية.</p>
-                    </div>
-                  )}
-
-                  {activeTab === "reviews" && (
-                    <div className="space-y-4">
-                      <h4 className="font-extrabold text-sm text-slate-900">أحدث تقييمات المشترين الموثقين:</h4>
-                      
-                      <div className="space-y-3">
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900">عبدالله الشمري</span>
-                            <span className="text-amber-500">⭐⭐⭐⭐⭐</span>
-                          </div>
-                          <p className="text-slate-600">منتج رائع جداً وجاء بنفس المواصفات تماماً والتوصيل كان في غضون 24 ساعة!</p>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900">سارة التميمي</span>
-                            <span className="text-amber-500">⭐⭐⭐⭐⭐</span>
-                          </div>
-                          <p className="text-slate-600">التغليف فخم والجودة ممتازة وسرعة الاستجابة من الدعم تشكرون عليها.</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Related Products Showcase */}
-              {relatedProducts.length > 0 && (
-                <div className="pt-8 space-y-4">
-                  <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
-                    <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                      <span>منتجات أخرى قد تعجبك أيضا 🔥</span>
-                    </h3>
-                    <button 
-                      onClick={() => setStorePage("products")}
-                      className="text-xs font-bold text-sky-700 underline"
-                    >
-                      عرض جميع المنتجات
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {relatedProducts.map(rel => (
-                      <div
-                        key={rel.id}
-                        onClick={() => handleOpenProductProfile(rel)}
-                        className="rounded-2xl border bg-white p-3 space-y-2 cursor-pointer hover:shadow-md hover:border-sky-400 transition"
-                      >
-                        <div className="aspect-square w-full rounded-xl bg-slate-50 p-2 flex items-center justify-center overflow-hidden">
-                          <ProductArt keyword={rel.imageKeyword} primaryColor={primaryColor} imageUrl={rel.imageUrl} />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-xs truncate text-slate-900">{rel.name}</h4>
-                          <span className="text-xs font-black text-sky-700 font-mono block mt-0.5">{rel.price} {config.currency}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
+        {/* 5. PRODUCT PROFILE PAGE (بروفايل المنتج) */}
+        {storePage === "product" && detailProduct && (
+          <StorefrontProductDetail
+            product={detailProduct}
+            config={config}
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            onBack={() => setStorePage("products")}
+            onAdd={handleAddToCartWithQty}
+          />
+        )}
         {/* 6. CHECKOUT PAGE (صفحة إتمام الطلب وتعبئة البيانات والدفع) */}
         {storePage === "checkout" && (() => {
           const customWalletsList = config.customWallets ?? [];

@@ -15,8 +15,10 @@ use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\RoleAssignmentService;
+use App\Services\StoreDraftService;
 use App\Services\StoreSubmissionService;
 use App\Services\TenantProvisioner;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
 use Database\Seeders\IdentitySeeder;
@@ -121,6 +123,29 @@ class StoreDraftLifecycleTest extends TestCase
         } catch (QueryException $exception) {
             $this->assertStringContainsString('store_drafts_revision_positive', (string) ($exception->errorInfo[2] ?? ''));
         }
+    }
+
+    public function test_unbound_and_correction_drafts_never_become_storefront_layout_authorities(): void
+    {
+        $owner = $this->createUser('draft-layout-owner@example.test');
+        $customLayout = [
+            ['id' => 'about', 'visible' => true],
+            ['id' => 'featured_products', 'visible' => false],
+            ['id' => 'categories', 'visible' => false],
+            ['id' => 'trust', 'visible' => false],
+            ['id' => 'hero', 'visible' => false],
+        ];
+        $payload = $this->draftPayload('layout-unbound', 0, 'layout-unbound', 'starter');
+        $payload['config']['homeSections'] = $customLayout;
+
+        $draft = app(StoreDraftService::class)->saveUnbound(
+            $payload,
+            $owner,
+            Request::create('/api/merchant/store-draft', 'PUT'),
+        );
+
+        $this->assertArrayNotHasKey('homeSections', $draft->config);
+        $this->assertSame(StoreDraftStatus::Draft, $draft->status);
     }
 
     public function test_submission_revalidates_the_locked_user_and_enforces_exact_draft_tenant_integrity(): void
@@ -249,15 +274,24 @@ class StoreDraftLifecycleTest extends TestCase
         ])->assertForbidden();
 
         $this->startBrowserSessionAs($owner);
-        $corrected = $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $this->draftPayload(
+        $correctionPayload = $this->draftPayload(
             'corrected',
             $correctionRevision,
             'corrected-shop',
             'starter',
-        ))->assertOk()
+        );
+        $correctionPayload['config']['homeSections'] = [
+            ['id' => 'about', 'visible' => true],
+            ['id' => 'featured_products', 'visible' => false],
+            ['id' => 'categories', 'visible' => false],
+            ['id' => 'trust', 'visible' => false],
+            ['id' => 'hero', 'visible' => false],
+        ];
+        $corrected = $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $correctionPayload)->assertOk()
             ->assertJsonPath('data.revision', $correctionRevision + 1)
             ->assertJsonPath('data.status', StoreDraftStatus::CorrectionRequired->value);
         $this->assertSame('corrected-shop', $corrected->json('data.handle'));
+        $this->assertArrayNotHasKey('homeSections', $draft->refresh()->config);
 
         $key = (string) Str::uuid();
         $correctedRevision = $correctionRevision + 1;
@@ -279,6 +313,8 @@ class StoreDraftLifecycleTest extends TestCase
         $this->assertSame(2, $submission->revision);
         $this->assertSame('Store corrected', $submission->payload_snapshot['storeName']);
         $this->assertSame('corrected-shop', $submission->payload_snapshot['handle']);
+        $this->assertSame(StorefrontSectionLayout::defaults(), $submission->payload_snapshot['config']['homeSections']);
+        $this->assertArrayNotHasKey('homeSections', $draft->refresh()->config);
         $this->assertDatabaseCount('store_resubmissions', 1);
         $this->assertSame(StoreDraftStatus::Submitted, $draft->refresh()->status);
         $this->assertSame($correctedRevision + 1, $draft->revision);

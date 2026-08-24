@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "./apiClient";
 import { workspaceApi } from "./workspaceApi";
 import type { StoreConfig } from "../types";
+import { defaultStorefrontSections } from "../contracts/storefrontSections";
 
 const config: StoreConfig = {
   storeName: "Server Store",
@@ -68,6 +69,22 @@ describe("workspaceApi", () => {
     expect(workspace.config.logoUrl).toBe("");
     expect(workspace.config.heroBannerImage).toBe("");
     expect(workspace.config.aboutImage).toBe("");
+    expect(workspace.config.homeSections).toEqual(defaultStorefrontSections());
+  });
+
+  it("rejects a present malformed storefront layout instead of replacing it silently", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        tenantId: "tenant-1",
+        revision: 7,
+        catalogRevision: 3,
+        capabilities: { inventoryView: false, inventoryManage: false },
+        updatedAt: null,
+        config: { ...config, homeSections: [{ id: "hero", visible: true }] },
+      },
+    }), { status: 200 })));
+
+    await expect(workspaceApi.load("tenant-1")).rejects.toMatchObject({ category: "unexpected" });
   });
 
   it("omits draft identifiers and sends the current revision through the CSRF client", async () => {

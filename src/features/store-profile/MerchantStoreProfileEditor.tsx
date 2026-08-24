@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, Image, Loader2, Palette, Store, Trash2, Type, Upload } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Eye, EyeOff, Image, LayoutList, Loader2, Palette, Store, Trash2, Type, Upload } from "lucide-react";
 import type { StoreAssetUpload } from "../../adapters/uiAdapters";
 import { uiErrorMessage } from "../../contracts/uiError";
 import type { StoreConfig } from "../../types";
+import { STOREFRONT_SECTION_LABELS, storefrontSectionsOrDefault } from "../../contracts/storefrontSections";
 
-type ProfileSection = "identity" | "appearance" | "hero";
+type ProfileSection = "identity" | "appearance" | "hero" | "layout";
 type AssetField = "logoUrl" | "heroBannerImage";
 
 interface MerchantStoreProfileEditorProps {
@@ -20,6 +21,7 @@ const SECTIONS: Array<{ key: ProfileSection; label: string; icon: typeof Store }
   { key: "identity", label: "هوية المتجر", icon: Store },
   { key: "appearance", label: "الألوان والخط", icon: Palette },
   { key: "hero", label: "واجهة الترحيب", icon: Image },
+  { key: "layout", label: "ترتيب الأقسام", icon: LayoutList },
 ];
 
 const COLORS: Array<{ key: keyof StoreConfig; label: string; fallback: string }> = [
@@ -64,6 +66,21 @@ export default function MerchantStoreProfileEditor({
   }, [activeTenantId, mediaOwnerKey, config.logoUrl, config.heroBannerImage]);
 
   const set = <Key extends keyof StoreConfig>(key: Key, value: StoreConfig[Key]) => onChange(key, value);
+  const layout = storefrontSectionsOrDefault(config.homeSections);
+  const moveSection = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= layout.length) return;
+    const next = layout.map((item) => ({ ...item }));
+    [next[index], next[target]] = [next[target], next[index]];
+    set("homeSections", next);
+  };
+  const toggleSection = (index: number) => {
+    const currentlyVisible = layout.filter((item) => item.visible).length;
+    if (layout[index].visible && currentlyVisible === 1) return;
+    set("homeSections", layout.map((item, itemIndex) => itemIndex === index
+      ? { ...item, visible: !item.visible }
+      : { ...item }));
+  };
   const replaceAsset = (field: AssetField, value: string) => {
     generationRef.current += 1;
     uploadRef.current?.controller.abort();
@@ -161,7 +178,7 @@ export default function MerchantStoreProfileEditor({
   return (
     <div className="space-y-5" dir="rtl">
       <div className="rounded-2xl border border-slate-200 bg-white p-1.5">
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
           {SECTIONS.map(({ key, label, icon: Icon }) => (
             <button key={key} type="button" onClick={() => setSection(key)} className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-black transition ${section === key ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
               <Icon className="h-4 w-4" /> {label}
@@ -206,12 +223,38 @@ export default function MerchantStoreProfileEditor({
 
       {section === "hero" && (
         <div className="space-y-4">
-          <header className="flex items-start justify-between gap-3"><div><h3 className="text-base font-black text-slate-900">واجهة الترحيب</h3><p className="mt-1 text-xs leading-5 text-slate-500">رسالة وصورة تظهران في أعلى المتجر العام.</p></div><button type="button" role="switch" aria-checked={config.showHeroBanner ?? false} onClick={() => set("showHeroBanner", !(config.showHeroBanner ?? false))} className={`rounded-full px-3 py-1.5 text-xs font-black ${config.showHeroBanner ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{config.showHeroBanner ? "مفعلة" : "مخفية"}</button></header>
+          <header className="flex items-start justify-between gap-3"><div><h3 className="text-base font-black text-slate-900">واجهة الترحيب</h3><p className="mt-1 text-xs leading-5 text-slate-500">حرر محتوى الترحيب، ويمكن التحكم بظهور القسم كاملًا من تبويب ترتيب الأقسام.</p></div><button type="button" role="switch" aria-label="إظهار طبقة صورة الترحيب" aria-checked={config.showHeroBanner ?? false} onClick={() => set("showHeroBanner", !(config.showHeroBanner ?? false))} className={`rounded-full px-3 py-1.5 text-xs font-black ${config.showHeroBanner ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{config.showHeroBanner ? "طبقة الصورة مفعلة" : "طبقة الصورة مخفية"}</button></header>
           {assetField("heroBannerImage", "صورة واجهة الترحيب")}
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">العنوان</span><input value={config.heroBannerTitle ?? ""} onChange={(event) => set("heroBannerTitle", event.target.value)} maxLength={500} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></label>
           <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700">النص المساند</span><textarea value={config.heroBannerSubtitle ?? ""} onChange={(event) => set("heroBannerSubtitle", event.target.value)} maxLength={1000} rows={3} className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></label>
           <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><span className="text-xs font-bold text-slate-700">الشارة</span><input value={config.heroBannerBadge ?? ""} onChange={(event) => set("heroBannerBadge", event.target.value)} maxLength={255} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></label><label className="space-y-1.5"><span className="text-xs font-bold text-slate-700">نص الزر</span><input value={config.heroBannerButtonText ?? ""} onChange={(event) => set("heroBannerButtonText", event.target.value)} maxLength={255} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /></label></div>
           <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5"><span className="text-xs font-bold text-slate-700">ارتفاع الواجهة</span><select value={config.heroBannerHeight ?? "medium"} onChange={(event) => set("heroBannerHeight", event.target.value as StoreConfig["heroBannerHeight"])} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="compact">مدمج</option><option value="medium">متوسط</option><option value="large">كبير</option></select></label><label className="space-y-1.5"><span className="text-xs font-bold text-slate-700">تعتيم الصورة: {config.heroBannerOverlayOpacity ?? 35}%</span><input type="range" min="0" max="100" value={config.heroBannerOverlayOpacity ?? 35} onChange={(event) => set("heroBannerOverlayOpacity", Number(event.target.value))} className="w-full" /></label></div>
+        </div>
+      )}
+
+      {section === "layout" && (
+        <div className="space-y-4">
+          <header>
+            <h3 className="text-base font-black text-slate-900">ترتيب الصفحة الرئيسية</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">رتب الأقسام أو أخفِ ما لا تحتاجه. لن يؤثر ذلك في صفحات المنتجات ومن نحن.</p>
+          </header>
+          <div className="space-y-2">
+            {layout.map((item, index) => (
+              <div key={item.id} className={`flex items-center gap-3 rounded-2xl border p-3 ${item.visible ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50 opacity-70"}`}>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-xs font-black text-white">{index + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black text-slate-800">{STOREFRONT_SECTION_LABELS[item.id]}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">{item.visible ? "ظاهر في واجهة المتجر" : "مخفي من الصفحة الرئيسية"}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button type="button" aria-label={`نقل ${STOREFRONT_SECTION_LABELS[item.id]} للأعلى`} disabled={index === 0} onClick={() => moveSection(index, -1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                  <button type="button" aria-label={`نقل ${STOREFRONT_SECTION_LABELS[item.id]} للأسفل`} disabled={index === layout.length - 1} onClick={() => moveSection(index, 1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                  <button type="button" aria-label={`${item.visible ? "إخفاء" : "إظهار"} ${STOREFRONT_SECTION_LABELS[item.id]}`} disabled={item.visible && layout.filter((sectionItem) => sectionItem.visible).length === 1} onClick={() => toggleSection(index)} className={`rounded-lg p-1.5 disabled:cursor-not-allowed disabled:opacity-30 ${item.visible ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{item.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="rounded-xl bg-sky-50 p-3 text-[11px] font-bold leading-5 text-sky-800">يجب إبقاء قسم واحد على الأقل ظاهرًا. الترتيب المحفوظ يظهر نفسه للعميل على رابط المتجر.</p>
         </div>
       )}
     </div>

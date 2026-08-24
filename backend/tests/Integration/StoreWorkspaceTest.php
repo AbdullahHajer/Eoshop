@@ -42,6 +42,7 @@ use App\Services\RoleAssignmentService;
 use App\Services\StoreAssetService;
 use App\Services\StoreWorkspaceService;
 use App\Services\TenantProvisioningExecutor;
+use App\Support\StorefrontSectionLayout;
 use App\Support\TenantWorkspaceReadiness;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Database\Events\QueryExecuted;
@@ -178,6 +179,103 @@ class StoreWorkspaceTest extends TestCase
         $this->assertArrayNotHasKey('email', $public);
         $this->assertSame((string) config('tenancy.database.central_connection'), DB::getDefaultConnection());
         $this->assertFalse(tenancy()->initialized);
+    }
+
+    public function test_storefront_layout_adopts_legacy_once_and_rejects_old_client_omission_after_customization(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('storefront-layout');
+
+        $legacy = $this->actingAs($owner)
+            ->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->assertJsonPath('data.config.homeSections', StorefrontSectionLayout::defaults())
+            ->json('data');
+        $tenant->run(function (): void {
+            $stored = json_decode((string) DB::table('store_configs')->where('is_current', true)->value('config_json'), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertArrayNotHasKey('homeSections', $stored);
+        });
+
+        $firstWrite = $this->config('Legacy adoption', [[
+            ...$this->product('LAYOUT-1'),
+            'id' => $legacy['config']['products'][0]['id'],
+            'revision' => $legacy['config']['products'][0]['revision'],
+        ]]);
+        $adopted = $this->actingAs($owner)->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+            'revision' => $legacy['revision'],
+            'catalogRevision' => $legacy['catalogRevision'],
+            'config' => $firstWrite,
+        ])->assertOk()->assertJsonPath('data.config.homeSections', StorefrontSectionLayout::defaults())->json('data');
+
+        $customLayout = [
+            ['id' => 'featured_products', 'visible' => true],
+            ['id' => 'hero', 'visible' => false],
+            ['id' => 'categories', 'visible' => true],
+            ['id' => 'trust', 'visible' => true],
+            ['id' => 'about', 'visible' => true],
+        ];
+        $customConfig = $adopted['config'];
+        $customConfig['homeSections'] = $customLayout;
+        $saved = $this->actingAs($owner)->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+            'revision' => $adopted['revision'],
+            'catalogRevision' => $adopted['catalogRevision'],
+            'config' => $customConfig,
+        ])->assertOk()->assertJsonPath('data.config.homeSections', $customLayout)->json('data');
+
+        $oldClientConfig = $saved['config'];
+        unset($oldClientConfig['homeSections']);
+        $this->actingAs($owner)->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+            'revision' => $saved['revision'],
+            'catalogRevision' => $saved['catalogRevision'],
+            'config' => $oldClientConfig,
+        ])->assertUnprocessable()->assertJsonPath('code', 'workspace_layout_required');
+
+        $this->actingAs($owner)->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+            'revision' => $saved['revision'],
+            'catalogRevision' => $saved['catalogRevision'],
+            'config' => [...$saved['config'], 'homeSections' => [
+                ['id' => 'hero', 'visible' => false],
+                ['id' => 'trust', 'visible' => false],
+                ['id' => 'categories', 'visible' => false],
+                ['id' => 'featured_products', 'visible' => false],
+                ['id' => 'about', 'visible' => false],
+            ]],
+        ])->assertUnprocessable()->assertJsonPath('code', 'workspace_validation_failed');
+
+        $invalidLayouts = [
+            array_slice(StorefrontSectionLayout::defaults(), 0, 4),
+            [
+                ['id' => 'hero', 'visible' => true],
+                ['id' => 'hero', 'visible' => false],
+                ['id' => 'categories', 'visible' => true],
+                ['id' => 'featured_products', 'visible' => true],
+                ['id' => 'about', 'visible' => true],
+            ],
+            [
+                ['id' => 'unknown', 'visible' => true],
+                ['id' => 'trust', 'visible' => true],
+                ['id' => 'categories', 'visible' => true],
+                ['id' => 'featured_products', 'visible' => true],
+                ['id' => 'about', 'visible' => true],
+            ],
+        ];
+        foreach ($invalidLayouts as $invalidLayout) {
+            $this->actingAs($owner)->patchJson("/api/merchant/stores/{$tenant->id}/workspace", [
+                'revision' => $saved['revision'],
+                'catalogRevision' => $saved['catalogRevision'],
+                'config' => [...$saved['config'], 'homeSections' => $invalidLayout],
+            ])->assertUnprocessable()->assertJsonPath('code', 'workspace_validation_failed');
+        }
+
+        $tenant->run(function () use ($saved): void {
+            $record = DB::table('store_configs')->where('is_current', true)->firstOrFail();
+            $this->assertSame($saved['revision'], (int) $record->revision);
+            $stored = json_decode((string) $record->config_json, true, 512, JSON_THROW_ON_ERROR);
+            $stored['homeSections'] = [['id' => 'hero', 'visible' => true]];
+            DB::table('store_configs')->where('id', $record->id)->update(['config_json' => json_encode($stored, JSON_THROW_ON_ERROR)]);
+        });
+        $this->actingAs($owner)->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertConflict()->assertJsonPath('code', 'workspace_layout_invalid');
+        $this->getJson("http://{$domain}/api/store/config")->assertNotFound();
     }
 
     public function test_workspace_rejects_enabled_demo_payment_accounts(): void

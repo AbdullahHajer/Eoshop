@@ -2,6 +2,7 @@ import type { Coupon, EWallet, Product, StoreConfig } from "../types";
 import { apiClient, ApiError } from "./apiClient";
 import { arrayField, enumField, numberField, record, stringField } from "./apiContract";
 import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
+import { defaultStorefrontSections, validStorefrontSections } from "../contracts/storefrontSections";
 
 export interface StoreWorkspace {
   tenantId: string;
@@ -134,6 +135,11 @@ export function mapStoreConfig(value: unknown): StoreConfig {
     fontFamily: stringField(dto, "fontFamily", "إعدادات مساحة العمل"),
     phone: stringField(dto, "phone", "إعدادات مساحة العمل"),
     currency: stringField(dto, "currency", "إعدادات مساحة العمل"),
+    homeSections: dto.homeSections === undefined
+      ? defaultStorefrontSections()
+      : validStorefrontSections(dto.homeSections)
+        ? dto.homeSections.map((section) => ({ ...section }))
+        : invalid("ترتيب أقسام واجهة المتجر"),
   };
 
   for (const key of optionalStringKeys) {
