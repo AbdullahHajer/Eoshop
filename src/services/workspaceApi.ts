@@ -133,7 +133,7 @@ export function mapStoreConfig(value: unknown): StoreConfig {
     bannerText: stringField(dto, "bannerText", "إعدادات مساحة العمل"),
     products: arrayField(dto, "products", "إعدادات مساحة العمل").map(mapProduct),
     fontFamily: stringField(dto, "fontFamily", "إعدادات مساحة العمل"),
-    phone: stringField(dto, "phone", "إعدادات مساحة العمل"),
+    phone: optionalString(dto, "phone", "إعدادات مساحة العمل") ?? "",
     currency: stringField(dto, "currency", "إعدادات مساحة العمل"),
     homeSections: dto.homeSections === undefined
       ? defaultStorefrontSections()
