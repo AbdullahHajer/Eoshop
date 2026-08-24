@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.16 |
-| Status | In progress |
+| Status | Ready for PR |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.16-draft-continuity` |
 | Base | Protected `main` at `74b374e7` |
@@ -62,15 +62,15 @@ Close the gap between a server-saved onboarding draft and a submitted store so t
 
 ### T4 — Gates
 
-- [ ] Pass complete frontend quality and production build.
-- [ ] Pass unchanged backend, repository safety and container integration gates.
-- [ ] Update retained Pilot without deleting merchant or draft data and verify the live continuation journey.
+- [x] Pass complete frontend quality and production build.
+- [x] Pass unchanged backend, repository safety and container integration gates.
+- [x] Update retained Pilot without deleting merchant or draft data and verify the live continuation journey.
 
 ### T5 — Evidence and delivery
 
-- [ ] Record final immutable evidence and retained debt.
-- [ ] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately.
+- [x] Record final local and retained-Pilot evidence and retained debt.
+- [x] Obtain final independent read-only approval.
+- [x] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
