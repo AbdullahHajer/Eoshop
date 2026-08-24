@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.17 — Newly provisioned workspace nullable-contact hotfix |
-| Status | Ready for PR |
+| Status | Complete and merged |
 | Verified | 2026-08-24 |
 | Branch | `codex/wp-5.17-workspace-nullable-contact` |
 | Base | `ad2e1daefb966ba778262cc43680b5fe46b0ba90` |
@@ -75,4 +75,9 @@
 
 ## Delivery
 
-- Implementation commit, evidence commit, pull request, required CI, merge commit and protected-main CI will be appended during delivery closeout.
+- Implementation commit: `786f4f853846c8d1dedfcc6143c741bea98dda01`.
+- Evidence commit: `c4062527e1981f7748e42d4aa02d63fe62ebbbf5`.
+- Pull request [#58](https://github.com/sas-prog1/Eoshop/pull/58) was merged from final head `c4062527e1981f7748e42d4aa02d63fe62ebbbf5`.
+- Pull-request CI run [32753751743](https://github.com/sas-prog1/Eoshop/actions/runs/32753751743) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `a6034cde6a961b203459cf4f27c6264b394a8202`.
+- Protected-main CI run [32754393671](https://github.com/sas-prog1/Eoshop/actions/runs/32754393671) passed the same four required jobs after merge.

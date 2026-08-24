@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.17 |
-| Status | Ready for PR |
+| Status | Complete and merged |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.17-workspace-nullable-contact` |
 | Base | Protected `main` at `ad2e1dae` |
@@ -48,7 +48,7 @@ Restore every shared-workspace merchant module for a newly provisioned store who
 
 - [x] Obtain independent read-only approval.
 - [x] Record immutable evidence and retained debt.
-- [ ] Commit, push, pass required CI and merge.
+- [x] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
 
