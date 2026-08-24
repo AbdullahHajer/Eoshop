@@ -7,6 +7,7 @@ use App\Support\CheckoutPolicyContract;
 use App\Support\ProductCatalogContract;
 use App\Support\StoreAssetPath;
 use App\Support\StoreContactTarget;
+use App\Support\StorefrontSectionLayout;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -31,7 +32,7 @@ class UpdateStoreWorkspaceRequest extends FormRequest
         'enableCashOnDelivery', 'cashOnDeliveryFee', 'enableBankTransfer', 'bankName', 'bankAccountName',
         'bankIban', 'bankAccountNumber', 'enableOnlineCard', 'enableApplePay', 'enableStcPay',
         'enableEWallets', 'customWallets', 'enableCoupons', 'customCoupons', 'thankYouTitle',
-        'thankYouMessage', 'enableWhatsAppNotification',
+        'thankYouMessage', 'enableWhatsAppNotification', 'homeSections',
     ];
 
     /** @return array<string, list<mixed>> */
@@ -130,6 +131,10 @@ class UpdateStoreWorkspaceRequest extends FormRequest
             'config.thankYouTitle' => ['nullable', 'string', 'max:500'],
             'config.thankYouMessage' => $longText,
             'config.enableWhatsAppNotification' => $boolean,
+            'config.homeSections' => ['sometimes', 'array', 'size:5'],
+            'config.homeSections.*' => ['required', 'array:id,visible'],
+            'config.homeSections.*.id' => ['required', 'string', Rule::in(StorefrontSectionLayout::ids()), 'distinct:strict'],
+            'config.homeSections.*.visible' => ['required', 'boolean'],
             'config.products' => ['present', 'array', 'max:5000'],
             'config.products.*' => ['array:id,revision,status,name,price,basePrice,salePrice,description,category,imageKeyword,imageUrl,imageUrls,stockQuantity,reservedQuantity,availableQuantity,inventoryRevision,manageStock,sku,lowStockThreshold'],
             'config.products.*.id' => ['nullable', 'uuid', 'distinct:strict'],
@@ -229,6 +234,14 @@ class UpdateStoreWorkspaceRequest extends FormRequest
                 $validator->errors()->add('config.customCoupons', 'Coupon codes must be unique after canonicalization.');
             }
             CheckoutPolicyContract::appendErrors($validator, (array) $this->input('config', []));
+
+            if ($this->has('config.homeSections')
+                && ! StorefrontSectionLayout::isValid($this->input('config.homeSections'))) {
+                $validator->errors()->add(
+                    'config.homeSections',
+                    'The storefront layout must contain every supported section exactly once and keep at least one visible.',
+                );
+            }
 
         }];
     }

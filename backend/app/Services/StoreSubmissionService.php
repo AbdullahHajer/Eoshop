@@ -20,6 +20,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\CanonicalDomain;
 use App\Support\CanonicalPayload;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -90,8 +91,10 @@ class StoreSubmissionService
                 }
                 $this->subscriptions->assertStoreQuota($actor);
                 $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
+                $centralDraftConfig = StorefrontSectionLayout::withoutLayout((array) $input['config']);
+                $provisioningConfig = StorefrontSectionLayout::forProvisioning($centralDraftConfig);
                 $workspaceValidator = StoreWorkspaceContract::validator(
-                    $input['config'],
+                    $provisioningConfig,
                     $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
                 );
                 if ($workspaceValidator->fails()) {
@@ -128,7 +131,7 @@ class StoreSubmissionService
                         'theme_style' => $tenant->getAttribute('theme_style'),
                         'handle' => $reservation->getAttribute('handle'),
                         'plan_key' => $plan->getKey(),
-                        'config' => $input['config'],
+                        'config' => $centralDraftConfig,
                         'saved_at' => now(),
                         'submitted_at' => now(),
                     ]);
@@ -137,6 +140,7 @@ class StoreSubmissionService
                         'tenant_id' => $tenant->getKey(),
                         'status' => StoreDraftStatus::Submitted,
                         'onboarding_stage' => StoreOnboardingStage::Review,
+                        'config' => StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config')),
                         'revision' => ((int) $draft->getAttribute('revision')) + 1,
                         'saved_at' => now(),
                         'submitted_at' => now(),
@@ -158,7 +162,7 @@ class StoreSubmissionService
                         'handle' => $reservation->getAttribute('handle'),
                         'planKey' => $plan->getKey(),
                         'themeStyle' => $tenant->getAttribute('theme_style'),
-                        'config' => $input['config'],
+                        'config' => $provisioningConfig,
                         'owner' => [
                             'id' => $actor->getKey(),
                             'name' => $actor->getAttribute('name'),

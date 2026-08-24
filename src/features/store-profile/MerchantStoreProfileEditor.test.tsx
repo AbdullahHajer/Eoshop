@@ -127,4 +127,37 @@ describe("MerchantStoreProfileEditor", () => {
     await user.click(screen.getByRole("button", { name: /واجهة الترحيب/ }));
     expect(screen.getByRole("heading", { name: "واجهة الترحيب" })).toBeTruthy();
   });
+
+  it("reorders and hides semantic storefront sections while keeping one visible", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const config = {
+      ...ELEGANT_PRESET,
+      homeSections: [
+        { id: "hero" as const, visible: true },
+        { id: "trust" as const, visible: true },
+        { id: "categories" as const, visible: true },
+        { id: "featured_products" as const, visible: true },
+        { id: "about" as const, visible: true },
+      ],
+    };
+    const view = renderEditor({ config, initialSection: "layout", onChange });
+
+    await user.click(screen.getByRole("button", { name: "نقل معلومات الخدمة للأعلى" }));
+    expect(onChange).toHaveBeenCalledWith("homeSections", [
+      { id: "trust", visible: true },
+      { id: "hero", visible: true },
+      { id: "categories", visible: true },
+      { id: "featured_products", visible: true },
+      { id: "about", visible: true },
+    ]);
+    await user.click(screen.getByRole("button", { name: "إخفاء واجهة الترحيب" }));
+    expect(onChange).toHaveBeenCalledWith("homeSections", expect.arrayContaining([{ id: "hero", visible: false }]));
+
+    view.rerender(<MerchantStoreProfileEditor {...view.props} initialSection="layout" config={{
+      ...config,
+      homeSections: config.homeSections.map((section) => ({ ...section, visible: section.id === "hero" })),
+    }} />);
+    expect(screen.getByRole("button", { name: "إخفاء واجهة الترحيب" })).toHaveProperty("disabled", true);
+  });
 });

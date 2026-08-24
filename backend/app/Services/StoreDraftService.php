@@ -14,6 +14,7 @@ use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PublicStoreHandle;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
 use App\Support\StoreWorkspaceContract;
@@ -90,7 +91,7 @@ class StoreDraftService
                     return $draft->refresh();
                 }
 
-                $config = (array) $draft->getAttribute('config');
+                $config = StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config'));
                 $config['storeName'] = $name;
                 $changes = [];
                 if ($draft->getAttribute('store_name') !== $name) {
@@ -133,7 +134,7 @@ class StoreDraftService
                 $this->assertExpectedRevision($draft, (int) $input['expectedRevision']);
 
                 $config = StoreOnboardingAppearance::merge(
-                    (array) $draft->getAttribute('config'),
+                    StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config')),
                     (string) $draft->getAttribute('store_name'),
                     $input['themeStyle'],
                     $input['config'],
@@ -195,7 +196,7 @@ class StoreDraftService
                 if (! $plan instanceof Plan) {
                     throw ValidationException::withMessages(['planKey' => ['الباقة المحددة غير متاحة.']]);
                 }
-                $config = (array) $draft->getAttribute('config');
+                $config = StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config'));
                 $validator = StoreWorkspaceContract::validator(
                     $config,
                     $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
@@ -217,6 +218,9 @@ class StoreDraftService
                 if ($draft->getAttribute('plan_key') !== $plan->getKey()) {
                     $changes[] = 'planKey';
                 }
+                if ($draft->getAttribute('config') !== $config) {
+                    $changes[] = 'config';
+                }
                 if ($draft->getAttribute('onboarding_stage') !== StoreOnboardingStage::Review) {
                     $changes[] = 'onboardingStage';
                 }
@@ -228,6 +232,7 @@ class StoreDraftService
                 $draft->forceFill([
                     'handle' => $handle,
                     'plan_key' => $plan->getKey(),
+                    'config' => $config,
                     'onboarding_stage' => StoreOnboardingStage::Review,
                     'revision' => $oldRevision + 1,
                     'saved_at' => now(),
@@ -418,7 +423,7 @@ class StoreDraftService
         if (is_string($input['planKey'] ?? null) && $input['planKey'] !== '') {
             $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
         }
-        $config = $input['config'];
+        $config = StorefrontSectionLayout::withoutLayout($input['config']);
         $validator = StoreWorkspaceContract::validator(
             $config,
             $plan?->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),

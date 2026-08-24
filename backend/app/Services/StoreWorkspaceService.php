@@ -13,6 +13,7 @@ use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Support\CheckoutPolicyContract;
 use App\Support\StoreContactTarget;
+use App\Support\StorefrontSectionLayout;
 use App\Support\TenantWorkspaceReadiness;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Arr;
@@ -93,15 +94,16 @@ class StoreWorkspaceService
                     }
 
                     $currentFullConfig = json_decode((string) $record->config_json, true, 512, JSON_THROW_ON_ERROR);
-                    $this->assets->syncReferences($lockedTenant, $currentFullConfig, $payload['config']);
+                    $incomingConfig = StorefrontSectionLayout::forWrite($payload['config'], $currentFullConfig);
+                    $this->assets->syncReferences($lockedTenant, $currentFullConfig, $incomingConfig);
 
                     $catalog = $this->catalogs->mutate($lockedTenant, [
                         'catalogRevision' => $payload['catalogRevision'],
-                        'currencyCode' => $payload['config']['currency'],
+                        'currencyCode' => $incomingConfig['currency'],
                         'products' => $products,
                         'archiveProductIds' => $payload['archiveProductIds'] ?? [],
                     ], $limit, false, true);
-                    $storedConfig = Arr::except($payload['config'], ['products', 'currency']);
+                    $storedConfig = Arr::except($incomingConfig, ['products', 'currency']);
                     $currentConfig = Arr::except($currentFullConfig, ['products', 'currency']);
                     $workspaceChanged = $currentConfig !== $storedConfig || ! (bool) $record->products_materialized;
                     if ($workspaceChanged) {
@@ -130,6 +132,7 @@ class StoreWorkspaceService
     /** @param array<string, mixed> $config */
     public function initialize(Tenant $tenant, string $configId, array $config): void
     {
+        $config = StorefrontSectionLayout::forProvisioning($config);
         DB::transaction(function () use ($tenant, $configId, $config): void {
             DB::table('store_configs')->where('is_current', true)->update(['is_current' => false]);
             $now = now();
@@ -242,7 +245,9 @@ class StoreWorkspaceService
     private function compose(Tenant $tenant, ?array $catalog = null, bool $public = false): array
     {
         $record = $this->currentConfig();
-        $config = json_decode((string) $record->config_json, true, 512, JSON_THROW_ON_ERROR);
+        $config = StorefrontSectionLayout::forProjection(
+            json_decode((string) $record->config_json, true, 512, JSON_THROW_ON_ERROR),
+        );
 
         $catalog ??= $this->catalogs->compose($tenant, $public);
         $config['products'] = $catalog['products'];

@@ -9,6 +9,7 @@ use App\Models\StoreSubmission;
 use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Support\StoreAssetSchema;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +54,7 @@ class TenantProvisioningExecutor
             if (! is_array($config)) {
                 throw new ProvisioningFailure('initial_config_missing', 'The initial store configuration is unavailable.');
             }
+            $config = StorefrontSectionLayout::forProvisioning($config);
 
             $validator = StoreWorkspaceContract::validator(
                 $config,

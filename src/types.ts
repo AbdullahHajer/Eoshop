@@ -38,6 +38,13 @@ export interface EWallet {
   bgColor?: string;
 }
 
+export type StorefrontSectionId = "hero" | "trust" | "categories" | "featured_products" | "about";
+
+export interface StorefrontSection {
+  id: StorefrontSectionId;
+  visible: boolean;
+}
+
 export interface StoreConfig {
   storeName: string;
   slogan: string;
@@ -54,6 +61,7 @@ export interface StoreConfig {
   themeStyle: "elegant" | "tech";
   bannerText: string;
   products: Product[];
+  homeSections?: StorefrontSection[];
   fontFamily: string;
   phone: string;
   currency: string;
@@ -133,10 +141,17 @@ const ELEGANT_SHOWCASE_PRESET: StoreConfig = {
   cardBgColor: "#FFFFFF", // Pure white cards & sections
   borderColor: "#F2EAE1", // Soft warm borders
   themeStyle: "elegant",
-  bannerText: "خصم حصري 20% بمناسبة إطلاق تشكيلة الصيف الجديدة للعود والعطور",
+  bannerText: "اكتشف تشكيلة العطور والهدايا المتاحة في المتجر",
   fontFamily: "Cairo",
   phone: "+966 50 123 4567",
   currency: "YER",
+  homeSections: [
+    { id: "hero", visible: true },
+    { id: "trust", visible: true },
+    { id: "categories", visible: true },
+    { id: "featured_products", visible: true },
+    { id: "about", visible: true },
+  ],
   aboutTitle: "قصة لورين للعطور - فخامة العبق الشرقي والفرنسي",
   aboutText: "تأسست دار 'لورين للعطور' لتكون رائدة في عالم الخلطات النادرة والنفحات الساحرة. نبتكر عطرياتنا من خلاصة أجود زيوت العود المعتق، المسك الأبيض، والورد الطائفي الفاخر، لنمنح زوارنا تجربة حسية فريدة تجسد الأصالة والهيبة.",
   aboutVision: "رؤيتنا هي الابتكار المستمر وإتاحة أرقى معايير صناعة العطور الملكية والمباخر اليدوية لكافة عملائنا في الخليج العربي.",
@@ -166,7 +181,7 @@ const ELEGANT_SHOWCASE_PRESET: StoreConfig = {
   // --- CHECKOUT & PAYMENT DEFAULTS ---
   checkoutTitle: "إتمام الطلب الشراء والدفع",
   checkoutSubtitle: "أدخل بيانات التوصيل واختر طريقة الدفع المناسبة لك",
-  checkoutNotice: "توصيل سريع وآمن لجميع مناطق المملكة والخليج العربي 🚚⚡",
+  checkoutNotice: "راجع بيانات الطلب والتوصيل قبل التأكيد.",
   requireEmail: false,
   requireAddressDetails: true,
   enableCustomerNotes: true,
@@ -347,7 +362,7 @@ export const TECH_PRESET: StoreConfig = {
   customCoupons: [],
   enableWhatsAppNotification: false,
   storeName: "تِك فيو - للأجهزة الذكية",
-  slogan: "أحدث ابتكارات التكنولوجيا والملحقات الذكية مع ضمان 24 شهراً",
+  slogan: "أجهزة وملحقات تقنية مرتبة في تجربة شراء واضحة",
   logoIcon: "⚡",
   primaryColor: "#0284C7", // Bright Sky Blue
   secondaryColor: "#0F172A", // Deep Slate
@@ -356,12 +371,19 @@ export const TECH_PRESET: StoreConfig = {
   cardBgColor: "#FFFFFF", // Pure White Cards
   borderColor: "#E2E8F0", // Cool Slate Borders
   themeStyle: "tech",
-  bannerText: "خصم حصري 15% عند الشراء اليوم مع شحن مجاني وسريع وضمان رسمي سنتين",
+  bannerText: "تصفح المنتجات التقنية المنشورة في المتجر",
   fontFamily: "Tajawal",
   phone: "",
   currency: "YER",
+  homeSections: [
+    { id: "hero", visible: true },
+    { id: "trust", visible: true },
+    { id: "categories", visible: true },
+    { id: "featured_products", visible: true },
+    { id: "about", visible: true },
+  ],
   aboutTitle: "عن متجر تِك فيو - الابتكار والحلول الذكية",
-  aboutText: "تأسست منصة 'تِك فيو' لتسوق أحدث المنتجات والابتكارات الإلكترونية في المنطقة. نوفر تشكيلة منتواة من السماعات، الساعات الذكية، والشواحن عالية الكفاءة المعززة بضمان رسمي وتجربة تسوق سلسة وآمنة.",
+  aboutText: "تأسست منصة 'تِك فيو' لعرض المنتجات والابتكارات الإلكترونية في مكان منظم. يضم الكتالوج سماعات وساعات ذكية وملحقات تقنية بمواصفات يضيفها المتجر لكل منتج.",
   aboutVision: "رؤيتنا إيصال أحدث ما توصلت إليه التكنولوجيا الحديثة لعملائنا بأسعار تنافسية وأعلى معايير الخدمة بعد البيع.",
   aboutImage: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80",
   email: "",
@@ -375,7 +397,7 @@ export const TECH_PRESET: StoreConfig = {
   showHeroBanner: false,
   heroBannerImage: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1600&q=80",
   heroBannerTitle: "عالم التقنية والحلول الذكية بين يديك ⚡",
-  heroBannerSubtitle: "شاهد أحدث الساعات والسماعات وملحقات الجوال بأسعار استثنائية وضمان عامين",
+  heroBannerSubtitle: "شاهد الساعات والسماعات وملحقات الجوال المتاحة في الكتالوج",
   heroBannerBadge: "🚀 عروض موثقة حصرياً",
   heroBannerButtonText: "استكشف المنتجات التقنية",
   heroBannerHeight: "medium",
