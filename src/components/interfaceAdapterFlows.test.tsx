@@ -179,11 +179,53 @@ describe("adapter-backed interface flows", () => {
     expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   }, 15_000);
 
+  it("shows submitted stores without waiting for a hanging draft recovery request", async () => {
+    const pendingStore: StoreSubmission = {
+      ...submission,
+      verificationStatus: "pending",
+      provisioningStatus: "not_started",
+      publicationBlockers: ["review_not_approved", "provisioning_not_ready"],
+    };
+    const currentDraft = vi.fn(() => new Promise<StoreDraft | null>(() => undefined));
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      provisioning: { listStores: vi.fn().mockResolvedValue([pendingStore]), currentDraft },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+    expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByText(/جاري التحقق من وجود مسودة محفوظة/)).toBeTruthy();
+    expect(currentDraft).toHaveBeenCalledOnce();
+  });
+
+  it("restores an unfinished server draft into the merchant portal without fabricating a submitted store", async () => {
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(merchant) },
+      provisioning: {
+        listStores: vi.fn().mockResolvedValue([]),
+        currentDraft: vi.fn().mockResolvedValue(serverDraft),
+      },
+    });
+
+    renderInterface(<App />, adapters);
+
+    expect(await screen.findByRole("heading", { name: "مسودة الحساب أ" })).toBeTruthy();
+    expect(screen.getByText("مسودة محفوظة — لم تُرسل للمراجعة")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "ابدأ متجرك الأول" })).toBeNull();
+    expect(screen.queryByText("قيد المراجعة")).toBeNull();
+  });
+
   it("keeps an authenticated merchant inside the portal when store recovery fails", async () => {
     const adapters = createFakeUiAdapters({
       auth: { session: vi.fn().mockResolvedValue(merchant) },
       plans: { list: vi.fn().mockResolvedValue([]) },
-      provisioning: { listStores: vi.fn().mockRejectedValue(new UiAdapterError("تعذر الاتصال بالخادم.", "server")) },
+      provisioning: {
+        listStores: vi.fn().mockRejectedValue(new UiAdapterError("تعذر الاتصال بالخادم.", "server")),
+        currentDraft: vi.fn().mockResolvedValue(null),
+      },
     });
 
     renderInterface(<App />, adapters);

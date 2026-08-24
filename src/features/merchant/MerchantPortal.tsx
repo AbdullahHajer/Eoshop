@@ -21,7 +21,7 @@ import {
   Store,
   UserRound,
 } from "lucide-react";
-import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
+import type { StoreDraft, StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
 import { publicStoreUrl } from "../../utils/publicStoreUrl";
 import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycleTone } from "./lifecycle";
 import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
@@ -29,6 +29,9 @@ import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
 interface MerchantPortalProps {
   user: UserProfile;
   stores: StoreSubmission[];
+  draft: StoreDraft | null;
+  draftLoading: boolean;
+  draftError: string | null;
   loading: boolean;
   error: string | null;
   onReload: () => void;
@@ -62,6 +65,9 @@ function formatDate(value: string | null): string {
 export default function MerchantPortal({
   user,
   stores,
+  draft,
+  draftLoading,
+  draftError,
   loading,
   error,
   onReload,
@@ -88,6 +94,27 @@ export default function MerchantPortal({
 
   const selectedStore = stores.find((store) => store.id === selectedStoreId) ?? stores[0] ?? null;
   const selectedLifecycle = selectedStore ? deriveMerchantLifecycle(selectedStore) : null;
+  const creationActionLabel = draft
+    ? "متابعة إنشاء المتجر"
+    : draftLoading
+      ? "جاري استعادة رحلة الإنشاء"
+    : draftError
+      ? "استعادة رحلة إنشاء المتجر"
+      : "إنشاء متجر جديد";
+  const draftStep = draft?.nextRequiredStep === "design"
+    ? "اختيار القالب والتخصيص"
+    : draft?.nextRequiredStep === "review"
+      ? "العنوان والباقة ثم الإرسال"
+      : draft?.nextRequiredStep === "submit"
+        ? "تأكيد الإرسال النهائي"
+        : "بيانات النشاط";
+  const draftProgress = draft?.nextRequiredStep === "submit"
+    ? 3
+    : draft?.onboardingReadiness?.design
+      ? 2
+      : draft?.onboardingReadiness?.business
+        ? 1
+        : 0;
   const totals = useMemo(() => ({
     published: stores.filter((store) => deriveMerchantLifecycle(store).isPublished).length,
     attention: stores.filter((store) => ["danger", "warning"].includes(deriveMerchantLifecycle(store).tone)).length,
@@ -169,8 +196,8 @@ export default function MerchantPortal({
             <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500">
               <ShoppingBag className="h-4 w-4" /> متاجري
             </div>
-            <button type="button" onClick={onCreateStore} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700">
-              <Plus className="h-4 w-4" /> إنشاء متجر جديد
+            <button type="button" disabled={draftLoading} onClick={onCreateStore} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-wait disabled:opacity-60">
+              <Plus className="h-4 w-4" /> {creationActionLabel}
             </button>
             <a href="/app/account" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-sky-700">
               <Settings2 className="h-4 w-4" /> الحساب والأمان
@@ -190,13 +217,56 @@ export default function MerchantPortal({
               </div>
               <button
                 type="button"
+                disabled={draftLoading}
                 onClick={onCreateStore}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-sky-500/20 transition hover:bg-sky-400 disabled:cursor-wait disabled:opacity-70"
               >
-                <Plus className="h-4 w-4" /> إنشاء متجر جديد
+                <Plus className="h-4 w-4" /> {creationActionLabel}
               </button>
             </div>
           </section>
+
+          {draft && (
+            <section aria-label="المسودة غير المكتملة" className="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
+              <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black text-amber-900">مسودة محفوظة — لم تُرسل للمراجعة</span>
+                    <span className="text-xs font-bold text-slate-500">آخر حفظ: {formatDate(draft.savedAt)}</span>
+                  </div>
+                  <h2 className="mt-3 text-xl font-black">{draft.storeName || "متجر غير مكتمل"}</h2>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">الخطوة التالية: <strong className="text-slate-900">{draftStep}</strong>. لن يظهر المتجر لدى إدارة المنصة حتى تؤكد الإرسال وتحصل على نتيجة نجاح من الخادم.</p>
+                  <div className="mt-4 grid grid-cols-3 gap-2" aria-label={`اكتملت ${draftProgress} من 3 مراحل`}>
+                    {["بيانات النشاط", "التصميم", "المراجعة والإرسال"].map((label, index) => (
+                      <div key={label} className={`rounded-xl border px-3 py-2 text-center text-[11px] font-bold ${index < draftProgress ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                        {index < draftProgress && <Check className="mx-auto mb-1 h-3.5 w-3.5" />}{label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-4 text-center">
+                  <Clock3 className="mx-auto h-7 w-7 text-amber-700" />
+                  <p className="mt-2 text-xs leading-6 text-amber-950">يمكنك الخروج والعودة لاحقًا؛ سنفتح آخر خطوة مطلوبة بدل بدء الرحلة من جديد.</p>
+                  <button type="button" onClick={onCreateStore} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white">
+                    متابعة إنشاء المتجر <ArrowLeft className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {draftLoading && (
+            <section aria-live="polite" className="flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-bold text-sky-900">
+              <RefreshCw className="h-5 w-5 animate-spin" /> جاري التحقق من وجود مسودة محفوظة، بينما تبقى متاجرك المرسلة متاحة أدناه.
+            </section>
+          )}
+
+          {draftError && (
+            <section role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+              <div><p className="font-black">تعذر التحقق من المسودة المحفوظة</p><p className="mt-1 text-sm">{draftError} المتاجر المرسلة أدناه ما زالت متاحة.</p></div>
+              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+            </section>
+          )}
 
           <section aria-label="ملخص الحساب" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
@@ -220,7 +290,7 @@ export default function MerchantPortal({
             </section>
           )}
 
-          {!loading && !error && stores.length === 0 && (
+          {!loading && !error && stores.length === 0 && !draft && !draftLoading && !draftError && (
             <section className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-700"><Store className="h-7 w-7" /></div>
               <h2 className="text-xl font-black">ابدأ متجرك الأول</h2>
