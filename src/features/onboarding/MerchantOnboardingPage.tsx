@@ -40,9 +40,10 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
   const [theme, setTheme] = useState<OnboardingTemplateKey>("elegant");
   const [config, setConfig] = useState<StoreConfig>(() => createTemplateConfig(ONBOARDING_TEMPLATES[0], ""));
   const [plans, setPlans] = useState<StorePlan[]>([]);
-  const [planKey, setPlanKey] = useState("starter");
+  const [planKey, setPlanKey] = useState("");
   const [handle, setHandle] = useState("");
-  const [availability, setAvailability] = useState<{ available: boolean; domain: string } | null>(null);
+  const [availability, setAvailability] = useState<{ handle: string; available: boolean; domain: string } | null>(null);
+  const [availabilityError, setAvailabilityError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -51,8 +52,10 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
   const loadSequence = useRef(0);
   const operationSequence = useRef(0);
   const operationController = useRef<AbortController | null>(null);
+  const availabilitySequence = useRef(0);
+  const leavingForPortal = useRef(false);
 
-  const applyDraft = (value: StoreDraft) => {
+  const applyDraft = (value: StoreDraft, availablePlans: StorePlan[] = plans) => {
     setDraft(value);
     setStoreName(value.storeName);
     setBusinessType(value.businessType);
@@ -62,7 +65,9 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
       ? createTemplateConfig(template, value.storeName, value.config)
       : value.config);
     setHandle(value.handle ?? "");
-    setPlanKey(value.planKey ?? "starter");
+    setPlanKey(value.planKey && availablePlans.some((plan) => plan.key === value.planKey)
+      ? value.planKey
+      : (availablePlans[0]?.key ?? ""));
   };
 
   const selectedTemplate = useMemo(
@@ -78,12 +83,25 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
     () => createTemplatePreviewConfig(selectedTemplate, persistedConfig),
     [persistedConfig, selectedTemplate],
   );
+  const selectedPlan = useMemo(() => plans.find((plan) => plan.key === planKey) ?? null, [plans, planKey]);
+  const normalizedHandle = handle.trim().toLowerCase();
+  const reviewBlockers = useMemo(() => {
+    if (pendingSubmission) return [];
+    const blockers: string[] = [];
+    if (normalizedHandle.length < 3) blockers.push("اكتب عنوانًا للمتجر من 3 أحرف على الأقل.");
+    else if (checking) blockers.push("انتظر حتى يكتمل التحقق من توفر العنوان.");
+    else if (availabilityError) blockers.push(availabilityError);
+    else if (!availability || availability.handle !== normalizedHandle) blockers.push("يجب التحقق من توفر عنوان المتجر قبل الإرسال.");
+    else if (!availability.available) blockers.push("عنوان المتجر مستخدم؛ اختر عنوانًا مختلفًا.");
+    if (!selectedPlan) blockers.push("اختر باقة متاحة قبل الإرسال.");
+    return blockers;
+  }, [availability, availabilityError, checking, normalizedHandle, pendingSubmission, selectedPlan]);
 
   const dirty = useMemo(() => {
     if (!draft) return storeName.trim() !== "";
     if (step === "business") return storeName.trim() !== draft.storeName || businessType !== draft.businessType;
     if (step === "design") return theme !== draft.themeStyle || JSON.stringify(persistedConfig) !== JSON.stringify(draft.config);
-    return handle.trim().toLowerCase() !== (draft.handle ?? "") || planKey !== (draft.planKey ?? "starter");
+    return handle.trim().toLowerCase() !== (draft.handle ?? "") || planKey !== (draft.planKey ?? "");
   }, [businessType, draft, handle, persistedConfig, planKey, step, storeName, theme]);
 
   const navigate = (target: Step, persisted = false) => {
@@ -132,13 +150,17 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
           window.history.replaceState({}, "", stepPath.business);
           return;
         }
-        applyDraft(current);
+        applyDraft(current, availablePlans);
         const required = current.nextRequiredStep === "business" || current.nextRequiredStep === "design" || current.nextRequiredStep === "review"
           ? current.nextRequiredStep
           : requestedStep;
-        if (stepRank[requestedStep] > stepRank[required]) {
-          setStep(required);
-          window.history.replaceState({}, "", stepPath[required]);
+        const resumeStep = current.nextRequiredStep === "submit" ? "review" : required;
+        const target = requestedStep === "business" && resumeStep !== "business"
+          ? resumeStep
+          : (stepRank[requestedStep] > stepRank[resumeStep] ? resumeStep : requestedStep);
+        if (target !== requestedStep) {
+          setStep(target);
+          window.history.replaceState({}, "", stepPath[target]);
         }
       })
       .catch((caught) => {
@@ -158,33 +180,51 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
   }, [user.id]);
 
   useEffect(() => {
-    if (step !== "review" || handle.trim().length < 3 || pendingSubmission) {
-      setAvailability(null);
-      return;
-    }
+    const sequence = ++availabilitySequence.current;
+    setAvailability(null);
+    setAvailabilityError("");
+    setChecking(false);
+    if (step !== "review" || normalizedHandle.length < 3 || pendingSubmission) return;
     const controller = new AbortController();
+    setChecking(true);
     const timer = window.setTimeout(() => {
-      setChecking(true);
-      planActions.domainAvailability(handle.trim().toLowerCase(), controller.signal)
-        .then((result) => setAvailability(result))
-        .catch((caught) => {
-          if (isUiError(caught, "unauthenticated")) onSessionExpired(stepPath.review);
-          else if (!isUiError(caught, "aborted")) setAvailability(null);
+      planActions.domainAvailability(normalizedHandle, controller.signal)
+        .then((result) => {
+          if (sequence === availabilitySequence.current && result.handle === normalizedHandle) setAvailability(result);
         })
-        .finally(() => setChecking(false));
+        .catch((caught) => {
+          if (sequence !== availabilitySequence.current) return;
+          if (isUiError(caught, "unauthenticated")) onSessionExpired(stepPath.review);
+          else if (!isUiError(caught, "aborted")) setAvailabilityError("تعذر التحقق من عنوان المتجر. تحقق من الاتصال ثم حاول مجددًا.");
+        })
+        .finally(() => {
+          if (sequence === availabilitySequence.current) setChecking(false);
+        });
     }, 350);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [handle, pendingSubmission, planActions, step]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      if (sequence === availabilitySequence.current) availabilitySequence.current += 1;
+    };
+  }, [normalizedHandle, pendingSubmission, planActions, step]);
 
   useEffect(() => {
     const guard = (event: BeforeUnloadEvent) => {
-      if (!saving && !dirty) return;
+      if (leavingForPortal.current || (!saving && !dirty)) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", guard);
     return () => window.removeEventListener("beforeunload", guard);
   }, [dirty, saving]);
+
+  const leaveForPortal = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (dirty && !window.confirm("توجد بيانات في هذه الخطوة لم تُحفظ بعد. الخروج سيحتفظ بآخر نسخة محفوظة فقط. هل تريد المتابعة؟")) {
+      event.preventDefault();
+      return;
+    }
+    leavingForPortal.current = true;
+  };
 
   const selectTemplate = (key: OnboardingTemplateKey) => {
     if (saving) return;
@@ -237,8 +277,12 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
   };
 
   const submit = async () => {
-    if (!draft || (!pendingSubmission && (!availability?.available || !planKey))) {
-      setError("اختر باقة وعنوانًا متاحًا قبل الإرسال.");
+    if (!draft) {
+      setError("لا توجد مسودة محفوظة يمكن إرسالها.");
+      return;
+    }
+    if (!pendingSubmission && reviewBlockers.length > 0) {
+      setError(reviewBlockers[0]);
       return;
     }
     const { sequence, controller } = beginOperation();
@@ -276,7 +320,6 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
     }
   };
 
-  const selectedPlan = useMemo(() => plans.find((plan) => plan.key === planKey) ?? null, [plans, planKey]);
   const inputClass = "mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100";
 
   if (loading) return <LoadingScreen />;
@@ -287,7 +330,7 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
         <header className="mb-6 rounded-3xl bg-slate-950 p-6 text-white shadow-xl">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div><p className="text-xs font-bold text-sky-300">تهيئة متجر جديد</p><h1 className="mt-1 text-2xl font-black">شاهد متجرك وخصصه قبل إرسال الطلب</h1></div>
-            <a href="/app" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold"><ArrowRight className="h-4 w-4" />بوابة التاجر</a>
+            <a href="/app" onClick={leaveForPortal} className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold"><ArrowRight className="h-4 w-4" />الخروج إلى بوابة التاجر</a>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {(["business", "design", "review"] as Step[]).map((item, index) => (
@@ -363,12 +406,13 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
 
                 <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                   <h2 className="text-lg font-black">العنوان والباقة</h2>
-                  <label className="mt-5 block text-sm font-bold">معرّف عنوان المتجر<input disabled={pendingSubmission} value={handle} onChange={(event) => setHandle(event.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())} minLength={3} maxLength={50} dir="ltr" className={`${inputClass} text-left`} /></label>
-                  <p className={`mt-2 text-xs font-bold ${availability?.available ? "text-emerald-700" : availability ? "text-rose-700" : "text-slate-500"}`}>{checking ? "جاري التحقق..." : availability ? availability.available ? `متاح الآن: ${availability.domain}` : "العنوان مستخدم؛ جرّب اسمًا مختلفًا." : "3–50 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة داخلية."}</p>
-                  <label className="mt-5 block text-sm font-bold">الباقة<select disabled={pendingSubmission} value={planKey} onChange={(event) => setPlanKey(event.target.value)} className={inputClass}>{plans.map((plan) => <option key={plan.key} value={plan.key}>{plan.name}</option>)}</select></label>
+                  <label className="mt-5 block text-sm font-bold">معرّف عنوان المتجر <span className="text-rose-600">*</span><input aria-describedby="store-handle-status" disabled={pendingSubmission} value={handle} onChange={(event) => { setHandle(event.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase()); setError(""); }} minLength={3} maxLength={50} dir="ltr" className={`${inputClass} text-left`} /></label>
+                  <p id="store-handle-status" aria-live="polite" className={`mt-2 text-xs font-bold ${availability?.available ? "text-emerald-700" : availability || availabilityError ? "text-rose-700" : "text-slate-500"}`}>{checking ? "جاري التحقق من العنوان..." : availabilityError || (availability ? availability.available ? `متاح الآن: ${availability.domain}` : "العنوان مستخدم؛ جرّب اسمًا مختلفًا." : "3–50 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة داخلية.")}</p>
+                  <label className="mt-5 block text-sm font-bold">الباقة <span className="text-rose-600">*</span><select disabled={pendingSubmission || plans.length === 0} value={planKey} onChange={(event) => { setPlanKey(event.target.value); setError(""); }} className={inputClass}>{plans.map((plan) => <option key={plan.key} value={plan.key}>{plan.name}</option>)}</select></label>
                   {selectedPlan && <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-xs leading-6 text-slate-600"><p className="font-black text-slate-900">{selectedPlan.name}</p><p>{selectedPlan.maxProducts === null ? "منتجات غير محدودة" : `حتى ${selectedPlan.maxProducts} منتجات`} — {selectedPlan.activationMode === "automatic" ? "تفعيل تلقائي بعد الموافقة" : "يتطلب تفعيل الإدارة"}</p>{selectedPlan.features.length > 0 && <ul className="mt-2 list-inside list-disc">{selectedPlan.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}</div>}
                 </div>
 
+                {!pendingSubmission && <div aria-live="polite" className={`rounded-2xl border p-4 text-xs leading-6 ${reviewBlockers.length === 0 ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}><p className="font-black">{reviewBlockers.length === 0 ? "الطلب جاهز للإرسال" : "أكمل المطلوب قبل الإرسال"}</p>{reviewBlockers.length > 0 && <ul className="mt-2 list-inside list-disc">{reviewBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul>}</div>}
                 <div className="flex gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-xs leading-6 text-indigo-900"><ShieldCheck className="h-5 w-5 shrink-0" /><p>الإرسال ينشئ طلب مراجعة فقط. بعد الموافقة يبدأ تجهيز قاعدة المتجر، ثم يظهر لك إجراء النشر والرابط من بوابة التاجر.</p></div>
                 {pendingSubmission && <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-900">نتيجة المحاولة السابقة غير مؤكدة. الضغط مرة أخرى يستعيد العملية نفسها دون إنشاء متجر مكرر.</p>}
               </div>
@@ -379,7 +423,7 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
 
             <div className="flex flex-wrap gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <button type="button" disabled={saving || pendingSubmission} onClick={() => navigate("design")} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">السابق</button>
-              <button type="button" disabled={saving || (!pendingSubmission && !availability?.available)} onClick={() => void submit()} className="flex-1 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50">{saving ? "جاري الحفظ والإرسال..." : pendingSubmission ? "استعادة نتيجة الإرسال" : "تأكيد التصميم وإرسال طلب المراجعة"}</button>
+              <button type="button" disabled={saving} onClick={() => void submit()} className="flex-1 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50">{saving ? "جاري الحفظ والإرسال..." : pendingSubmission ? "استعادة نتيجة الإرسال" : "تأكيد التصميم وإرسال طلب المراجعة"}</button>
             </div>
           </section>
         )}

@@ -4,7 +4,8 @@ import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
+import type { StoreDraft, StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
+import { ELEGANT_PRESET } from "../../types";
 import MerchantPortal from "./MerchantPortal";
 
 const user: UserProfile = {
@@ -47,6 +48,9 @@ function props(stores: StoreSubmission[]) {
   return {
     user,
     stores,
+    draft: null as StoreDraft | null,
+    draftLoading: false,
+    draftError: null as string | null,
     loading: false,
     error: null,
     onReload: vi.fn(),
@@ -69,6 +73,47 @@ describe("MerchantPortal", () => {
     expect(screen.getByRole("heading", { name: "ابدأ متجرك الأول" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "إنشاء متجر" }));
     expect(callbacks.onCreateStore).toHaveBeenCalledOnce();
+  });
+
+  it("shows the authoritative unfinished draft and resumes it instead of claiming the account is empty", async () => {
+    const callbacks = props([]);
+    callbacks.draft = {
+      id: "draft-1",
+      tenantId: null,
+      status: "draft",
+      revision: 2,
+      onboardingStage: "design",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["domain_unavailable"] },
+      nextRequiredStep: "review",
+      storeName: "متجر قيد الإنشاء",
+      businessType: "تجزئة",
+      themeStyle: "elegant",
+      handle: null,
+      planKey: null,
+      config: ELEGANT_PRESET,
+      savedAt: "2026-08-24T14:28:46Z",
+      submittedAt: null,
+    };
+
+    render(<MerchantPortal {...callbacks} />);
+
+    expect(screen.getByRole("heading", { name: "متجر قيد الإنشاء" })).toBeTruthy();
+    expect(screen.getByText("مسودة محفوظة — لم تُرسل للمراجعة")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "ابدأ متجرك الأول" })).toBeNull();
+    await userEvent.click(screen.getAllByRole("button", { name: /متابعة إنشاء المتجر/ }).at(-1)!);
+    expect(callbacks.onCreateStore).toHaveBeenCalledOnce();
+  });
+
+  it("does not claim there is no draft when draft recovery fails independently", async () => {
+    const callbacks = props([]);
+    callbacks.draftError = "انقطع الاتصال أثناء قراءة المسودة.";
+
+    render(<MerchantPortal {...callbacks} />);
+
+    expect(screen.getByRole("alert").textContent).toContain("تعذر التحقق من المسودة المحفوظة");
+    expect(screen.queryByRole("heading", { name: "ابدأ متجرك الأول" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
+    expect(callbacks.onReload).toHaveBeenCalledOnce();
   });
 
   it("shows a safe rejection reason with the server-authorized correction action", async () => {

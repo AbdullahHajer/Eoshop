@@ -61,6 +61,127 @@ afterEach(() => {
 });
 
 describe("MerchantOnboardingPage", () => {
+  it("resumes an existing draft at its server-required step from the generic creation entry", async () => {
+    window.history.replaceState({}, "", "/app/new");
+    const designDraft: StoreDraft = {
+      ...businessDraft,
+      revision: 2,
+      onboardingStage: "design",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["domain_unavailable"] },
+      nextRequiredStep: "review",
+    };
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(designDraft) },
+      plans: { list: vi.fn().mockResolvedValue([starter]) },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="business" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+
+    expect(await screen.findByRole("heading", { name: "راجع الطلب قبل الإرسال" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/app/new/review");
+    expect(screen.getByText("اكتب عنوانًا للمتجر من 3 أحرف على الأقل.")).toBeTruthy();
+  });
+
+  it("explains missing review requirements when the merchant presses submit instead of disabling it silently", async () => {
+    const designDraft: StoreDraft = {
+      ...businessDraft,
+      revision: 2,
+      onboardingStage: "design",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["domain_unavailable"] },
+      nextRequiredStep: "review",
+    };
+    const saveReview = vi.fn();
+    const submit = vi.fn();
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(designDraft), saveReview, submit },
+      plans: { list: vi.fn().mockResolvedValue([starter]) },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="review" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: "تأكيد التصميم وإرسال طلب المراجعة" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("اكتب عنوانًا للمتجر من 3 أحرف على الأقل.");
+    expect(saveReview).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("invalidates a previous available-domain result while a changed handle is being checked", async () => {
+    const designDraft: StoreDraft = {
+      ...businessDraft,
+      revision: 2,
+      onboardingStage: "design",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["domain_unavailable"] },
+      nextRequiredStep: "review",
+    };
+    let resolveSecond!: (value: { handle: string; domain: string; available: boolean }) => void;
+    const domainAvailability = vi.fn((handle: string) => handle === "first-shop"
+      ? Promise.resolve({ handle, domain: `${handle}.eoshop.local`, available: true })
+      : new Promise<{ handle: string; domain: string; available: boolean }>((resolve) => { resolveSecond = resolve; }));
+    const savedReview = { ...designDraft, revision: 3, onboardingStage: "review" as const, nextRequiredStep: "submit" as const, handle: "second-shop", planKey: "starter", onboardingReadiness: { business: true, design: true, review: true, blockers: [] } };
+    const saveReview = vi.fn().mockResolvedValue(savedReview);
+    const submit = vi.fn(() => new Promise<never>(() => undefined));
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(designDraft), saveReview, submit },
+      plans: { list: vi.fn().mockResolvedValue([starter]), domainAvailability },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="review" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+    const input = await screen.findByRole("textbox", { name: /معرّف عنوان المتجر/ });
+    await userEvent.type(input, "first-shop");
+    expect(await screen.findByText("متاح الآن: first-shop.eoshop.local")).toBeTruthy();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "second-shop");
+    await waitFor(() => expect(domainAvailability).toHaveBeenCalledWith("second-shop", expect.any(AbortSignal)));
+    await userEvent.click(screen.getByRole("button", { name: "تأكيد التصميم وإرسال طلب المراجعة" }));
+    expect(saveReview).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toContain("انتظر حتى يكتمل التحقق");
+
+    resolveSecond({ handle: "second-shop", domain: "second-shop.eoshop.local", available: true });
+    expect(await screen.findByText("متاح الآن: second-shop.eoshop.local")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "تأكيد التصميم وإرسال طلب المراجعة" }));
+    await waitFor(() => expect(saveReview).toHaveBeenCalledWith(expect.objectContaining({ handle: "second-shop", planKey: "starter" }), expect.any(AbortSignal)));
+    expect(submit).toHaveBeenCalledOnce();
+  }, 30_000);
+
+  it("falls back from an inactive saved plan to the only active non-starter plan", async () => {
+    const pro = { ...starter, key: "pro", name: "الاحترافية", maxProducts: 100 };
+    const reviewDraft: StoreDraft = {
+      ...businessDraft,
+      revision: 3,
+      onboardingStage: "review",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["plan_unavailable"] },
+      nextRequiredStep: "review",
+      handle: "pro-only-shop",
+      planKey: "retired",
+    };
+    const savedReview: StoreDraft = {
+      ...reviewDraft,
+      revision: 4,
+      onboardingReadiness: { business: true, design: true, review: true, blockers: [] },
+      nextRequiredStep: "submit",
+      planKey: "pro",
+    };
+    const saveReview = vi.fn().mockResolvedValue(savedReview);
+    const submit = vi.fn(() => new Promise<never>(() => undefined));
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(reviewDraft), saveReview, submit },
+      plans: {
+        list: vi.fn().mockResolvedValue([pro]),
+        domainAvailability: vi.fn().mockResolvedValue({ handle: "pro-only-shop", domain: "pro-only-shop.eoshop.local", available: true }),
+      },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="review" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+
+    const plan = await screen.findByRole("combobox", { name: /الباقة/ }) as HTMLSelectElement;
+    expect(plan.value).toBe("pro");
+    expect(await screen.findByText("الطلب جاهز للإرسال")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "تأكيد التصميم وإرسال طلب المراجعة" }));
+    await waitFor(() => expect(saveReview).toHaveBeenCalledWith(expect.objectContaining({ planKey: "pro" }), expect.any(AbortSignal)));
+    expect(submit).toHaveBeenCalledOnce();
+  });
+
   it("guards a direct review URL with server readiness then persists design before advancing", async () => {
     window.history.replaceState({}, "", "/app/new/review");
     const designDraft: StoreDraft = {

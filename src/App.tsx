@@ -168,6 +168,9 @@ export default function App() {
   
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [merchantStores, setMerchantStores] = useState<StoreSubmission[]>([]);
+  const [merchantOnboardingDraft, setMerchantOnboardingDraft] = useState<StoreDraft | null>(null);
+  const [merchantDraftLoading, setMerchantDraftLoading] = useState(false);
+  const [merchantDraftError, setMerchantDraftError] = useState<string | null>(null);
   const [merchantStoresLoading, setMerchantStoresLoading] = useState(false);
   const [merchantStoresError, setMerchantStoresError] = useState<string | null>(null);
   const [merchantStoreRoute, setMerchantStoreRoute] = useState<{ tenantId: string; section: MerchantStoreSection } | null>(null);
@@ -382,6 +385,9 @@ export default function App() {
     setDraftLoading(false);
     setDraftSaving(false);
     setMerchantStores([]);
+    setMerchantOnboardingDraft(null);
+    setMerchantDraftLoading(false);
+    setMerchantDraftError(null);
     setMerchantStoresLoading(false);
     setMerchantStoresError(null);
     setMerchantStoreRoute(null);
@@ -513,6 +519,27 @@ export default function App() {
     const restoreSequence = ++merchantRestoreSequence.current;
     setMerchantStoresLoading(true);
     setMerchantStoresError(null);
+    setMerchantDraftLoading(true);
+    setMerchantDraftError(null);
+    void provisioning.currentDraft()
+      .then((onboardingDraft) => {
+        if (restoreSequence !== merchantRestoreSequence.current) return;
+        setMerchantOnboardingDraft(onboardingDraft);
+      })
+      .catch((draftError: unknown) => {
+        if (restoreSequence !== merchantRestoreSequence.current) return;
+        if (isUiError(draftError, "unauthenticated")) {
+          setAuthUser(null);
+          resetTenantOwnedState();
+          replaceCentralPath(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
+          return;
+        }
+        setMerchantOnboardingDraft(null);
+        setMerchantDraftError(uiErrorMessage(draftError, "تعذر استعادة مسودة المتجر المحفوظة."));
+      })
+      .finally(() => {
+        if (restoreSequence === merchantRestoreSequence.current) setMerchantDraftLoading(false);
+      });
     try {
       const stores = await provisioning.listStores();
       if (restoreSequence !== merchantRestoreSequence.current) return { status: "error", loadedTenantId: null, sessionActive: true, stores: [] };
@@ -1310,10 +1337,21 @@ export default function App() {
         <MerchantPortal
           user={authUser}
           stores={merchantStores}
+          draft={merchantOnboardingDraft}
+          draftLoading={merchantDraftLoading}
+          draftError={merchantDraftError}
           loading={merchantStoresLoading}
           error={merchantStoresError}
           onReload={reloadMerchantPortal}
-          onCreateStore={() => window.location.assign("/app/new")}
+          onCreateStore={() => {
+            const nextStep = merchantOnboardingDraft?.nextRequiredStep;
+            const path = nextStep === "design"
+              ? "/app/new/design"
+              : nextStep === "review" || nextStep === "submit"
+                ? "/app/new/review"
+                : "/app/new";
+            window.location.assign(path);
+          }}
           onOpenStore={openMerchantStore}
           onCorrectStore={(store) => void openMerchantCorrection(store)}
           onPublish={(store) => publishMerchantStore(store)}
