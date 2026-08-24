@@ -25,14 +25,15 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - WP 5.15: server-owned storefront section ordering/visibility, truthful first-party theme composition and focused renderer decomposition.
 - WP 5.16: durable onboarding draft continuity, explicit submission requirements and truthful resume behavior.
 - WP 5.17: nullable-contact workspace boundary hotfix for newly provisioned stores.
+- WP 5.18: authenticated-shell narrow-screen, keyboard and structural accessibility acceptance hardening.
 
 ## Active
 
-- WP 5.18: authenticated-shell narrow-screen, keyboard and structural accessibility acceptance hardening.
+- No active implementation work package; WP 5.19 is the next bounded acceptance slice.
 
 ## Approved next sequence
 
-1. Complete WP 5.18 for the authenticated merchant/platform shells, then continue public-storefront browser/device acceptance as a bounded slice.
+1. Start WP 5.19 for public-storefront narrow-screen, keyboard and cross-browser acceptance as a bounded slice.
 2. Restore richer appearance options incrementally through bounded server-owned contracts rather than the prototype builder.
 3. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 

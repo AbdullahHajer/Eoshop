@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.18 — Authenticated shell acceptance hardening |
-| Status | Verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-24 |
 | Branch | codex/wp-5.18-acceptance-hardening |
 | Base | 8e0531cc254d0728da3123926230f3664567a309 |
@@ -76,5 +76,8 @@
 
 - T0 documentation commit: 2e12678.
 - Implementation commit: d142e22.
-- Evidence commit: pending.
-- Pull request, required CI, merge commit and protected-main CI: pending.
+- Evidence commit: d4e580d192b9332e29e1d3df6b8e6bae78e1ecd2.
+- Pull request [#60](https://github.com/sas-prog1/Eoshop/pull/60) was merged from final head d4e580d192b9332e29e1d3df6b8e6bae78e1ecd2.
+- Pull-request CI run [32769283590](https://github.com/sas-prog1/Eoshop/actions/runs/32769283590) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: fa47faa401fc72c70297074f6c599ebbf7579b6c.
+- Protected-main CI run [32769904640](https://github.com/sas-prog1/Eoshop/actions/runs/32769904640) passed the same four required jobs after merge.

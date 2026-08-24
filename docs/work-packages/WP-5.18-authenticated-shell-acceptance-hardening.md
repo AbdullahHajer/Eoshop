@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.18 |
-| Status | Verified; ready for delivery |
+| Status | Complete |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.18-acceptance-hardening` |
 | Base | Protected `main` at `8e0531cc` |
@@ -65,7 +65,7 @@ Make the existing merchant portal, store operations center and platform administ
 
 - [x] Obtain independent read-only approval.
 - [x] Record evidence, retained debt and rollback.
-- [ ] Commit, push, pass required CI and merge.
+- [x] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
 
