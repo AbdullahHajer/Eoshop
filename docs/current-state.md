@@ -22,15 +22,16 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - WP 5.10–5.12: permission-driven platform administration, operator lifecycle and server-owned platform branding/navigation/settings.
 - WP 5.13: guided authentication, merchant account and durable three-step onboarding routes with recoverable submission handoff.
 - WP 5.14: bounded visual template selection, real preview and appearance-only onboarding persistence.
+- WP 5.15: server-owned storefront section ordering/visibility, truthful first-party theme composition and focused renderer decomposition.
 
 ## Active
 
-- WP 5.15: server-owned storefront section order/visibility inside the existing focused appearance editor.
+- No implementation work package is active; the retained Pilot is ready for product-owner review of WP 5.15.
 
 ## Approved next sequence
 
-1. Complete the bounded storefront section layout without reintroducing the prototype builder.
-2. UX/browser acceptance, accessibility and responsive hardening across merchant, platform and public shells.
+1. WP 5.16: UX/browser acceptance, accessibility and responsive hardening across merchant, platform and public shells.
+2. Restore richer appearance options incrementally through bounded server-owned contracts rather than the prototype builder.
 3. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
