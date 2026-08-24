@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.18 |
-| Status | In progress |
+| Status | Verified; ready for delivery |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.18-acceptance-hardening` |
 | Base | Protected `main` at `8e0531cc` |
@@ -47,24 +47,24 @@ Make the existing merchant portal, store operations center and platform administ
 
 ### T2 — Implementation
 
-- [ ] Add the shared accessibility primitive and focus treatment.
-- [ ] Harden merchant portal, store operations and platform shells.
+- [x] Add the shared accessibility primitive and focus treatment.
+- [x] Harden merchant portal, store operations and platform shells.
 
 ### T3 — Verification
 
-- [ ] Add positive route/landmark/action regressions.
-- [ ] Pass focused and complete frontend quality.
-- [ ] Pass backend, repository and isolated integration gates.
+- [x] Add positive route/landmark/action regressions.
+- [x] Pass focused and complete frontend quality.
+- [x] Pass backend, repository and isolated integration gates.
 
 ### T4 — Pilot
 
-- [ ] Update only the retained Pilot web container.
-- [ ] Verify HTTP health and hand off narrow-screen/keyboard visual acceptance.
+- [x] Update only the retained Pilot web container.
+- [x] Verify HTTP health and hand off narrow-screen/keyboard visual acceptance.
 
 ### T5 — Delivery
 
-- [ ] Obtain independent read-only approval.
-- [ ] Record evidence, retained debt and rollback.
+- [x] Obtain independent read-only approval.
+- [x] Record evidence, retained debt and rollback.
 - [ ] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
