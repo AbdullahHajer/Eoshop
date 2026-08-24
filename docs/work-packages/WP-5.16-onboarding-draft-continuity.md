@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.16 |
-| Status | Ready for PR |
+| Status | Complete and merged |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.16-draft-continuity` |
 | Base | Protected `main` at `74b374e7` |
@@ -71,7 +71,7 @@ Close the gap between a server-saved onboarding draft and a submitted store so t
 - [x] Record final local and retained-Pilot evidence and retained debt.
 - [x] Obtain final independent read-only approval.
 - [x] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass required CI and merge.
+- [x] Push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 

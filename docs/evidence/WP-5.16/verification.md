@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.16 — Onboarding draft continuity and explicit submission |
-| Status | Local gates and retained Pilot verified |
+| Status | Complete and merged |
 | Verified | 2026-08-24 |
 | Branch | `codex/wp-5.16-draft-continuity` |
 | Base | `74b374e794522644c77f6a97bb29f1f6e5d43363` |
@@ -73,5 +73,9 @@
 
 ## Delivery
 
-- Evidence commit: this separate documentation commit.
-- Branch push, pull request, required CI and protected-main merge: pending.
+- Implementation is recorded separately in `320e7010e0c587b9e24a3aca507e2486a9c16856`.
+- Evidence is recorded separately in `a6f2504a9d46614cc8892803df4d319fb500e324`.
+- Pull request [#56](https://github.com/sas-prog1/Eoshop/pull/56) was merged from final head `a6f2504a9d46614cc8892803df4d319fb500e324`.
+- Pull-request CI run [32743018048](https://github.com/sas-prog1/Eoshop/actions/runs/32743018048) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `a189d02366ba25b3a1d40480414da3cd034e1d30`.
+- Protected-main CI run [32743734327](https://github.com/sas-prog1/Eoshop/actions/runs/32743734327) passed the same four required jobs after merge.
