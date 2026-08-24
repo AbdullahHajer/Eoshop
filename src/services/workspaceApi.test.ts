@@ -87,6 +87,49 @@ describe("workspaceApi", () => {
     await expect(workspaceApi.load("tenant-1")).rejects.toMatchObject({ category: "unexpected" });
   });
 
+  it("normalizes the nullable onboarding contact before opening a newly provisioned workspace", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        tenantId: "tenant-new",
+        revision: 1,
+        catalogRevision: 1,
+        capabilities: { inventoryView: true, inventoryManage: true },
+        updatedAt: "2026-08-24T15:00:00Z",
+        config: {
+          ...config,
+          phone: null,
+          heroBannerTitle: null,
+          heroBannerSubtitle: null,
+          heroBannerBadge: null,
+          heroBannerButtonText: null,
+          products: [],
+          homeSections: defaultStorefrontSections(),
+        },
+      },
+    }), { status: 200 })));
+
+    const workspace = await workspaceApi.load("tenant-new");
+
+    expect(workspace.config.phone).toBe("");
+    expect(workspace.config.products).toEqual([]);
+    expect(workspace.config.homeSections).toEqual(defaultStorefrontSections());
+  });
+
+  it.each([123, true, {}, []])("rejects malformed present workspace phone value %#", async (phone) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        tenantId: "tenant-new",
+        revision: 1,
+        catalogRevision: 1,
+        capabilities: { inventoryView: true, inventoryManage: true },
+        updatedAt: "2026-08-24T15:00:00Z",
+        config: { ...config, phone, products: [], homeSections: defaultStorefrontSections() },
+      },
+    }), { status: 200 })));
+
+    await expect(workspaceApi.load("tenant-new")).rejects.toMatchObject({ category: "unexpected" });
+  });
+
   it("omits draft identifiers and sends the current revision through the CSRF client", async () => {
     const saved = {
       data: {
