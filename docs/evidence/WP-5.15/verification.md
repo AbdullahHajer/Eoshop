@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.15 — Storefront section layout and truthful template composition |
-| Status | Implementation verified; delivery pending |
+| Status | Complete and merged |
 | Verified | 2026-08-24 |
 | Branch | `codex/wp-5.15-storefront-sections` |
 | Base | `45cc3e709889b1e9dfa6339dc85869978080ea32` |
@@ -74,4 +74,8 @@
 ## Delivery status
 
 - Implementation is recorded separately in `9eff6371fcbde6530c5a6e059419fcbe194043a7`.
-- Evidence commit, pull request, required CI, merge commit and protected-main CI facts will be appended after delivery.
+- Evidence is recorded separately in `7267249d51da122b7bee808838e921de09c7ce40`.
+- Pull request [#54](https://github.com/sas-prog1/Eoshop/pull/54) was merged from final head `7267249d51da122b7bee808838e921de09c7ce40`.
+- Pull-request CI run [32717410676](https://github.com/sas-prog1/Eoshop/actions/runs/32717410676) passed Repository safety, Backend quality, Frontend quality and Container integration.
+- Merge commit: `47da47aa5b3914d05be7d51583be5ff28da6acb1`.
+- Protected-main CI run [32718039040](https://github.com/sas-prog1/Eoshop/actions/runs/32718039040) passed the same four required jobs after merge.

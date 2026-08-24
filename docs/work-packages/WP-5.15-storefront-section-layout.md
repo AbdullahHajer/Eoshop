@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.15 |
-| Status | Implementation complete; delivery pending |
+| Status | Complete and merged |
 | Started | 2026-08-24 |
 | Branch | `codex/wp-5.15-storefront-sections` |
 | Base | Protected `main` at `45cc3e70` |
@@ -73,7 +73,7 @@ Extend the existing-store profile and appearance task with a safe, server-owned 
 - [x] Record immutable evidence and retained debt.
 - [x] Obtain final independent read-only approval.
 - [x] Commit implementation and evidence separately.
-- [ ] Push, open PR, pass required CI and merge.
+- [x] Push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
 
