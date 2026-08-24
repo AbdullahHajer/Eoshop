@@ -70,9 +70,9 @@ Extend the existing-store profile and appearance task with a safe, server-owned 
 
 ### T5 — Evidence and delivery
 
-- [ ] Record immutable evidence and retained debt.
-- [ ] Obtain final independent read-only approval.
-- [ ] Commit implementation and evidence separately.
+- [x] Record immutable evidence and retained debt.
+- [x] Obtain final independent read-only approval.
+- [x] Commit implementation and evidence separately.
 - [ ] Push, open PR, pass required CI and merge.
 
 ## Acceptance criteria
