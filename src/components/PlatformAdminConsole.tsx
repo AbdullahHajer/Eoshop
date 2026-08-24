@@ -47,6 +47,7 @@ import {
 import PlatformUsersPanel from "../features/admin/PlatformUsersPanel";
 import PlatformSettingsPanel from "../features/admin/PlatformSettingsPanel";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
+import SkipLink from "./SkipLink";
 
 interface PlatformAdminConsoleProps {
   user: UserProfile;
@@ -414,6 +415,7 @@ export default function PlatformAdminConsole({
 
   return (
     <div className="fixed inset-0 z-50 flex overflow-hidden bg-slate-100 text-slate-900" dir="rtl">
+      <SkipLink targetId="platform-admin-main" />
       <aside className="hidden w-72 shrink-0 flex-col bg-slate-950 text-white lg:flex">
         <div className="border-b border-slate-800 p-6">
           <div className="flex items-center gap-3">
@@ -426,7 +428,7 @@ export default function PlatformAdminConsole({
             const Icon = item === "overview" ? LayoutDashboard : item === "stores" ? Store : item === "users" ? UsersRound : item === "settings" ? Settings : ScrollText;
             const label = item === "overview" ? "نظرة تشغيلية" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : item === "settings" ? "إعدادات المنصة" : "سجل التدقيق";
             return (
-              <button key={item} type="button" onClick={() => navigateSection(item)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-900"}`}>
+              <button key={item} type="button" onClick={() => navigateSection(item)} aria-current={activeSection === item ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-900"}`}>
                 <Icon className="h-5 w-5" /> {label}
               </button>
             );
@@ -449,20 +451,24 @@ export default function PlatformAdminConsole({
               <h1 className="text-xl font-black">{activeSection === "overview" ? "النظرة التشغيلية" : activeSection === "stores" ? "إدارة المتاجر" : activeSection === "users" ? "إدارة مستخدمي المنصة" : activeSection === "settings" ? "إعدادات المنصة" : "سجل التدقيق"}</h1>
               <p className="mt-1 text-xs text-slate-500">بيانات مركزية محمية بصلاحيات الخادم</p>
             </div>
-            <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection === "users" && usersForbidden) || (activeSection === "settings" && (settingsForbidden || settingsDirty)) || ((activeSection === "overview" || activeSection === "stores") && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "users" ? setUsersRefreshSignal((value) => value + 1) : activeSection === "settings" ? setSettingsRefreshSignal((value) => value + 1) : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading || usersLoading || settingsLoading) ? "animate-spin" : ""}`} /> تحديث
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={(activeSection === "audit" && auditForbidden) || (activeSection === "users" && usersForbidden) || (activeSection === "settings" && (settingsForbidden || settingsDirty)) || ((activeSection === "overview" || activeSection === "stores") && storesForbidden)} onClick={() => activeSection === "audit" ? void loadAudit() : activeSection === "users" ? setUsersRefreshSignal((value) => value + 1) : activeSection === "settings" ? setSettingsRefreshSignal((value) => value + 1) : activeSection === "stores" ? void loadStores() : void loadOverview()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50 sm:px-4">
+                <RefreshCw className={`h-4 w-4 ${(overviewLoading || storesLoading || auditLoading || usersLoading || settingsLoading) ? "animate-spin" : ""}`} /><span className="hidden sm:inline">تحديث</span>
+              </button>
+              <button type="button" onClick={exitConsole} aria-label="العودة إلى الموقع" className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 lg:hidden"><ExternalLink className="h-4 w-4" /></button>
+              <button type="button" disabled={logoutPending} onClick={logout} aria-label="تسجيل الخروج" className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-700 disabled:opacity-50 lg:hidden"><LogOut className="h-4 w-4" /></button>
+            </div>
           </div>
           <nav className="mt-4 flex gap-2 overflow-x-auto lg:hidden" aria-label="أقسام إدارة المنصة للجوال">
             {allowedSections.map((item) => (
-              <button key={item} type="button" onClick={() => navigateSection(item)} className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+              <button key={item} type="button" onClick={() => navigateSection(item)} aria-current={activeSection === item ? "page" : undefined} className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold ${activeSection === item ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
                 {item === "overview" ? "النظرة" : item === "stores" ? "المتاجر" : item === "users" ? "المستخدمون" : item === "settings" ? "الإعدادات" : "التدقيق"}
               </button>
             ))}
           </nav>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 sm:p-6">
+        <main id="platform-admin-main" tabIndex={-1} className="flex-1 overflow-auto p-4 sm:p-6">
           {((activeSection === "overview" || activeSection === "stores") && storesForbidden) && <AccessDeniedState />}
           {(activeSection === "audit" && auditForbidden) && <AccessDeniedState />}
           {(activeSection === "settings" && settingsForbidden) && <AccessDeniedState />}

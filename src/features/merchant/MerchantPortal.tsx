@@ -25,6 +25,7 @@ import type { StoreDraft, StoreSubmission, UserProfile } from "../../adapters/ui
 import { publicStoreUrl } from "../../utils/publicStoreUrl";
 import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycleTone } from "./lifecycle";
 import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
+import SkipLink from "../../components/SkipLink";
 
 interface MerchantPortalProps {
   user: UserProfile;
@@ -145,6 +146,7 @@ export default function MerchantPortal({
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <SkipLink targetId="merchant-portal-main" />
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -181,31 +183,31 @@ export default function MerchantPortal({
       </header>
 
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[250px_minmax(0,1fr)] lg:px-8">
-        <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
-          <div className="mb-5 rounded-2xl bg-slate-950 p-4 text-white">
+        <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-2 shadow-sm sm:p-4 lg:sticky lg:top-24">
+          <div className="mb-5 hidden rounded-2xl bg-slate-950 p-4 text-white lg:block">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
               <UserRound className="h-5 w-5" />
             </div>
             <p className="truncate text-sm font-black">{user.fullName}</p>
             <p className="mt-1 truncate text-[11px] text-slate-300">{user.email}</p>
           </div>
-          <nav aria-label="تنقل بوابة التاجر" className="space-y-1.5">
-            <div className="flex items-center gap-3 rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-black text-sky-800">
+          <nav aria-label="تنقل بوابة التاجر" className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0">
+            <div aria-current="page" className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-black text-sky-800 lg:w-full">
               <LayoutDashboard className="h-4 w-4" /> نظرة عامة
             </div>
-            <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500">
+            <div className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500 lg:w-full">
               <ShoppingBag className="h-4 w-4" /> متاجري
             </div>
-            <button type="button" disabled={draftLoading} onClick={onCreateStore} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-wait disabled:opacity-60">
+            <button type="button" disabled={draftLoading} onClick={onCreateStore} className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-wait disabled:opacity-60 lg:w-full">
               <Plus className="h-4 w-4" /> {creationActionLabel}
             </button>
-            <a href="/app/account" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-sky-700">
+            <a href="/app/account" className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-sky-700 lg:w-full">
               <Settings2 className="h-4 w-4" /> الحساب والأمان
             </a>
           </nav>
         </aside>
 
-        <main className="min-w-0 space-y-6">
+        <main id="merchant-portal-main" tabIndex={-1} className="min-w-0 space-y-6">
           <section className="overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-slate-900 to-sky-950 p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
               <div>

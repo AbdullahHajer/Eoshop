@@ -16,6 +16,11 @@ body {
   overflow-x: hidden;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #0284c7;
+  outline-offset: 3px;
+}
+
 /* Custom scrollbars for a cleaner look */
 ::-webkit-scrollbar {
   width: 6px;

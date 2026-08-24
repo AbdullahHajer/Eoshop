@@ -67,6 +67,15 @@ function props(stores: StoreSubmission[]) {
 afterEach(() => cleanup());
 
 describe("MerchantPortal", () => {
+  it("exposes a keyboard skip target and compact narrow-screen navigation", () => {
+    render(<MerchantPortal {...props([])} />);
+
+    expect(screen.getByRole("link", { name: "تجاوز التنقل والانتقال إلى المحتوى الرئيسي" }).getAttribute("href")).toBe("#merchant-portal-main");
+    expect(document.getElementById("merchant-portal-main")?.getAttribute("tabindex")).toBe("-1");
+    expect(screen.getByRole("navigation", { name: "تنقل بوابة التاجر" }).className).toContain("overflow-x-auto");
+    expect(screen.getByText("نظرة عامة").getAttribute("aria-current")).toBe("page");
+  });
+
   it("shows a durable empty state and starts the creation journey", async () => {
     const callbacks = props([]);
     render(<MerchantPortal {...callbacks} />);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
@@ -68,6 +68,34 @@ function operator(platformPermissions: string[]): UserProfile {
 afterEach(cleanup);
 
 describe("PlatformAdminConsole", () => {
+  it("keeps main content and session controls reachable when the desktop sidebar is hidden", async () => {
+    const onExit = vi.fn();
+    const onLogout = vi.fn().mockResolvedValue(undefined);
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: { overview: vi.fn().mockResolvedValue(overview) } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.stores.view"])}
+          section="overview"
+          onNavigate={vi.fn()}
+          onExit={onExit}
+          onLogout={onLogout}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: "تجاوز التنقل والانتقال إلى المحتوى الرئيسي" }).getAttribute("href")).toBe("#platform-admin-main");
+    expect(document.getElementById("platform-admin-main")?.getAttribute("tabindex")).toBe("-1");
+    const mobileNavigation = screen.getByRole("navigation", { name: "أقسام إدارة المنصة للجوال" });
+    expect(within(mobileNavigation).getByRole("button", { name: "النظرة" }).getAttribute("aria-current")).toBe("page");
+
+    await userEvent.click(screen.getByRole("button", { name: "العودة إلى الموقع" }));
+    await userEvent.click(screen.getByRole("button", { name: "تسجيل الخروج" }));
+    expect(onExit).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onLogout).toHaveBeenCalledOnce());
+  });
+
   it("routes a settings-only manager to the protected settings workspace", async () => {
     const getPlatformSettings = vi.fn().mockResolvedValue({
       ...structuredClone(DEFAULT_PLATFORM_SETTINGS),

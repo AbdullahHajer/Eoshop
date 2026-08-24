@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
@@ -26,6 +26,17 @@ function callbacks() {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("MerchantStoreOperations", () => {
+  it("exposes the active module through a compact keyboard-reachable shell", () => {
+    const adapters = createFakeUiAdapters();
+    render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store()} section="overview" {...callbacks()} /></UiAdaptersProvider>);
+
+    expect(screen.getByRole("link", { name: "تجاوز التنقل والانتقال إلى المحتوى الرئيسي" }).getAttribute("href")).toBe("#merchant-operations-main");
+    expect(document.getElementById("merchant-operations-main")?.getAttribute("tabindex")).toBe("-1");
+    const navigation = screen.getByRole("navigation", { name: "وحدات تشغيل المتجر" });
+    expect(navigation.className).toContain("overflow-x-auto");
+    expect(within(navigation).getByRole("button", { name: "نظرة عامة" }).getAttribute("aria-current")).toBe("page");
+  });
+
   it("loads independent server-owned overview snapshots", async () => {
     const adapters = createFakeUiAdapters({
       catalog: { load: vi.fn(async () => ({ tenantId: "tenant-a", revision: 2, currencyCode: "YER", products: [{ id: "p1", name: "منتج", price: 10, status: "published" as const, description: "", category: "", imageKeyword: "default" }] })) },
