@@ -46,6 +46,41 @@ afterEach(() => {
 });
 
 describe("tenant storefront order orchestration", () => {
+  it("recovers one transient storefront bootstrap without showing a terminal error", async () => {
+    const loadStorefront = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("temporary", "network"))
+      .mockResolvedValueOnce(storefront(10));
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(null) },
+      orders: { loadStorefront },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><App /></UiAdaptersProvider>);
+
+    expect(await screen.findByText("Live Server Store")).toBeTruthy();
+    expect(loadStorefront).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("heading", { name: "تعذر تحميل المتجر" })).toBeNull();
+  });
+
+  it("retries a missing storefront in place after the customer requests it", async () => {
+    const loadStorefront = vi.fn()
+      .mockRejectedValueOnce(new UiAdapterError("missing", "not_found"))
+      .mockResolvedValueOnce(storefront(10));
+    const adapters = createFakeUiAdapters({
+      auth: { session: vi.fn().mockResolvedValue(null) },
+      orders: { loadStorefront },
+    });
+    const user = userEvent.setup();
+
+    render(<UiAdaptersProvider adapters={adapters}><App /></UiAdaptersProvider>);
+
+    expect(await screen.findByText(/لا يوجد متجر منشور لهذا العنوان/)).toBeTruthy();
+    expect(loadStorefront).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
+    expect(await screen.findByText("Live Server Store")).toBeTruthy();
+    expect(loadStorefront).toHaveBeenCalledTimes(2);
+  });
+
   it("bootstraps only on the tenant host and preserves cart edits during deferred stale-quote refresh", async () => {
     let resolveRefresh!: (value: ReturnType<typeof storefront>) => void;
     const refresh = new Promise<ReturnType<typeof storefront>>((resolve) => { resolveRefresh = resolve; });

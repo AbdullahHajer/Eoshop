@@ -76,6 +76,7 @@ describe("application shell boundaries", () => {
       <PublicStorefrontScreen
         storefront={null}
         error="تعذر الاتصال بالخادم"
+        loading={false}
         cart={[]}
         addToCart={vi.fn()}
         updateQuantity={vi.fn()}
