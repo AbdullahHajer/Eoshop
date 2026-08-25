@@ -4,7 +4,7 @@ Updated: 2026-08-25
 
 ## Product position
 
-Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Human Pilot acceptance is paused while Phase 5 turns the prototype-style navigation into coherent merchant and platform product shells. Automated verification and protected-branch CI remain mandatory.
+Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a verified minimum journey from merchant customization through provisioning to a server-confirmed public storefront. Human Pilot acceptance can resume while Phase 5 hardens the public storefront and then expands management capabilities and visual polish. Automated verification and protected-branch CI remain mandatory.
 
 ## Delivered
 
@@ -26,17 +26,18 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 - WP 5.16: durable onboarding draft continuity, explicit submission requirements and truthful resume behavior.
 - WP 5.17: nullable-contact workspace boundary hotfix for newly provisioned stores.
 - WP 5.18: authenticated-shell narrow-screen, keyboard and structural accessibility acceptance hardening.
+- WP 5.19: end-to-end existing-store customization completion, bounded provisioning refresh and server-confirmed publication continuity.
 
 ## Active
 
-- WP 5.19: end-to-end customization, provisioning refresh and publication continuity.
+- Next execution: WP 5.20 public-storefront narrow-screen, keyboard and cross-browser acceptance.
 
 ## Approved next sequence
 
-1. Complete WP 5.19 through a server-confirmed public URL.
-2. Continue public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.20.
-3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
-4. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
+1. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.20.
+2. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
+3. Complete local-market payment verification/notifications.
+4. Continue to Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 

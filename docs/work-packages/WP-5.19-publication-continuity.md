@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.19 |
-| Status | Implemented and verified; awaiting implementation merge |
+| Status | Complete and merged |
 | Started | 2026-08-25 |
 | Branch | `codex/wp-5.19-publication-continuity` |
 | Base | Protected `main` at `34ef4030` |
@@ -66,7 +66,7 @@ Close the visible merchant journey from existing-store customization through asy
 
 - [x] Obtain independent read-only approval.
 - [x] Record evidence, retained debt and rollback.
-- [ ] Commit, push, pass required CI and merge.
+- [x] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
 

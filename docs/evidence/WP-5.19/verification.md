@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.19 — End-to-end publication continuity |
-| Status | Implemented, independently approved and ready to merge |
+| Status | Complete and merged |
 | Verified | 2026-08-25 |
 | Branch | `codex/wp-5.19-publication-continuity` |
 | Base | `34ef4030d281a7e6d6d4f88a6f861f6f87e7e7d0` |
@@ -79,5 +79,7 @@ Run [32877894267](https://github.com/sas-prog1/Eoshop/actions/runs/32877894267) 
 - T0/T1 documentation commit: `af2ad91`.
 - Initial implementation commit: `ba7228f`.
 - Review-resolution implementation commit: `e9528d0`.
-- Pull request: [#62](https://github.com/sas-prog1/Eoshop/pull/62).
-- Merge and protected-main evidence will be recorded by the WP 5.19 closeout after this implementation PR merges.
+- Verification evidence commit: `d9a517c`.
+- Final implementation-head CI: [32879395150](https://github.com/sas-prog1/Eoshop/actions/runs/32879395150); all four required jobs passed.
+- Implementation pull request: [#62](https://github.com/sas-prog1/Eoshop/pull/62), merged as `deef30712bc9d9e87e2e79ab66d8c2ff690e32a9`.
+- Protected-`main` CI: [32880042710](https://github.com/sas-prog1/Eoshop/actions/runs/32880042710); all four required jobs passed on the merge commit.
