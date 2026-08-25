@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.19 |
-| Status | In progress |
+| Status | Implemented and verified; awaiting implementation merge |
 | Started | 2026-08-25 |
 | Branch | `codex/wp-5.19-publication-continuity` |
 | Base | Protected `main` at `34ef4030` |
@@ -47,25 +47,25 @@ Close the visible merchant journey from existing-store customization through asy
 
 ### T2 — Implementation
 
-- [ ] Correct existing-store completion without changing onboarding submission.
-- [ ] Add bounded lifecycle refresh to merchant and platform store lists.
-- [ ] Preserve failure, retry, conflict and session-expiry behavior.
+- [x] Correct existing-store completion without changing onboarding submission.
+- [x] Add bounded lifecycle refresh to merchant and platform store lists.
+- [x] Preserve failure, retry, conflict and session-expiry behavior.
 
 ### T3 — Verification
 
-- [ ] Add completion and polling regressions.
-- [ ] Pass focused and complete frontend quality.
-- [ ] Pass backend, repository and isolated integration gates.
+- [x] Add completion and polling regressions.
+- [x] Pass focused and complete frontend quality.
+- [x] Pass backend, repository and isolated integration gates.
 
 ### T4 — Pilot
 
-- [ ] Update the retained Pilot without resetting its database.
-- [ ] Verify approval, provisioning refresh, customization return, publication and public URL.
+- [x] Update the retained Pilot without resetting its database.
+- [x] Verify the retained approval/provisioning state, completion contracts, publication and exact public URL.
 
 ### T5 — Delivery
 
-- [ ] Obtain independent read-only approval.
-- [ ] Record evidence, retained debt and rollback.
+- [x] Obtain independent read-only approval.
+- [x] Record evidence, retained debt and rollback.
 - [ ] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
@@ -80,3 +80,7 @@ Close the visible merchant journey from existing-store customization through asy
 ## Rollback
 
 Deploy the previous web image. This work package does not migrate or rewrite persisted data.
+
+## Evidence
+
+See [WP 5.19 verification evidence](../evidence/WP-5.19/verification.md).
