@@ -387,8 +387,8 @@ export const provisioningApi = {
     return mapDraft(record(response, "استجابة حفظ التصحيح").data);
   },
 
-  async listStores(): Promise<StoreSubmission[]> {
-    const response = await apiClient.request<{ data: unknown }>("/api/merchant/stores");
+  async listStores(signal?: AbortSignal): Promise<StoreSubmission[]> {
+    const response = await apiClient.request<{ data: unknown }>("/api/merchant/stores", { signal });
     const envelope = record(response, "قائمة متاجر التاجر");
     const data = envelope.data;
     if (!Array.isArray(data)) throw new ApiError("استجابة الخادم لا تطابق عقد قائمة متاجر التاجر.", "unexpected", 200);

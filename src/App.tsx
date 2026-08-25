@@ -60,6 +60,8 @@ import { usePlatformSettings } from "./adapters/PlatformSettingsContext";
 import AuthRoutePage from "./features/auth/AuthRoutePage";
 import AccountPage from "./features/account/AccountPage";
 import MerchantOnboardingPage from "./features/onboarding/MerchantOnboardingPage";
+import { refreshMerchantLifecycleSnapshot } from "./workflows/merchantLifecycleRefresh";
+import { coordinateCustomizationCompletion } from "./workflows/customizationCompletion";
 
 export default function App() {
   const {
@@ -187,6 +189,7 @@ export default function App() {
   const workspaceEditGeneration = useRef(0);
   const workspaceOperationSequence = useRef(0);
   const merchantRestoreSequence = useRef(0);
+  const merchantLifecycleRefreshSequence = useRef(0);
   const workspaceLoads = useRef(new LatestWorkspaceLoad());
   const draftLoads = useRef(new LatestWorkspaceLoad());
   const draftOperationSequence = useRef(0);
@@ -372,6 +375,7 @@ export default function App() {
   const resetTenantOwnedState = () => {
     workspaceOperationSequence.current += 1;
     merchantRestoreSequence.current += 1;
+    merchantLifecycleRefreshSequence.current += 1;
     draftOperationSequence.current += 1;
     workspaceLoads.current.invalidate();
     draftLoads.current.invalidate();
@@ -743,6 +747,19 @@ export default function App() {
     } finally {
       if (operation === workspaceOperationSequence.current) setWorkspaceSaving(false);
     }
+  };
+
+  const completeStoreCustomization = async (): Promise<void> => {
+    await coordinateCustomizationCompletion({
+      existingWorkspace: activeWorkspace !== null,
+      save: () => saveStore(),
+      returnToMerchantPortal: () => {
+        setMerchantStoreRoute(null);
+        setView("merchant_dashboard");
+        pushCentralPath("/app");
+      },
+      continueNewStoreJourney: () => setIsDomainModalOpen(true),
+    });
   };
 
   // Reset to default
@@ -1165,9 +1182,32 @@ export default function App() {
     triggerToast("تم إيقاف العرض العام للمتجر مع الاحتفاظ ببياناته.", "info");
   };
 
-  const reloadMerchantPortal = () => {
+  const reloadMerchantPortal = async (signal?: AbortSignal): Promise<void> => {
     if (!authUser || merchantStoresLoading) return;
-    void restoreMerchantState(authUser);
+    const refreshSequence = ++merchantLifecycleRefreshSequence.current;
+    setMerchantStoresLoading(true);
+    setMerchantStoresError(null);
+    try {
+      await refreshMerchantLifecycleSnapshot({
+        signal,
+        listStores: provisioning.listStores,
+        applyStores: (stores) => {
+          if (refreshSequence === merchantLifecycleRefreshSequence.current) setMerchantStores(stores);
+        },
+      });
+    } catch (requestError) {
+      if (signal?.aborted || isUiError(requestError, "aborted")) return;
+      if (isUiError(requestError, "unauthenticated")) {
+        setAuthUser(null);
+        resetTenantOwnedState();
+        return;
+      }
+      const message = uiErrorMessage(requestError, "تعذر تحديث حالات متاجرك من الخادم.");
+      setMerchantStoresError(message);
+      triggerToast(message, "error");
+    } finally {
+      if (refreshSequence === merchantLifecycleRefreshSequence.current) setMerchantStoresLoading(false);
+    }
   };
 
   const copyPublicStoreUrl = async (url: string) => {
@@ -2077,15 +2117,7 @@ export default function App() {
             <div className="flex items-center flex-wrap gap-2">
               <button
                 disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
-                onClick={() => void saveStore().then((saved) => {
-                  if (!saved) return;
-                  if (activeWorkspace) {
-                    setView("merchant_dashboard");
-                    pushCentralPath("/app");
-                  } else {
-                    setIsDomainModalOpen(true);
-                  }
-                })}
+                onClick={() => void completeStoreCustomization()}
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-md hover:shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer ring-2 ring-emerald-400/30"
                 title="إنهاء التخصيص واختيار الدومين والاستضافة لمتجرك"
               >
@@ -2245,7 +2277,8 @@ export default function App() {
                     setPreviewDevice={setPreviewDevice}
                     onOpenInventory={activeWorkspace && canViewInventory ? openInventoryFromBuilder : undefined}
                     onOpenCheckoutPreview={handleOpenCheckoutPreview}
-                    onOpenDomainModal={() => setIsDomainModalOpen(true)}
+                    onOpenDomainModal={activeWorkspace ? undefined : () => setIsDomainModalOpen(true)}
+                    onCompleteCustomization={completeStoreCustomization}
                   />
                 </div>
               </aside>

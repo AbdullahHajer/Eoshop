@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
@@ -65,9 +65,57 @@ function operator(platformPermissions: string[]): UserProfile {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("PlatformAdminConsole", () => {
+  it("refreshes approved stores while provisioning advances and stops at the terminal state", async () => {
+    vi.useFakeTimers();
+    const queuedStore: PlatformStore = {
+      ...pendingStore,
+      verificationStatus: "approved",
+      provisioningStatus: "queued",
+      publicationBlockers: ["provisioning_not_ready"],
+    };
+    const activeStore: PlatformStore = {
+      ...queuedStore,
+      provisioningStatus: "active",
+      publicationBlockers: [],
+      activeAt: "2026-08-25T00:00:00Z",
+    };
+    const listStores = vi.fn()
+      .mockResolvedValueOnce(storePage([queuedStore]))
+      .mockResolvedValueOnce(storePage([activeStore]));
+
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
+        overview: vi.fn().mockResolvedValue(overview),
+        listStores,
+      } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.stores.view"])}
+          section="stores"
+          onNavigate={vi.fn()}
+          onExit={vi.fn()}
+          onLogout={vi.fn().mockResolvedValue(undefined)}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(listStores).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(queuedStore.storeName)).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(listStores).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(listStores).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps main content and session controls reachable when the desktop sidebar is hidden", async () => {
     const onExit = vi.fn();
     const onLogout = vi.fn().mockResolvedValue(undefined);

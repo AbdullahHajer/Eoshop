@@ -26,6 +26,7 @@ import { publicStoreUrl } from "../../utils/publicStoreUrl";
 import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycleTone } from "./lifecycle";
 import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
 import SkipLink from "../../components/SkipLink";
+import { shouldPollMerchantLifecycle, useLifecyclePolling } from "../provisioning/useLifecyclePolling";
 
 interface MerchantPortalProps {
   user: UserProfile;
@@ -35,7 +36,7 @@ interface MerchantPortalProps {
   draftError: string | null;
   loading: boolean;
   error: string | null;
-  onReload: () => void;
+  onReload: (signal?: AbortSignal) => void | Promise<void>;
   onCreateStore: () => void;
   onOpenStore: (store: StoreSubmission) => void;
   onCorrectStore: (store: StoreSubmission) => void;
@@ -84,6 +85,16 @@ export default function MerchantPortal({
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(stores[0]?.id ?? null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const lifecyclePollIds = stores
+    .filter((store) => shouldPollMerchantLifecycle(store.verificationStatus, store.provisioningStatus))
+    .map((store) => store.id)
+    .sort();
+
+  useLifecyclePolling({
+    enabled: lifecyclePollIds.length > 0,
+    pollKey: `merchant:${lifecyclePollIds.join(",")}`,
+    refresh: onReload,
+  });
 
   useEffect(() => {
     if (!stores.length) {

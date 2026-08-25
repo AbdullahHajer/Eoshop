@@ -48,6 +48,7 @@ import PlatformUsersPanel from "../features/admin/PlatformUsersPanel";
 import PlatformSettingsPanel from "../features/admin/PlatformSettingsPanel";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import SkipLink from "./SkipLink";
+import { isProvisioningTransition, useLifecyclePolling } from "../features/provisioning/useLifecyclePolling";
 
 interface PlatformAdminConsoleProps {
   user: UserProfile;
@@ -285,22 +286,39 @@ export default function PlatformAdminConsole({
     }
   };
 
-  const loadStores = async (query: PlatformStoreQuery = storeQuery) => {
+  const loadStores = async (query: PlatformStoreQuery = storeQuery, signal?: AbortSignal) => {
     if (!canStores || storesForbiddenRef.current) return;
     const sequence = ++storesSequence.current;
     setStoresLoading(true);
     setStoresError(null);
     try {
-      const next = await administration.listStores(query);
+      const next = signal
+        ? await administration.listStores(query, signal)
+        : await administration.listStores(query);
       if (mounted.current && sequence === storesSequence.current) setStores(next);
     } catch (error) {
       if (mounted.current && sequence === storesSequence.current) {
+        if (isUiError(error, "aborted")) return;
         handleReadError(error, "stores", "تعذر تحميل متاجر المنصة.", setStoresError);
       }
     } finally {
       if (mounted.current && sequence === storesSequence.current) setStoresLoading(false);
     }
   };
+
+  const transitioningStoreIds = stores.items
+    .filter((store) => store.verificationStatus === "approved" && isProvisioningTransition(store.provisioningStatus))
+    .map((store) => store.id)
+    .sort();
+
+  useLifecyclePolling({
+    enabled: activeSection === "stores" && canStores && !storesForbidden && transitioningStoreIds.length > 0,
+    pollKey: `platform:${user.id}:${transitioningStoreIds.join(",")}`,
+    refresh: async (signal) => {
+      if (mutationInFlight.current || storesLoading) return;
+      await loadStores(storeQuery, signal);
+    },
+  });
 
   const loadAudit = async (query: AdminAuditQuery = auditQuery) => {
     if (!canAudit || auditForbiddenRef.current) return;

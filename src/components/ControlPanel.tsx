@@ -26,6 +26,7 @@ export default function ControlPanel({
   onOpenCheckoutPreview,
   onOpenInventory,
   onOpenDomainModal,
+  onCompleteCustomization,
 }: ControlPanelProps) {
   const { assistant, catalog, storeAssets } = useUiAdapters();
   const [assistantPrompt, setAssistantPrompt] = useState("");
@@ -88,7 +89,21 @@ export default function ControlPanel({
         {activeTab === "ai" && <AiCopywriterPanel prompt={assistantPrompt} loading={isGeneratingCopy} output={copyOutput} onPromptChange={setAssistantPrompt} onSubmit={triggerCopyWrite} />}
         {activeTab === "export" && <StoreSubmissionPanel storeName={config.storeName} slogan={config.slogan} productCount={config.products.length} onOpen={onOpenDomainModal} />}
       </div>
-      {activeTab !== "export" && <CustomizationCompletionBar onComplete={() => onOpenDomainModal ? onOpenDomainModal() : setActiveTab("export")} />}
+      {activeTab !== "export" && (
+        <CustomizationCompletionBar
+          onComplete={() => {
+            if (onCompleteCustomization) {
+              void onCompleteCustomization();
+              return;
+            }
+            if (onOpenDomainModal) {
+              onOpenDomainModal();
+              return;
+            }
+            setActiveTab("export");
+          }}
+        />
+      )}
     </div>
   );
 }

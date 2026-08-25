@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StoreDraft, StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
@@ -64,9 +64,28 @@ function props(stores: StoreSubmission[]) {
   };
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("MerchantPortal", () => {
+  it("refreshes pending lifecycle state automatically and stops once the store is ready", async () => {
+    vi.useFakeTimers();
+    const callbacks = props([store()]);
+    const view = render(<MerchantPortal {...callbacks} />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(callbacks.onReload).toHaveBeenCalledTimes(1);
+
+    view.rerender(<MerchantPortal
+      {...callbacks}
+      stores={[store({ verificationStatus: "approved", provisioningStatus: "active", publicationBlockers: [] })]}
+    />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(callbacks.onReload).toHaveBeenCalledTimes(1);
+  });
+
   it("exposes a keyboard skip target and compact narrow-screen navigation", () => {
     render(<MerchantPortal {...props([])} />);
 

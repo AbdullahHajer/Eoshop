@@ -9,6 +9,18 @@ afterEach(() => {
 });
 
 describe("provisioningApi", () => {
+  it("forwards merchant lifecycle cancellation to the HTTP request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await expect(provisioningApi.listStores(controller.signal)).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/merchant/stores",
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it("fails closed when a lifecycle enum or critical projection field is malformed", () => {
     expect(() => mapSubmission({
       id: "tenant-invalid",

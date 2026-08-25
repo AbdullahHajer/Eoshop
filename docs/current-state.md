@@ -1,6 +1,6 @@
 # Eoshop current delivery state
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 ## Product position
 
@@ -29,13 +29,14 @@ Eoshop has a server-authoritative commerce core and a repeatable local Pilot. Hu
 
 ## Active
 
-- No active implementation work package; WP 5.19 is the next bounded acceptance slice.
+- WP 5.19: end-to-end customization, provisioning refresh and publication continuity.
 
 ## Approved next sequence
 
-1. Start WP 5.19 for public-storefront narrow-screen, keyboard and cross-browser acceptance as a bounded slice.
-2. Restore richer appearance options incrementally through bounded server-owned contracts rather than the prototype builder.
-3. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
+1. Complete WP 5.19 through a server-confirmed public URL.
+2. Continue public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.20.
+3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
+4. Local-market payment verification/notifications, then Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 

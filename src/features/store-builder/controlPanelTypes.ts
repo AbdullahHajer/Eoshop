@@ -28,6 +28,7 @@ export interface ControlPanelProps {
   onOpenCheckoutPreview?: () => void;
   onOpenInventory?: () => void;
   onOpenDomainModal?: () => void;
+  onCompleteCustomization?: () => void | Promise<void>;
 }
 
 export interface CopywriterOutput {

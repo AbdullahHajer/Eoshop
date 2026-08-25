@@ -664,6 +664,34 @@ describe("adapter-backed interface flows", () => {
     expect(setActiveTab).toHaveBeenCalledWith("export");
   });
 
+  it("keeps an existing workspace completion separate from the new-store domain journey", async () => {
+    const onCompleteCustomization = vi.fn().mockResolvedValue(undefined);
+    const onOpenDomainModal = vi.fn();
+    const user = userEvent.setup();
+    renderInterface(
+      <ControlPanel
+        config={ELEGANT_PRESET}
+        activeTenantId="tenant-existing"
+        handleConfigChange={vi.fn()}
+        handleProductChange={vi.fn()}
+        handleProductMediaChange={vi.fn()}
+        addEmptyProduct={vi.fn()}
+        deleteProduct={vi.fn()}
+        activeTab="branding"
+        setActiveTab={vi.fn()}
+        previewDevice="desktop"
+        setPreviewDevice={vi.fn()}
+        onCompleteCustomization={onCompleteCustomization}
+        onOpenDomainModal={onOpenDomainModal}
+      />,
+      createFakeUiAdapters(),
+    );
+
+    await user.click(screen.getByRole("button", { name: /تم الانتهاء من التخصيص/ }));
+    expect(onCompleteCustomization).toHaveBeenCalledOnce();
+    expect(onOpenDomainModal).not.toHaveBeenCalled();
+  });
+
   it("aborts an in-flight catalog upload when the active tenant changes", async () => {
     let resolveUpload!: (value: { id: string; url: string; mimeType: string; byteSize: number }) => void;
     let capturedSignal: AbortSignal | undefined;
