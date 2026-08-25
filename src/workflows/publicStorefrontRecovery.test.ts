@@ -40,4 +40,3 @@ describe("public storefront recovery", () => {
     expect(publicStorefrontFailureMessage(new UiAdapterError("hidden", "server"))).toContain("غير متاحة مؤقتًا");
   });
 });
-

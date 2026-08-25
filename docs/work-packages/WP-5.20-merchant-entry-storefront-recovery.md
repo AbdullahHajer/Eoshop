@@ -76,4 +76,3 @@ Make the existing-store management and editing path obvious from the merchant po
 ## Rollback
 
 Deploy the previous web image. This work package has no database or persisted-contract rollback.
-

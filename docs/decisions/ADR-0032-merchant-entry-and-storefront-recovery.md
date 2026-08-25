@@ -22,4 +22,3 @@ The merchant portal already contains the authoritative store list and the route-
 - Temporary startup/network failures can recover without a full page reload.
 - Public-store authority, tenant routing, permissions and persisted contracts remain unchanged.
 - Broad public-storefront responsive, keyboard and cross-browser acceptance moves to WP 5.21.
-
