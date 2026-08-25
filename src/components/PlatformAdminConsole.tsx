@@ -48,6 +48,7 @@ import PlatformUsersPanel from "../features/admin/PlatformUsersPanel";
 import PlatformSettingsPanel from "../features/admin/PlatformSettingsPanel";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import SkipLink from "./SkipLink";
+import { isProvisioningTransition, useLifecyclePolling } from "../features/provisioning/useLifecyclePolling";
 
 interface PlatformAdminConsoleProps {
   user: UserProfile;
@@ -301,6 +302,20 @@ export default function PlatformAdminConsole({
       if (mounted.current && sequence === storesSequence.current) setStoresLoading(false);
     }
   };
+
+  const transitioningStoreIds = stores.items
+    .filter((store) => store.verificationStatus === "approved" && isProvisioningTransition(store.provisioningStatus))
+    .map((store) => store.id)
+    .sort();
+
+  useLifecyclePolling({
+    enabled: activeSection === "stores" && canStores && !storesForbidden && transitioningStoreIds.length > 0,
+    pollKey: `platform:${user.id}:${transitioningStoreIds.join(",")}`,
+    refresh: async () => {
+      if (mutationInFlight.current || storesLoading) return;
+      await loadStores(storeQuery);
+    },
+  });
 
   const loadAudit = async (query: AdminAuditQuery = auditQuery) => {
     if (!canAudit || auditForbiddenRef.current) return;

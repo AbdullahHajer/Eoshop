@@ -745,6 +745,21 @@ export default function App() {
     }
   };
 
+  const completeStoreCustomization = async (): Promise<void> => {
+    const completingExistingWorkspace = activeWorkspace !== null;
+    const saved = await saveStore();
+    if (!saved) return;
+
+    if (completingExistingWorkspace) {
+      setMerchantStoreRoute(null);
+      setView("merchant_dashboard");
+      pushCentralPath("/app");
+      return;
+    }
+
+    setIsDomainModalOpen(true);
+  };
+
   // Reset to default
   const resetStore = () => {
     setIsResetConfirmOpen(true);
@@ -1165,9 +1180,9 @@ export default function App() {
     triggerToast("تم إيقاف العرض العام للمتجر مع الاحتفاظ ببياناته.", "info");
   };
 
-  const reloadMerchantPortal = () => {
+  const reloadMerchantPortal = async (): Promise<void> => {
     if (!authUser || merchantStoresLoading) return;
-    void restoreMerchantState(authUser);
+    await restoreMerchantState(authUser);
   };
 
   const copyPublicStoreUrl = async (url: string) => {
@@ -2077,15 +2092,7 @@ export default function App() {
             <div className="flex items-center flex-wrap gap-2">
               <button
                 disabled={workspaceSaving || workspaceLoading || workspaceConflict !== null}
-                onClick={() => void saveStore().then((saved) => {
-                  if (!saved) return;
-                  if (activeWorkspace) {
-                    setView("merchant_dashboard");
-                    pushCentralPath("/app");
-                  } else {
-                    setIsDomainModalOpen(true);
-                  }
-                })}
+                onClick={() => void completeStoreCustomization()}
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-md hover:shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer ring-2 ring-emerald-400/30"
                 title="إنهاء التخصيص واختيار الدومين والاستضافة لمتجرك"
               >
@@ -2245,7 +2252,8 @@ export default function App() {
                     setPreviewDevice={setPreviewDevice}
                     onOpenInventory={activeWorkspace && canViewInventory ? openInventoryFromBuilder : undefined}
                     onOpenCheckoutPreview={handleOpenCheckoutPreview}
-                    onOpenDomainModal={() => setIsDomainModalOpen(true)}
+                    onOpenDomainModal={activeWorkspace ? undefined : () => setIsDomainModalOpen(true)}
+                    onCompleteCustomization={completeStoreCustomization}
                   />
                 </div>
               </aside>
