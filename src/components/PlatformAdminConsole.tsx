@@ -286,16 +286,19 @@ export default function PlatformAdminConsole({
     }
   };
 
-  const loadStores = async (query: PlatformStoreQuery = storeQuery) => {
+  const loadStores = async (query: PlatformStoreQuery = storeQuery, signal?: AbortSignal) => {
     if (!canStores || storesForbiddenRef.current) return;
     const sequence = ++storesSequence.current;
     setStoresLoading(true);
     setStoresError(null);
     try {
-      const next = await administration.listStores(query);
+      const next = signal
+        ? await administration.listStores(query, signal)
+        : await administration.listStores(query);
       if (mounted.current && sequence === storesSequence.current) setStores(next);
     } catch (error) {
       if (mounted.current && sequence === storesSequence.current) {
+        if (isUiError(error, "aborted")) return;
         handleReadError(error, "stores", "تعذر تحميل متاجر المنصة.", setStoresError);
       }
     } finally {
@@ -311,9 +314,9 @@ export default function PlatformAdminConsole({
   useLifecyclePolling({
     enabled: activeSection === "stores" && canStores && !storesForbidden && transitioningStoreIds.length > 0,
     pollKey: `platform:${user.id}:${transitioningStoreIds.join(",")}`,
-    refresh: async () => {
+    refresh: async (signal) => {
       if (mutationInFlight.current || storesLoading) return;
-      await loadStores(storeQuery);
+      await loadStores(storeQuery, signal);
     },
   });
 

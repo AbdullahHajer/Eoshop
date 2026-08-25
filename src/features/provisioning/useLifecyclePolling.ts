@@ -25,7 +25,7 @@ export function shouldPollMerchantLifecycle(
 interface LifecyclePollingOptions {
   enabled: boolean;
   pollKey: string;
-  refresh: () => void | Promise<void>;
+  refresh: (signal: AbortSignal) => void | Promise<void>;
   intervalMs?: number;
   maxAttempts?: number;
 }
@@ -46,12 +46,14 @@ export function useLifecyclePolling({
     let cancelled = false;
     let attempts = 0;
     let timer: number | undefined;
+    let controller: AbortController | undefined;
 
     const schedule = () => {
       timer = window.setTimeout(async () => {
         attempts += 1;
+        controller = new AbortController();
         try {
-          await refreshRef.current();
+          await refreshRef.current(controller.signal);
         } catch {
           // The owning screen presents refresh errors; polling remains bounded and retryable.
         } finally {
@@ -64,6 +66,7 @@ export function useLifecyclePolling({
 
     return () => {
       cancelled = true;
+      controller?.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [enabled, intervalMs, maxAttempts, pollKey]);

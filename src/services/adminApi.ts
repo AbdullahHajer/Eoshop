@@ -365,8 +365,8 @@ export const adminApi = {
     return mapOverview(payload.data);
   },
 
-  async listStores(query: PlatformStoreQuery = {}): Promise<PaginatedResult<PlatformStore>> {
-    const payload = await apiClient.request<unknown>(queryPath("/api/admin/stores", query));
+  async listStores(query: PlatformStoreQuery = {}, signal?: AbortSignal): Promise<PaginatedResult<PlatformStore>> {
+    const payload = await apiClient.request<unknown>(queryPath("/api/admin/stores", query), { signal });
 
     return mapPaginated(payload, "قائمة متاجر المنصة", mapStore);
   },

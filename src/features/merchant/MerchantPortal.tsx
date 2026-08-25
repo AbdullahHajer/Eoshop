@@ -36,7 +36,7 @@ interface MerchantPortalProps {
   draftError: string | null;
   loading: boolean;
   error: string | null;
-  onReload: () => void | Promise<void>;
+  onReload: (signal?: AbortSignal) => void | Promise<void>;
   onCreateStore: () => void;
   onOpenStore: (store: StoreSubmission) => void;
   onCorrectStore: (store: StoreSubmission) => void;

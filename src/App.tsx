@@ -60,6 +60,8 @@ import { usePlatformSettings } from "./adapters/PlatformSettingsContext";
 import AuthRoutePage from "./features/auth/AuthRoutePage";
 import AccountPage from "./features/account/AccountPage";
 import MerchantOnboardingPage from "./features/onboarding/MerchantOnboardingPage";
+import { refreshMerchantLifecycleSnapshot } from "./workflows/merchantLifecycleRefresh";
+import { coordinateCustomizationCompletion } from "./workflows/customizationCompletion";
 
 export default function App() {
   const {
@@ -187,6 +189,7 @@ export default function App() {
   const workspaceEditGeneration = useRef(0);
   const workspaceOperationSequence = useRef(0);
   const merchantRestoreSequence = useRef(0);
+  const merchantLifecycleRefreshSequence = useRef(0);
   const workspaceLoads = useRef(new LatestWorkspaceLoad());
   const draftLoads = useRef(new LatestWorkspaceLoad());
   const draftOperationSequence = useRef(0);
@@ -372,6 +375,7 @@ export default function App() {
   const resetTenantOwnedState = () => {
     workspaceOperationSequence.current += 1;
     merchantRestoreSequence.current += 1;
+    merchantLifecycleRefreshSequence.current += 1;
     draftOperationSequence.current += 1;
     workspaceLoads.current.invalidate();
     draftLoads.current.invalidate();
@@ -746,18 +750,16 @@ export default function App() {
   };
 
   const completeStoreCustomization = async (): Promise<void> => {
-    const completingExistingWorkspace = activeWorkspace !== null;
-    const saved = await saveStore();
-    if (!saved) return;
-
-    if (completingExistingWorkspace) {
-      setMerchantStoreRoute(null);
-      setView("merchant_dashboard");
-      pushCentralPath("/app");
-      return;
-    }
-
-    setIsDomainModalOpen(true);
+    await coordinateCustomizationCompletion({
+      existingWorkspace: activeWorkspace !== null,
+      save: () => saveStore(),
+      returnToMerchantPortal: () => {
+        setMerchantStoreRoute(null);
+        setView("merchant_dashboard");
+        pushCentralPath("/app");
+      },
+      continueNewStoreJourney: () => setIsDomainModalOpen(true),
+    });
   };
 
   // Reset to default
@@ -1180,9 +1182,32 @@ export default function App() {
     triggerToast("تم إيقاف العرض العام للمتجر مع الاحتفاظ ببياناته.", "info");
   };
 
-  const reloadMerchantPortal = async (): Promise<void> => {
+  const reloadMerchantPortal = async (signal?: AbortSignal): Promise<void> => {
     if (!authUser || merchantStoresLoading) return;
-    await restoreMerchantState(authUser);
+    const refreshSequence = ++merchantLifecycleRefreshSequence.current;
+    setMerchantStoresLoading(true);
+    setMerchantStoresError(null);
+    try {
+      await refreshMerchantLifecycleSnapshot({
+        signal,
+        listStores: provisioning.listStores,
+        applyStores: (stores) => {
+          if (refreshSequence === merchantLifecycleRefreshSequence.current) setMerchantStores(stores);
+        },
+      });
+    } catch (requestError) {
+      if (signal?.aborted || isUiError(requestError, "aborted")) return;
+      if (isUiError(requestError, "unauthenticated")) {
+        setAuthUser(null);
+        resetTenantOwnedState();
+        return;
+      }
+      const message = uiErrorMessage(requestError, "تعذر تحديث حالات متاجرك من الخادم.");
+      setMerchantStoresError(message);
+      triggerToast(message, "error");
+    } finally {
+      if (refreshSequence === merchantLifecycleRefreshSequence.current) setMerchantStoresLoading(false);
+    }
   };
 
   const copyPublicStoreUrl = async (url: string) => {

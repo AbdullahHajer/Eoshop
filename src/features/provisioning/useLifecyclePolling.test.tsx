@@ -14,7 +14,7 @@ function PollingHarness({
   refresh,
 }: {
   enabled: boolean;
-  refresh: () => Promise<void>;
+  refresh: (signal: AbortSignal) => Promise<void>;
 }) {
   useLifecyclePolling({ enabled, pollKey: "test-store", refresh, intervalMs: 10, maxAttempts: 2 });
   return null;
@@ -54,5 +54,20 @@ describe("useLifecyclePolling", () => {
     view.rerender(<PollingHarness enabled={false} refresh={refresh} />);
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts an in-flight refresh when the polling screen unmounts", async () => {
+    vi.useFakeTimers();
+    let observedSignal: AbortSignal | null = null;
+    const refresh = vi.fn((signal: AbortSignal) => {
+      observedSignal = signal;
+      return new Promise<void>(() => undefined);
+    });
+    const view = render(<PollingHarness enabled refresh={refresh} />);
+
+    act(() => { vi.advanceTimersByTime(10); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    view.unmount();
+    expect(observedSignal?.aborted).toBe(true);
   });
 });
