@@ -86,6 +86,15 @@ describe("MerchantPortal", () => {
     expect(callbacks.onReload).toHaveBeenCalledTimes(1);
   });
 
+  it("does not pass a click event as the optional reload signal", async () => {
+    const callbacks = props([]);
+    render(<MerchantPortal {...callbacks} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "تحديث" }));
+
+    expect(callbacks.onReload).toHaveBeenCalledWith();
+  });
+
   it("exposes a keyboard skip target and compact narrow-screen navigation", () => {
     render(<MerchantPortal {...props([])} />);
 
@@ -141,7 +150,7 @@ describe("MerchantPortal", () => {
     expect(screen.getByRole("alert").textContent).toContain("تعذر التحقق من المسودة المحفوظة");
     expect(screen.queryByRole("heading", { name: "ابدأ متجرك الأول" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
-    expect(callbacks.onReload).toHaveBeenCalledOnce();
+    expect(callbacks.onReload).toHaveBeenCalledWith();
   });
 
   it("shows a safe rejection reason with the server-authorized correction action", async () => {

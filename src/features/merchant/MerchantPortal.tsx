@@ -183,7 +183,7 @@ export default function MerchantPortal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onReload}
+              onClick={() => void onReload()}
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
@@ -292,7 +292,7 @@ export default function MerchantPortal({
           {draftError && (
             <section role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
               <div><p className="font-black">تعذر التحقق من المسودة المحفوظة</p><p className="mt-1 text-sm">{draftError} المتاجر المرسلة أدناه ما زالت متاحة.</p></div>
-              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+              <button type="button" onClick={() => void onReload()} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
             </section>
           )}
 
@@ -314,7 +314,7 @@ export default function MerchantPortal({
           {error && (
             <section role="alert" className="flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
               <div><p className="font-black">تعذر تحميل متاجرك</p><p className="mt-1 text-sm">{error}</p></div>
-              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+              <button type="button" onClick={() => void onReload()} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
             </section>
           )}
 

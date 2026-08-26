@@ -179,6 +179,21 @@ describe("adapter-backed interface flows", () => {
     expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   }, 15_000);
 
+  it.each([
+    ["التصميم والهوية", "design"],
+    ["صفحات المتجر", "pages"],
+  ])("opens the %s shortcut directly in the existing builder", async (label, section) => {
+    const user = userEvent.setup();
+    const adapters = appAdapters(vi.fn().mockResolvedValue(workspace));
+
+    renderInterface(<App />, adapters);
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: label }));
+
+    expect(await screen.findByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
+    expect(window.location.pathname).toBe(`/app/stores/${submission.id}/${section}`);
+  }, 15_000);
+
   it("shows submitted stores without waiting for a hanging draft recovery request", async () => {
     const pendingStore: StoreSubmission = {
       ...submission,

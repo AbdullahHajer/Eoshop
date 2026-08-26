@@ -1413,7 +1413,13 @@ export default function App() {
                 : "/app/new";
             window.location.assign(path);
           }}
-          onOpenStore={openMerchantStore}
+          onOpenStore={(store, section = "overview") => {
+            if (section === "design" || section === "pages") {
+              void openMerchantBuilder(store, section);
+              return;
+            }
+            openMerchantStore(store, section);
+          }}
           onCorrectStore={(store) => void openMerchantCorrection(store)}
           onPublish={(store) => publishMerchantStore(store)}
           onUnpublish={(store) => unpublishMerchantStore(store)}
