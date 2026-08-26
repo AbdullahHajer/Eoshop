@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.21 |
-| Status | Ready for protected-branch delivery |
+| Status | Complete and merged |
 | Started | 2026-08-26 |
 | Branch | `codex/wp-5.21-public-storefront-accessibility` |
 | Base | Protected `main` at `b2bcd64e0268ba604de175c79458f948cfbea8bc` |
@@ -65,8 +65,8 @@ Make the server-confirmed public storefront purchase journey usable and understa
 ### T5 — Delivery
 
 - [x] Obtain final independent read-only re-approval after the Pilot-only UUID and 768 px corrections.
-- [ ] Record final evidence and rollback.
-- [ ] Commit, push, pass required CI and merge through protected `main`.
+- [x] Record final evidence and rollback.
+- [x] Commit, push, pass required CI and merge through protected `main`.
 
 ## Acceptance criteria
 
