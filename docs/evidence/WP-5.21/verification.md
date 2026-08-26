@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.21 — Public storefront accessibility acceptance |
-| Status | Ready for protected-branch delivery |
+| Status | Complete and merged |
 | Verified | 2026-08-26 |
 | Branch | `codex/wp-5.21-public-storefront-accessibility` |
 | Base | `b2bcd64e0268ba604de175c79458f948cfbea8bc` |
@@ -69,6 +69,13 @@
 - `http://127.0.0.1:8010/`, `http://noor.lvh.me:8010/` and `http://noor.lvh.me:8010/api/store/config` returned HTTP 200.
 - The local HTTP Pilot first exposed a blank/error storefront before any API request because `crypto.randomUUID()` is unavailable outside secure contexts. The secure `getRandomValues()` fallback corrected that environment-specific failure without weakening request identifiers.
 - The final review then found the same environment boundary in checkout/provisioning fingerprinting. The portable fallback stores only a compact comparison token, never customer payload data, and its collision cannot authorize or alter a server mutation because the UUID/idempotency contract and server payload validation remain authoritative.
+
+## Pull-request CI and delivery
+
+- Implementation commit: `d5cb2de56659204eeaa6eba19071243977df77c1`.
+- Implementation pull request: [#66](https://github.com/sas-prog1/Eoshop/pull/66), merged through protected `main` as `373c3109038b594716ed672f4fdb3187fd62ff40`.
+- Final implementation-head CI: [33009195791](https://github.com/sas-prog1/Eoshop/actions/runs/33009195791); repository safety, frontend quality, backend quality and container integration all passed.
+- Protected-`main` CI: [33009778780](https://github.com/sas-prog1/Eoshop/actions/runs/33009778780); the same four required jobs passed on merge commit `373c310`.
 
 ## Rollback
 

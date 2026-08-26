@@ -28,18 +28,18 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a 
 - WP 5.18: authenticated-shell narrow-screen, keyboard and structural accessibility acceptance hardening.
 - WP 5.19: end-to-end existing-store customization completion, bounded provisioning refresh and server-confirmed publication continuity.
 - WP 5.20: discoverable merchant store management, capability-aware shortcuts and recoverable public-storefront loading.
+- WP 5.21: public-storefront loading/error semantics, keyboard and cart/checkout focus behavior, reduced motion, readable merchant colors, secure local-HTTP request identity and verified 320–1440 px reflow.
 
 ## Active
 
-- WP 5.21: public-storefront narrow-screen and keyboard acceptance. Implementation, full frontend verification, retained Pilot acceptance and independent approval are complete; protected-branch delivery remains.
+- No implementation work package is open. The approved comprehensive connected-system review is the next controlled activity.
 
 ## Approved next sequence
 
-1. Close WP 5.21 through retained Pilot browser acceptance, independent review and protected-branch delivery.
-2. Perform the approved comprehensive review of backend authority, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
-3. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
-4. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
-5. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
+1. Perform the approved comprehensive review of backend authority, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
+2. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
+3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
+4. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 
