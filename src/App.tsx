@@ -62,6 +62,7 @@ import AccountPage from "./features/account/AccountPage";
 import MerchantOnboardingPage from "./features/onboarding/MerchantOnboardingPage";
 import { refreshMerchantLifecycleSnapshot } from "./workflows/merchantLifecycleRefresh";
 import { coordinateCustomizationCompletion } from "./workflows/customizationCompletion";
+import { loadPublicStorefrontWithRecovery, publicStorefrontFailureMessage } from "./workflows/publicStorefrontRecovery";
 
 export default function App() {
   const {
@@ -76,6 +77,8 @@ export default function App() {
   const [view, setView] = useState<AppView>("landing");
   const [publicStorefront, setPublicStorefront] = useState<StorefrontBootstrap | null>(null);
   const [publicStorefrontError, setPublicStorefrontError] = useState<string | null>(null);
+  const [publicStorefrontLoading, setPublicStorefrontLoading] = useState(false);
+  const publicStorefrontRequest = useRef<AbortController | null>(null);
   
   // Platform Administrator States
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -342,23 +345,39 @@ export default function App() {
     }
   }, []);
 
+  const loadPublicStorefront = useCallback(async () => {
+    publicStorefrontRequest.current?.abort();
+    const controller = new AbortController();
+    publicStorefrontRequest.current = controller;
+    setView("storefront");
+    setPublicStorefront(null);
+    setPublicStorefrontError(null);
+    setPublicStorefrontLoading(true);
+
+    try {
+      const storefront = await loadPublicStorefrontWithRecovery(orderActions.loadStorefront, controller.signal);
+      if (publicStorefrontRequest.current !== controller) return;
+      setPublicStorefront(storefront);
+      setConfig(storefront.config);
+    } catch (error) {
+      if (publicStorefrontRequest.current !== controller || controller.signal.aborted || isUiError(error, "aborted")) return;
+      setPublicStorefrontError(publicStorefrontFailureMessage(error));
+    } finally {
+      if (publicStorefrontRequest.current === controller) {
+        publicStorefrontRequest.current = null;
+        setPublicStorefrontLoading(false);
+      }
+    }
+  }, [orderActions]);
+
   useEffect(() => {
     if (window.location.pathname.startsWith("/admin") || isCentralFrontendHost(window.location.hostname)) return;
-    const controller = new AbortController();
-    orderActions.loadStorefront(controller.signal)
-      .then((storefront) => {
-        setPublicStorefrontError(null);
-        setPublicStorefront(storefront);
-        setConfig(storefront.config);
-        setView("storefront");
-      })
-      .catch((error) => {
-        if (isUiError(error, "aborted")) return;
-        setPublicStorefrontError(uiErrorMessage(error, "تعذر تحميل المتجر من الخادم. حدّث الصفحة ثم حاول مجددًا."));
-        setView("storefront");
-      });
-    return () => controller.abort();
-  }, [orderActions]);
+    void loadPublicStorefront();
+    return () => {
+      publicStorefrontRequest.current?.abort();
+      publicStorefrontRequest.current = null;
+    };
+  }, [loadPublicStorefront]);
 
   const triggerToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
@@ -1360,6 +1379,7 @@ export default function App() {
         <PublicStorefrontScreen
           storefront={publicStorefront}
           error={publicStorefrontError}
+          loading={publicStorefrontLoading}
           cart={cart}
           addToCart={addToCart}
           updateQuantity={updateQuantity}
@@ -1370,6 +1390,7 @@ export default function App() {
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           submitOrder={submitLiveOrder}
+          retry={() => void loadPublicStorefront()}
         />
       )}
 
@@ -1392,7 +1413,13 @@ export default function App() {
                 : "/app/new";
             window.location.assign(path);
           }}
-          onOpenStore={openMerchantStore}
+          onOpenStore={(store, section = "overview") => {
+            if (section === "design" || section === "pages") {
+              void openMerchantBuilder(store, section);
+              return;
+            }
+            openMerchantStore(store, section);
+          }}
           onCorrectStore={(store) => void openMerchantCorrection(store)}
           onPublish={(store) => publishMerchantStore(store)}
           onUnpublish={(store) => unpublishMerchantStore(store)}

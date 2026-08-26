@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import StorePreview from "../../components/StorePreview";
 import type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../../adapters/uiAdapters";
 import type { Product } from "../../types";
@@ -6,6 +6,7 @@ import type { Product } from "../../types";
 interface PublicStorefrontScreenProps {
   storefront: StorefrontBootstrap | null;
   error: string | null;
+  loading: boolean;
   cart: Array<{ product: Product; quantity: number }>;
   addToCart: (product: Product) => void;
   updateQuantity: (productId: string, amount: number) => void;
@@ -22,6 +23,7 @@ interface PublicStorefrontScreenProps {
 export default function PublicStorefrontScreen({
   storefront,
   error,
+  loading,
   cart,
   addToCart,
   updateQuantity,
@@ -52,6 +54,17 @@ export default function PublicStorefrontScreen({
           mode="live"
           submitOrder={submitOrder}
         />
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6" dir="rtl" aria-live="polite">
+        <div className="rounded-3xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-sky-600" />
+          <p className="mt-4 text-sm font-black text-slate-700">جارٍ تحميل المتجر…</p>
+        </div>
       </main>
     );
   }

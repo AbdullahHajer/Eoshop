@@ -86,6 +86,15 @@ describe("MerchantPortal", () => {
     expect(callbacks.onReload).toHaveBeenCalledTimes(1);
   });
 
+  it("does not pass a click event as the optional reload signal", async () => {
+    const callbacks = props([]);
+    render(<MerchantPortal {...callbacks} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "تحديث" }));
+
+    expect(callbacks.onReload).toHaveBeenCalledWith();
+  });
+
   it("exposes a keyboard skip target and compact narrow-screen navigation", () => {
     render(<MerchantPortal {...props([])} />);
 
@@ -141,7 +150,7 @@ describe("MerchantPortal", () => {
     expect(screen.getByRole("alert").textContent).toContain("تعذر التحقق من المسودة المحفوظة");
     expect(screen.queryByRole("heading", { name: "ابدأ متجرك الأول" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
-    expect(callbacks.onReload).toHaveBeenCalledOnce();
+    expect(callbacks.onReload).toHaveBeenCalledWith();
   });
 
   it("shows a safe rejection reason with the server-authorized correction action", async () => {
@@ -149,7 +158,7 @@ describe("MerchantPortal", () => {
     const callbacks = props([rejected]);
     render(<MerchantPortal {...callbacks} />);
     expect(screen.getAllByText("أكمل رقم التواصل الصحيح").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "إدارة وتعديل المتجر" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "تصحيح الطلب" }));
     expect(callbacks.onCorrectStore).toHaveBeenCalledWith(rejected);
   });
@@ -162,8 +171,33 @@ describe("MerchantPortal", () => {
     });
     const callbacks = props([ready]);
     render(<MerchantPortal {...callbacks} />);
-    await userEvent.click(screen.getByRole("button", { name: "فتح مركز المتجر" }));
-    expect(callbacks.onOpenStore).toHaveBeenCalledWith(ready);
+    await userEvent.click(screen.getByRole("button", { name: "إدارة وتعديل المتجر" }));
+    expect(callbacks.onOpenStore).toHaveBeenCalledWith(ready, "overview");
+  });
+
+  it("activates My stores and exposes capability-aware management shortcuts", async () => {
+    const ready = store({
+      verificationStatus: "approved",
+      provisioningStatus: "active",
+      publicationBlockers: [],
+    });
+    const callbacks = props([ready]);
+    render(<MerchantPortal {...callbacks} />);
+
+    const storeList = document.getElementById("merchant-store-list");
+    expect(storeList).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "متاجري" }));
+    expect(document.activeElement).toBe(storeList);
+
+    await userEvent.click(screen.getByRole("button", { name: "المنتجات" }));
+    await userEvent.click(screen.getByRole("button", { name: "الطلبات" }));
+    await userEvent.click(screen.getByRole("button", { name: "التصميم والهوية" }));
+    await userEvent.click(screen.getByRole("button", { name: "صفحات المتجر" }));
+
+    expect(callbacks.onOpenStore).toHaveBeenNthCalledWith(1, ready, "products");
+    expect(callbacks.onOpenStore).toHaveBeenNthCalledWith(2, ready, "orders");
+    expect(callbacks.onOpenStore).toHaveBeenNthCalledWith(3, ready, "design");
+    expect(callbacks.onOpenStore).toHaveBeenNthCalledWith(4, ready, "pages");
   });
 
   it("shows staff module capabilities without exposing the full workspace editor", () => {
@@ -176,7 +210,11 @@ describe("MerchantPortal", () => {
 
     expect(screen.getByText("غير متاح: إعدادات وتصميم المتجر")).toBeTruthy();
     expect(screen.getByText("متاح: المنتجات")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "إدارة وتعديل المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "المنتجات" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "الطلبات" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "التصميم والهوية" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "صفحات المتجر" })).toBeNull();
   });
 
   it("switches between stores without inventing lifecycle actions", async () => {
@@ -187,7 +225,7 @@ describe("MerchantPortal", () => {
     await userEvent.click(screen.getByRole("button", { name: /متجر تعز/ }));
 
     expect(screen.getByRole("heading", { name: "توقف تجهيز المتجر بأمان" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "إدارة وتعديل المتجر" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
   });
 

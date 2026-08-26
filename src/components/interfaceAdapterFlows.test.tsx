@@ -146,7 +146,7 @@ async function openRestoredBuilder(
 ) {
   renderInterface(<App />, adapters);
   expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "فتح مركز المتجر" }));
+  await user.click(screen.getByRole("button", { name: "إدارة وتعديل المتجر" }));
   if (section === "products") {
     await user.click((await screen.findAllByRole("button", { name: "المنتجات" }))[0]);
     await user.click(await screen.findByRole("button", { name: "إضافة وتعديل المنتجات" }));
@@ -175,8 +175,23 @@ describe("adapter-backed interface flows", () => {
     expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
     expect(window.location.pathname).toBe("/app");
     expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "إدارة وتعديل المتجر" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "نشر المتجر" })).toBeNull();
+  }, 15_000);
+
+  it.each([
+    ["التصميم والهوية", "design"],
+    ["صفحات المتجر", "pages"],
+  ])("opens the %s shortcut directly in the existing builder", async (label, section) => {
+    const user = userEvent.setup();
+    const adapters = appAdapters(vi.fn().mockResolvedValue(workspace));
+
+    renderInterface(<App />, adapters);
+    expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: label }));
+
+    expect(await screen.findByRole("button", { name: "حفظ التعديلات" })).toBeTruthy();
+    expect(window.location.pathname).toBe(`/app/stores/${submission.id}/${section}`);
   }, 15_000);
 
   it("shows submitted stores without waiting for a hanging draft recovery request", async () => {
@@ -196,7 +211,7 @@ describe("adapter-backed interface flows", () => {
 
     expect(await screen.findByRole("heading", { name: /مرحبًا تاجر/ })).toBeTruthy();
     expect(screen.getAllByText("قيد المراجعة").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "فتح مركز المتجر" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "إدارة وتعديل المتجر" })).toBeTruthy();
     expect(screen.getByText(/جاري التحقق من وجود مسودة محفوظة/)).toBeTruthy();
     expect(currentDraft).toHaveBeenCalledOnce();
   });
@@ -375,7 +390,7 @@ describe("adapter-backed interface flows", () => {
     await user.click(screen.getByRole("button", { name: "حفظ التعديلات" }));
     await waitFor(() => expect(saveCorrection).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTitle("الرجوع إلى بوابة التاجر"));
-    await user.click(await screen.findByRole("button", { name: "فتح مركز المتجر" }));
+    await user.click(await screen.findByRole("button", { name: "إدارة وتعديل المتجر" }));
     await user.click(await screen.findByRole("button", { name: "التصميم والهوية" }));
     expect((await screen.findAllByText("متجر الخادم")).length).toBeGreaterThan(0);
 

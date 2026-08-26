@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -8,9 +8,11 @@ import {
   Clock3,
   Copy,
   ExternalLink,
+  FileText,
   LayoutDashboard,
   LogOut,
   Package,
+  Palette,
   Plus,
   RefreshCw,
   Settings2,
@@ -27,6 +29,7 @@ import { deriveMerchantLifecycle, publicationBlockerLabel, type MerchantLifecycl
 import { usePlatformSettings } from "../../adapters/PlatformSettingsContext";
 import SkipLink from "../../components/SkipLink";
 import { shouldPollMerchantLifecycle, useLifecyclePolling } from "../provisioning/useLifecyclePolling";
+import type { MerchantStoreSection } from "../../app/centralNavigation";
 
 interface MerchantPortalProps {
   user: UserProfile;
@@ -38,7 +41,7 @@ interface MerchantPortalProps {
   error: string | null;
   onReload: (signal?: AbortSignal) => void | Promise<void>;
   onCreateStore: () => void;
-  onOpenStore: (store: StoreSubmission) => void;
+  onOpenStore: (store: StoreSubmission, section?: MerchantStoreSection) => void;
   onCorrectStore: (store: StoreSubmission) => void;
   onPublish: (store: StoreSubmission) => Promise<void>;
   onUnpublish: (store: StoreSubmission) => Promise<void>;
@@ -85,6 +88,7 @@ export default function MerchantPortal({
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(stores[0]?.id ?? null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const storesSectionRef = useRef<HTMLDivElement>(null);
   const lifecyclePollIds = stores
     .filter((store) => shouldPollMerchantLifecycle(store.verificationStatus, store.provisioningStatus))
     .map((store) => store.id)
@@ -155,6 +159,11 @@ export default function MerchantPortal({
     }
   };
 
+  const focusStoreList = () => {
+    storesSectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    storesSectionRef.current?.focus({ preventScroll: true });
+  };
+
   return (
     <div dir="rtl" className="min-h-screen bg-[#f5f7fb] text-slate-900">
       <SkipLink targetId="merchant-portal-main" />
@@ -174,7 +183,7 @@ export default function MerchantPortal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onReload}
+              onClick={() => void onReload()}
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
@@ -206,9 +215,15 @@ export default function MerchantPortal({
             <div aria-current="page" className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl bg-sky-50 px-3 py-2.5 text-sm font-black text-sky-800 lg:w-full">
               <LayoutDashboard className="h-4 w-4" /> نظرة عامة
             </div>
-            <div className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-bold text-slate-500 lg:w-full">
+            <button
+              type="button"
+              onClick={focusStoreList}
+              disabled={stores.length === 0}
+              aria-controls="merchant-store-list"
+              className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-40 lg:w-full"
+            >
               <ShoppingBag className="h-4 w-4" /> متاجري
-            </div>
+            </button>
             <button type="button" disabled={draftLoading} onClick={onCreateStore} className="flex shrink-0 items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 disabled:cursor-wait disabled:opacity-60 lg:w-full">
               <Plus className="h-4 w-4" /> {creationActionLabel}
             </button>
@@ -277,7 +292,7 @@ export default function MerchantPortal({
           {draftError && (
             <section role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
               <div><p className="font-black">تعذر التحقق من المسودة المحفوظة</p><p className="mt-1 text-sm">{draftError} المتاجر المرسلة أدناه ما زالت متاحة.</p></div>
-              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+              <button type="button" onClick={() => void onReload()} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
             </section>
           )}
 
@@ -299,7 +314,7 @@ export default function MerchantPortal({
           {error && (
             <section role="alert" className="flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
               <div><p className="font-black">تعذر تحميل متاجرك</p><p className="mt-1 text-sm">{error}</p></div>
-              <button type="button" onClick={onReload} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
+              <button type="button" onClick={() => void onReload()} className="rounded-xl bg-white px-3 py-2 text-xs font-black shadow-sm">إعادة المحاولة</button>
             </section>
           )}
 
@@ -319,7 +334,12 @@ export default function MerchantPortal({
           )}
 
           {stores.length > 0 && selectedStore && selectedLifecycle && (
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
+            <div
+              id="merchant-store-list"
+              ref={storesSectionRef}
+              tabIndex={-1}
+              className="scroll-mt-24 grid grid-cols-1 gap-6 outline-none xl:grid-cols-[330px_minmax(0,1fr)]"
+            >
               <section aria-label="قائمة المتاجر" className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <div><h2 className="font-black">متاجري</h2><p className="text-[11px] text-slate-500">اختر متجرًا لعرض رحلته</p></div>
@@ -368,8 +388,8 @@ export default function MerchantPortal({
                           <Settings2 className="h-4 w-4" /> تصحيح الطلب
                         </button>
                       )}
-                      <button type="button" disabled={Boolean(busyAction)} onClick={() => onOpenStore(selectedStore)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-50">
-                        <Settings2 className="h-4 w-4" /> فتح مركز المتجر
+                      <button type="button" disabled={Boolean(busyAction)} onClick={() => onOpenStore(selectedStore, "overview")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-50">
+                        <Settings2 className="h-4 w-4" /> إدارة وتعديل المتجر
                       </button>
                       {selectedStore.capabilities.publish && (
                         <button type="button" disabled={Boolean(busyAction)} onClick={() => void runAction(`publish:${selectedStore.id}`, () => onPublish(selectedStore))} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">
@@ -385,6 +405,31 @@ export default function MerchantPortal({
                   </div>
 
                   {actionError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">{actionError}</p>}
+
+                  {selectedStore.verificationStatus === "approved" && selectedStore.provisioningStatus === "active" && (
+                    <nav aria-label="اختصارات إدارة المتجر" className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                      {selectedStore.capabilities.catalogManage && (
+                        <button type="button" onClick={() => onOpenStore(selectedStore, "products")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800">
+                          <Package className="h-4 w-4" /> المنتجات
+                        </button>
+                      )}
+                      {selectedStore.capabilities.ordersView && (
+                        <button type="button" onClick={() => onOpenStore(selectedStore, "orders")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800">
+                          <ShoppingBag className="h-4 w-4" /> الطلبات
+                        </button>
+                      )}
+                      {selectedStore.capabilities.workspaceManage && (
+                        <>
+                          <button type="button" onClick={() => onOpenStore(selectedStore, "design")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800">
+                            <Palette className="h-4 w-4" /> التصميم والهوية
+                          </button>
+                          <button type="button" onClick={() => onOpenStore(selectedStore, "pages")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800">
+                            <FileText className="h-4 w-4" /> صفحات المتجر
+                          </button>
+                        </>
+                      )}
+                    </nav>
+                  )}
 
                   <div className="mt-6 grid grid-cols-4 gap-2" aria-label="مراحل تجهيز المتجر">
                     {stageNames.map((name, index) => {

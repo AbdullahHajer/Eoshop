@@ -30,14 +30,14 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a 
 
 ## Active
 
-- Next execution: WP 5.20 public-storefront narrow-screen, keyboard and cross-browser acceptance.
+- WP 5.20: merchant management entry points and recoverable public-storefront loading.
 
 ## Approved next sequence
 
-1. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.20.
-2. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
-3. Complete local-market payment verification/notifications.
-4. Continue to Phase 6 staging, observability, backup and scale work.
+1. Complete WP 5.20 merchant entry and public-storefront recovery.
+2. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.21.
+3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
+4. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 
