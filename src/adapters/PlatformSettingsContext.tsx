@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useUiAdapters } from "./UiAdaptersContext";
 import { DEFAULT_PLATFORM_SETTINGS, type PlatformSettings } from "../services/platformSettingsApi";
+import { readableForeground } from "../utils/readableForeground";
 
 interface PlatformSettingsState {
   settings: PlatformSettings;
@@ -19,13 +20,6 @@ const fallbackState: PlatformSettingsState = {
 };
 
 const PlatformSettingsContext = createContext<PlatformSettingsState>(fallbackState);
-
-function readableForeground(background: string): string {
-  const red = Number.parseInt(background.slice(1, 3), 16);
-  const green = Number.parseInt(background.slice(3, 5), 16);
-  const blue = Number.parseInt(background.slice(5, 7), 16);
-  return ((red * 299) + (green * 587) + (blue * 114)) / 1000 >= 150 ? "#0F172A" : "#FFFFFF";
-}
 
 export function PlatformSettingsProvider({ children }: { children: ReactNode }) {
   const { platformSettings } = useUiAdapters();

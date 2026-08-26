@@ -3,6 +3,8 @@ import { booleanField, enumField, nullableStringField, record, stringArrayField,
 import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
 import { storeOnboardingAppearance, type StoreOnboardingAppearance } from "../contracts/storeOnboardingAppearance";
 import type { StoreConfig } from "../types";
+import { randomUuid } from "../utils/randomUuid";
+import { requestFingerprint } from "../utils/requestFingerprint";
 
 export interface StoreSubmission {
   id: string;
@@ -207,9 +209,7 @@ function canonicalize(value: unknown): unknown {
 }
 
 async function fingerprint(input: StoreSubmissionInput): Promise<string> {
-  const bytes = new TextEncoder().encode(JSON.stringify(canonicalize(input)));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return requestFingerprint(JSON.stringify(canonicalize(input)));
 }
 
 function pendingStorageKey(ownerId: string, draftId: string): string {
@@ -246,7 +246,7 @@ async function acquireIdempotencyKey(input: StoreSubmissionInput, ownerId: strin
   }
 
   if (!pending || pending.version !== 2 || pending.ownerId !== ownerId || pending.draftId !== draftId || !sameDigest(pending.digest, requestDigest)) {
-    pending = { version: 2, ownerId, draftId, digest: requestDigest, idempotencyKey: crypto.randomUUID() };
+    pending = { version: 2, ownerId, draftId, digest: requestDigest, idempotencyKey: randomUuid() };
   }
 
   volatilePending = pending;
@@ -433,7 +433,7 @@ export const provisioningApi = {
 
   async resubmit(tenantId: string, expectedRevision: number, ownerId: string): Promise<{ data: StoreSubmission; meta: { replayed: boolean } }> {
     const storageKey = `eoshop.pending-store-resubmission.v2:${ownerId}:${tenantId}`;
-    let idempotencyKey: string = crypto.randomUUID();
+    let idempotencyKey: string = randomUuid();
     try {
       const pending = JSON.parse(localStorage.getItem(storageKey) || "null") as { revision?: number; key?: string } | null;
       if (pending?.revision === expectedRevision && typeof pending.key === "string") idempotencyKey = pending.key;

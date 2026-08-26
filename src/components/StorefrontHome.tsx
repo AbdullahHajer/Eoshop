@@ -4,6 +4,7 @@ import type { Product, StoreConfig, StorefrontSectionId } from "../types";
 import { storefrontSectionsOrDefault } from "../contracts/storefrontSections";
 import ProductArt from "./ProductArt";
 import { canonicalContactTarget } from "../contracts/checkoutPolicy";
+import { readableAccent, readableForeground } from "../utils/readableForeground";
 
 interface Props {
   config: StoreConfig;
@@ -34,6 +35,12 @@ export default function StorefrontHome({
   onOpenProduct,
   onAddProduct,
 }: Props) {
+  const primaryForeground = readableForeground(primaryColor);
+  const primaryPageAccent = readableAccent(primaryColor, config.bgColor || "#FFFFFF");
+  const primaryCardAccent = readableAccent(primaryColor, "#FFFFFF");
+  const primarySoftAccent = readableAccent(primaryColor, "#F8FAFC");
+  const secondaryPageAccent = readableAccent(secondaryColor, config.bgColor || "#FFFFFF");
+  const secondaryCardAccent = readableAccent(secondaryColor, "#FFFFFF");
   const products = config.products.filter((product) => product.status !== "archived" && product.status !== "draft");
   const categories = Array.from(new Set(products.map((product) => product.category.trim()).filter(Boolean)));
   const phone = canonicalContactTarget(config.phone);
@@ -73,13 +80,13 @@ export default function StorefrontHome({
         {heroImageVisible && <div className="absolute inset-0 bg-black" style={{ opacity: (config.heroBannerOverlayOpacity ?? 35) / 100 }} />}
         <div className="relative z-10 max-w-3xl space-y-4">
           {config.heroBannerBadge?.trim() && <span className="inline-flex rounded-full border border-current/20 bg-white/10 px-3 py-1 text-xs font-black">{config.heroBannerBadge}</span>}
-          <h1 className="text-3xl font-black leading-tight md:text-5xl" style={{ color: isElegant && !heroImageVisible ? secondaryColor : undefined }}>
+          <h1 className="text-3xl font-black leading-tight md:text-5xl" style={{ color: isElegant && !heroImageVisible ? secondaryCardAccent : undefined }}>
             {config.heroBannerTitle?.trim() || config.storeName}
           </h1>
           <p className={`max-w-2xl text-sm leading-7 ${isElegant && !heroImageVisible ? "text-slate-600" : "text-white/85"}`}>
             {config.heroBannerSubtitle?.trim() || config.slogan}
           </p>
-          <button type="button" onClick={onOpenProducts} className="rounded-xl px-5 py-3 text-xs font-black text-white" style={{ backgroundColor: primaryColor }}>
+          <button type="button" onClick={onOpenProducts} className="rounded-xl px-5 py-3 text-xs font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>
             {config.heroBannerButtonText?.trim() || "تصفح المنتجات"}
           </button>
         </div>
@@ -90,26 +97,26 @@ export default function StorefrontHome({
         <div className="mb-4"><h2 className="text-lg font-black text-slate-900">معلومات المتجر والخدمة</h2><p className="mt-1 text-xs text-slate-500">بيانات منشورة من إعدادات المتجر الحالية.</p></div>
         {facts.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {facts.map(({ key, label, icon: Icon }) => <div key={key} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-xs font-bold text-slate-700"><Icon className="h-4 w-4 shrink-0" style={{ color: primaryColor }} /><span>{label}</span></div>)}
+            {facts.map(({ key, label, icon: Icon }) => <div key={key} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-xs font-bold text-slate-700"><Icon className="h-4 w-4 shrink-0" style={{ color: primarySoftAccent }} /><span>{label}</span></div>)}
           </div>
         ) : <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm font-bold text-slate-500">لم يضف المتجر معلومات الخدمة بعد</div>}
       </section>
     ),
     categories: (
       <section className="space-y-4">
-        <div><h2 className="text-xl font-black" style={{ color: secondaryColor }}>التصنيفات</h2><p className="mt-1 text-xs text-slate-500">التصنيفات المستخرجة من المنتجات المنشورة.</p></div>
+        <div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>التصنيفات</h2><p className="mt-1 text-xs text-slate-500">التصنيفات المستخرجة من المنتجات المنشورة.</p></div>
         {categories.length > 0 ? <div className="flex flex-wrap gap-2">{categories.map((category) => <button key={category} type="button" onClick={() => onSelectCategory(category)} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:border-slate-400">{category}</button>)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm font-bold text-slate-500">لا توجد تصنيفات منشورة بعد.</div>}
       </section>
     ),
     featured_products: (
       <section className="space-y-4">
-        <div className="flex items-end justify-between gap-3"><div><h2 className="text-xl font-black" style={{ color: secondaryColor }}>المنتجات المنشورة</h2><p className="mt-1 text-xs text-slate-500">منتجات من كتالوج المتجر الحالي.</p></div>{products.length > 0 && <button type="button" onClick={onOpenProducts} className="text-xs font-black" style={{ color: primaryColor }}>عرض الكل</button>}</div>
-        {products.length > 0 ? <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{products.slice(0, 8).map((product) => <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><button type="button" aria-label="فتح تفاصيل المنتج" onClick={() => onOpenProduct(product)} className="block aspect-square w-full bg-slate-50 p-3"><ProductArt keyword={product.imageKeyword} primaryColor={primaryColor} imageUrl={product.imageUrl} /></button><div className="space-y-2 p-3"><p className="line-clamp-2 text-right text-xs font-black text-slate-900">{product.name}</p><div className="flex items-center justify-between gap-2"><span className="text-xs font-black" style={{ color: primaryColor }}>{product.price} {config.currency}</span><button type="button" title="أضف للسلة" aria-label="أضف للسلة" onClick={() => onAddProduct(product)} className="rounded-lg px-2 py-1.5 text-[10px] font-black text-white" style={{ backgroundColor: primaryColor }}>إضافة</button></div></div></article>)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم ينشر المتجر منتجات بعد.</div>}
+        <div className="flex items-end justify-between gap-3"><div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>المنتجات المنشورة</h2><p className="mt-1 text-xs text-slate-500">منتجات من كتالوج المتجر الحالي.</p></div>{products.length > 0 && <button type="button" onClick={onOpenProducts} className="text-xs font-black" style={{ color: primaryPageAccent }}>عرض الكل</button>}</div>
+        {products.length > 0 ? <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">{products.slice(0, 8).map((product) => <article key={product.id} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white"><button type="button" aria-label={`فتح تفاصيل ${product.name}`} onClick={() => onOpenProduct(product)} className="block aspect-square w-full bg-slate-50 p-3"><ProductArt keyword={product.imageKeyword} primaryColor={primaryColor} imageUrl={product.imageUrl} /></button><div className="space-y-2 p-3"><p className="line-clamp-2 break-words text-right text-xs font-black text-slate-900">{product.name}</p><div className="flex flex-wrap items-center justify-between gap-2"><span className="break-all text-xs font-black" style={{ color: primaryCardAccent }}>{product.price} {config.currency}</span><button type="button" title="أضف للسلة" aria-label={`إضافة ${product.name} إلى السلة`} onClick={() => onAddProduct(product)} className="min-h-11 rounded-lg px-3 py-2 text-[10px] font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>إضافة</button></div></div></article>)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم ينشر المتجر منتجات بعد.</div>}
       </section>
     ),
     about: (
       <section className="grid gap-5 rounded-3xl border border-slate-200 bg-white p-6 md:grid-cols-[minmax(0,1fr)_240px] md:items-center">
-        <div className="space-y-3"><h2 className="text-xl font-black" style={{ color: secondaryColor }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2><p className="line-clamp-4 text-sm leading-7 text-slate-600">{config.aboutText?.trim() || config.slogan}</p><button type="button" onClick={onOpenAbout} className="text-xs font-black" style={{ color: primaryColor }}>قراءة صفحة من نحن</button></div>
+        <div className="space-y-3"><h2 data-storefront-about-heading className="text-xl font-black" style={{ color: secondaryCardAccent }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2><p className="line-clamp-4 text-sm leading-7 text-slate-600">{config.aboutText?.trim() || config.slogan}</p><button type="button" onClick={onOpenAbout} className="text-xs font-black" style={{ color: primaryCardAccent }}>قراءة صفحة من نحن</button></div>
         {config.aboutImage && <img src={config.aboutImage} alt="" className="aspect-video h-full w-full rounded-2xl object-cover md:aspect-square" referrerPolicy="no-referrer" />}
       </section>
     ),

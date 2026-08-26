@@ -31,13 +31,13 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a 
 
 ## Active
 
-- Comprehensive cross-phase review after WP 5.20. This review is evidence-first and read-only; findings require approval before implementation.
+- WP 5.21: public-storefront narrow-screen and keyboard acceptance. Implementation, full frontend verification, retained Pilot acceptance and independent approval are complete; protected-branch delivery remains.
 
 ## Approved next sequence
 
-1. Review the backend, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
-2. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
-3. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.21.
+1. Close WP 5.21 through retained Pilot browser acceptance, independent review and protected-branch delivery.
+2. Perform the approved comprehensive review of backend authority, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
+3. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
 4. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
 5. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
 

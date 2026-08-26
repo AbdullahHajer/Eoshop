@@ -895,7 +895,7 @@ describe("adapter-backed interface flows", () => {
     adapters.workspace.load = vi.fn().mockResolvedValue(persistedWorkspace);
     const user = userEvent.setup();
     await openRestoredBuilder(adapters, user, "products");
-    await user.click(screen.getByRole("button", { name: /منتج قابل للأرشفة/ }));
+    await user.click(screen.getByText("منتج قابل للأرشفة", { selector: "h3" }).closest("button")!);
     await user.click(screen.getByRole("button", { name: "أرشفة المنتج عند الحفظ" }));
     await user.click(screen.getByRole("button", { name: "تأكيد" }));
     expect(await screen.findByText(/أُضيفت نية أرشفة المنتج إلى تعديلاتك غير المحفوظة/)).toBeTruthy();
