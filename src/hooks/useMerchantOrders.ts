@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
 import type { OrderReceipt } from "../adapters/uiAdapters";
 import { isUiError, uiErrorMessage } from "../contracts/uiError";
+import { randomUuid } from "../utils/randomUuid";
 
 export function useMerchantOrders(tenantId: string, enabled: boolean, onSessionExpired?: () => void) {
   const { orders } = useUiAdapters();
@@ -73,7 +74,7 @@ export function useMerchantOrders(tenantId: string, enabled: boolean, onSessionE
     loadController.current?.abort();
     setLoading(false);
     const operation = `${tenantId}:${order.id}:${target}:merchant_${target}`;
-    const key = transitionKeys.current.get(operation) ?? crypto.randomUUID();
+    const key = transitionKeys.current.get(operation) ?? randomUuid();
     transitionKeys.current.set(operation, key);
     const sequence = transitionSequence.current;
     const controller = new AbortController();

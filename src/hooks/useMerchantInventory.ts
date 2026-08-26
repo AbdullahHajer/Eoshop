@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useUiAdapters } from "../adapters/UiAdaptersContext";
 import { isUiError, uiErrorMessage } from "../contracts/uiError";
 import type { InventoryItem } from "../services/inventoryApi";
+import { randomUuid } from "../utils/randomUuid";
 
 type InventoryHookMutation = { replayed: boolean; items: InventoryItem[] };
 
@@ -71,7 +72,7 @@ export function useMerchantInventory(tenantId: string, enabled: boolean, onSessi
     const operation = ++sequence.current;
     loadController.current?.abort();
     setLoading(false);
-    const key = mutationKeys.current.get(fingerprint) ?? crypto.randomUUID();
+    const key = mutationKeys.current.get(fingerprint) ?? randomUuid();
     mutationKeys.current.set(fingerprint, key);
     const controller = new AbortController();
     mutationControllers.current.set(fingerprint, controller);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   ShoppingBag, Phone, ChevronLeft, ChevronRight, Search, Plus, Minus, X, Check, ArrowRight,
@@ -13,6 +13,7 @@ import StorefrontHome from "./StorefrontHome";
 import StorefrontProductDetail from "./StorefrontProductDetail";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
+import { readableAccent, readableForeground } from "../utils/readableForeground";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -51,6 +52,46 @@ const getFontFamilyStyle = (fontName?: string) => {
   }
 };
 
+const handleRadioArrowNavigation = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+  if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"].includes(event.key)) return;
+
+  const group = event.currentTarget.closest<HTMLElement>('[role="radiogroup"]');
+  const radios: HTMLButtonElement[] = group
+    ? Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]:not([disabled])'))
+    : [];
+  if (radios.length === 0) return;
+
+  event.preventDefault();
+  const currentIndex = Math.max(0, radios.indexOf(event.currentTarget));
+  const nextIndex = event.key === "Home"
+    ? 0
+    : event.key === "End"
+      ? radios.length - 1
+      : event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? (currentIndex + 1) % radios.length
+        : (currentIndex - 1 + radios.length) % radios.length;
+  radios[nextIndex]?.focus();
+  radios[nextIndex]?.click();
+};
+
+const useStorefrontReducedMotion = () => {
+  const readPreference = () => typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const [reducedMotion, setReducedMotion] = useState(readPreference);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    setReducedMotion(query.matches);
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  return reducedMotion;
+};
+
 export default function StorePreview({
   config,
   cart,
@@ -69,6 +110,14 @@ export default function StorePreview({
   submitOrder,
 }: StorePreviewProps) {
   const { settings: platformSettings } = usePlatformSettings();
+  const prefersReducedMotion = useStorefrontReducedMotion();
+  const cartDialogRef = useRef<HTMLDivElement>(null);
+  const cartCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const cartTriggerRef = useRef<HTMLElement | null>(null);
+  const cartExitFocusRef = useRef<"trigger" | "checkout" | null>(null);
+  const checkoutErrorRef = useRef<HTMLDivElement>(null);
+  const checkoutFocusTargetRef = useRef<string | null>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
   
   // Navigation Page State inside store
   const [storePage, setStorePage] = useState<"home" | "products" | "about" | "contact" | "product" | "checkout">("home");
@@ -108,7 +157,107 @@ export default function StorePreview({
   const [placedOrderDetails, setPlacedOrderDetails] = useState<any>(null);
   const [copiedWalletNum, setCopiedWalletNum] = useState<string | null>(null);
   const [formValidationErr, setFormValidationErr] = useState("");
+  const [checkoutErrorRevision, setCheckoutErrorRevision] = useState(0);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [isCartModalPresent, setIsCartModalPresent] = useState(isCartDrawerOpen);
+
+  const openCart = (trigger: HTMLElement) => {
+    cartTriggerRef.current = trigger;
+    cartExitFocusRef.current = null;
+    setIsCartModalPresent(true);
+    setIsCartDrawerOpen(true);
+  };
+
+  const closeCart = (focusDestination: "trigger" | "checkout" = "trigger") => {
+    cartExitFocusRef.current = focusDestination;
+    setIsCartDrawerOpen(false);
+  };
+
+  const handleCartExitComplete = () => {
+    setIsCartModalPresent(false);
+  };
+
+  useEffect(() => {
+    if (isCartModalPresent) return;
+
+    if (cartExitFocusRef.current === "checkout") {
+      document.getElementById("storefront-checkout-title")?.focus();
+    } else if (cartExitFocusRef.current === "trigger") {
+      cartTriggerRef.current?.focus();
+    }
+    cartExitFocusRef.current = null;
+  }, [isCartModalPresent]);
+
+  useEffect(() => {
+    if (isCartDrawerOpen) setIsCartModalPresent(true);
+  }, [isCartDrawerOpen]);
+
+  const reportCheckoutError = (message: string, focusTargetId?: string) => {
+    checkoutFocusTargetRef.current = focusTargetId ?? null;
+    setFormValidationErr(message);
+    setCheckoutErrorRevision((revision) => revision + 1);
+  };
+
+  useEffect(() => {
+    if (!isCartModalPresent) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCart();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const focusable: HTMLElement[] = [];
+      cartDialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ).forEach((element) => {
+        if (element.getAttribute("aria-hidden") !== "true") focusable.push(element);
+      });
+      if (focusable.length === 0) {
+        event.preventDefault();
+        cartDialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleDialogKeyDown);
+    };
+  }, [isCartModalPresent]);
+
+  useEffect(() => {
+    if (isCartDrawerOpen) cartCloseButtonRef.current?.focus();
+  }, [isCartDrawerOpen]);
+
+  useEffect(() => {
+    if (!formValidationErr) return;
+    const target = checkoutFocusTargetRef.current
+      ? document.getElementById(checkoutFocusTargetRef.current)
+      : null;
+    (target ?? checkoutErrorRef.current)?.focus();
+    checkoutFocusTargetRef.current = null;
+  }, [formValidationErr, checkoutErrorRevision]);
+
+  useEffect(() => {
+    if (orderCompleted) receiptRef.current?.focus();
+  }, [orderCompleted]);
 
   useEffect(() => {
     if (config.enableCashOnDelivery !== true) setPaymentMethod("wallet");
@@ -125,7 +274,7 @@ export default function StorePreview({
     setStorePage("product");
     const container = document.getElementById("store-preview-scroll-container");
     if (container) {
-      container.scrollTo({ top: 0, behavior: "smooth" });
+      container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
     }
   };
 
@@ -138,11 +287,19 @@ export default function StorePreview({
   };
 
   const primaryColor = config.primaryColor || "#D4AF37";
+  const primaryForeground = readableForeground(primaryColor);
   const secondaryColor = config.secondaryColor || "#1C1917";
+  const secondaryForeground = readableForeground(secondaryColor);
   const textColor = config.textColor || (config.themeStyle === "elegant" ? "#44403C" : "#334155");
   const bgColor = config.bgColor || (config.themeStyle === "elegant" ? "#fdfbf7" : "#f8fafc");
   const cardBgColor = config.cardBgColor || "#ffffff";
   const borderColor = config.borderColor || (config.themeStyle === "elegant" ? "#f2eae1" : "#e2e8f0");
+  const primaryOnWhite = readableAccent(primaryColor, "#ffffff");
+  const primaryOnWarmSurface = readableAccent(primaryColor, "#f5efe6");
+  const secondaryOnCard = readableAccent(secondaryColor, cardBgColor);
+  const secondaryOnPage = readableAccent(secondaryColor, bgColor);
+  const secondaryOnWarmSurface = readableAccent(secondaryColor, "#f5efe6");
+  const effectiveTextColor = readableAccent(textColor, bgColor);
   const isElegant = config.themeStyle === "elegant";
   const canonicalPhone = canonicalContactTarget(config.phone);
 
@@ -173,13 +330,22 @@ export default function StorePreview({
   return (
     <div 
       id="store-preview-scroll-container"
-      className="w-full h-full flex flex-col relative select-none overflow-y-auto pb-20 md:pb-6"
+      className="w-full h-full flex flex-col relative overflow-y-auto pb-24 lg:pb-6"
       style={{ 
         fontFamily: getFontFamilyStyle(config.fontFamily),
         backgroundColor: bgColor,
-        color: textColor
+        color: effectiveTextColor
       }}
     >
+      <div
+        className="contents"
+        data-storefront-background
+        aria-hidden={isCartModalPresent ? "true" : undefined}
+        inert={isCartModalPresent ? true : undefined}
+      >
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {addedSuccess ? "تمت إضافة المنتج إلى سلة التسوق." : ""}
+      </div>
       {/* Promotion / Announcement Bar */}
       {config.bannerText && (
         <div 
@@ -188,7 +354,7 @@ export default function StorePreview({
           }`}
           style={{ 
             backgroundColor: isElegant ? primaryColor : undefined, 
-            color: isElegant ? "#ffffff" : undefined 
+            color: isElegant ? primaryForeground : undefined
           }}
         >
           {!isElegant ? (
@@ -198,8 +364,8 @@ export default function StorePreview({
                 <span>{publishedProducts.length} منتج منشور</span>
               </div>
               <motion.p
-                animate={{ opacity: [0.85, 1, 0.85] }}
-                transition={{ repeat: Infinity, duration: 3 }}
+                animate={prefersReducedMotion ? undefined : { opacity: [0.85, 1, 0.85] }}
+                transition={prefersReducedMotion ? undefined : { repeat: Infinity, duration: 3 }}
                 className="truncate max-w-xl text-center mx-auto sm:mx-0 font-bold text-sky-200 leading-relaxed"
               >
                 🔥 {config.bannerText}
@@ -213,8 +379,8 @@ export default function StorePreview({
             </div>
           ) : (
             <motion.p
-              animate={{ opacity: [0.85, 1, 0.85] }}
-              transition={{ repeat: Infinity, duration: 3 }}
+              animate={prefersReducedMotion ? undefined : { opacity: [0.85, 1, 0.85] }}
+              transition={prefersReducedMotion ? undefined : { repeat: Infinity, duration: 3 }}
               className="truncate max-w-2xl text-xs sm:text-sm mx-auto font-bold leading-normal text-center"
             >
               {config.bannerText}
@@ -233,9 +399,11 @@ export default function StorePreview({
           <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
             {/* Top Row: Brand & Mobile Cart */}
             <div className="flex items-center justify-between w-full md:w-auto shrink-0">
-              <div 
+              <button
+                type="button"
                 onClick={() => setStorePage("home")}
-                className="flex items-center gap-3 cursor-pointer group"
+                className="flex items-center gap-3 cursor-pointer group text-right rounded-xl"
+                aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${config.storeName || "المتجر"}`}
               >
                 <div className="relative flex items-center">
                   {config.logoUrl ? (
@@ -243,7 +411,7 @@ export default function StorePreview({
                       src={config.logoUrl} 
                       alt={config.storeName} 
                       style={{ height: `${config.logoSize || 44}px` }} 
-                      className="w-auto max-w-[220px] object-contain group-hover:scale-105 transition duration-300 shrink-0 filter drop-shadow-xs" 
+                      className="w-auto max-w-[150px] sm:max-w-[220px] object-contain group-hover:scale-105 transition duration-300 shrink-0 filter drop-shadow-xs"
                       referrerPolicy="no-referrer" 
                     />
                   ) : (
@@ -262,7 +430,7 @@ export default function StorePreview({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-base font-black group-hover:text-sky-700 transition tracking-tight" style={{ color: secondaryColor }}>
+                    <h1 className="text-base font-black group-hover:text-sky-700 transition tracking-tight" style={{ color: secondaryOnCard }}>
                       {config.storeName || "متجر الأجهزة الذكية"}
                     </h1>
                     <span className="bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">
@@ -273,12 +441,14 @@ export default function StorePreview({
                     {config.slogan || `مرحباً بكم في ${config.storeName}`}
                   </p>
                 </div>
-              </div>
+              </button>
 
               {/* Mobile Shopping Cart Trigger */}
-              <div className="flex md:hidden items-center gap-2">
+              <div className="flex lg:hidden items-center gap-2">
                 <button
-                  onClick={() => setIsCartDrawerOpen(true)}
+                  type="button"
+                  onClick={(event) => openCart(event.currentTarget)}
+                  aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
                   className="p-2.5 rounded-xl bg-slate-900 text-white shadow-md relative flex items-center justify-center"
                 >
                   <ShoppingBag className="w-4 h-4 text-sky-400" />
@@ -298,6 +468,7 @@ export default function StorePreview({
                 <Search className="w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 right-3 pointer-events-none" />
                 <input
                   type="text"
+                  aria-label="البحث في منتجات المتجر"
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -310,7 +481,9 @@ export default function StorePreview({
                 />
                 {searchQuery && (
                   <button 
+                    type="button"
                     onClick={() => setSearchQuery("")}
+                    aria-label="مسح البحث"
                     className="absolute top-1/2 -translate-y-1/2 left-2.5 text-slate-400 hover:text-slate-700"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -319,7 +492,7 @@ export default function StorePreview({
               </div>
 
               {/* Segmented Floating Pill Nav (Desktop Only) */}
-              <nav className="hidden md:flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/90 text-xs font-bold">
+              <nav aria-label="التنقل الرئيسي في المتجر" className="hidden lg:flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/90 text-xs font-bold">
                 {[
                   { id: "home", label: "الرئيسية", icon: Zap },
                   { id: "products", label: "الأجهزة", icon: Box },
@@ -331,7 +504,9 @@ export default function StorePreview({
                   return (
                     <button
                       key={item.id}
+                      type="button"
                       onClick={() => setStorePage(item.id as any)}
+                      aria-current={isActive ? "page" : undefined}
                       className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 font-extrabold ${
                         isActive
                           ? "bg-slate-900 text-white shadow-sm"
@@ -347,7 +522,7 @@ export default function StorePreview({
             </div>
 
             {/* Desktop Actions Section: Contact hotline & Cart Trigger Pill */}
-            <div className="hidden md:flex items-center gap-2.5">
+            <div className="hidden lg:flex items-center gap-2.5">
               {canonicalPhone && (
                 <a 
                   href={`tel:${canonicalPhone}`}
@@ -360,7 +535,9 @@ export default function StorePreview({
               )}
 
               <button
-                onClick={() => setIsCartDrawerOpen(true)}
+                type="button"
+                onClick={(event) => openCart(event.currentTarget)}
+                aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
                 className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-extrabold text-xs transition shadow-md hover:shadow-lg flex items-center gap-2.5 border border-slate-800 group"
               >
                 <div className="relative">
@@ -392,16 +569,18 @@ export default function StorePreview({
         >
           <div className="flex items-center justify-between w-full md:w-auto">
             {/* Brand Logo & Name */}
-            <div 
+            <button
+              type="button"
               onClick={() => setStorePage("home")}
-              className="flex items-center gap-2.5 text-right cursor-pointer group"
+              className="flex items-center gap-2.5 text-right cursor-pointer group rounded-xl"
+              aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${config.storeName || "المتجر"}`}
             >
               {config.logoUrl ? (
                 <img 
                   src={config.logoUrl} 
                   alt={config.storeName} 
                   style={{ height: `${config.logoSize || 42}px` }} 
-                  className="w-auto max-w-[220px] object-contain shrink-0 transition group-hover:scale-105 filter drop-shadow-xs" 
+                  className="w-auto max-w-[150px] sm:max-w-[220px] object-contain shrink-0 transition group-hover:scale-105 filter drop-shadow-xs"
                   referrerPolicy="no-referrer" 
                 />
               ) : config.logoIcon ? (
@@ -418,27 +597,30 @@ export default function StorePreview({
                 </span>
               ) : null}
               <div className="flex flex-col">
-                <h1 className="text-sm md:text-base font-black tracking-tight leading-none" style={{ color: secondaryColor }}>
+                <h1 className="text-sm md:text-base font-black tracking-tight leading-none" style={{ color: secondaryOnCard }}>
                   {config.storeName || "متجر جديد"}
                 </h1>
                 <p className="text-[10px] text-slate-500 font-bold truncate max-w-[150px] md:max-w-xs leading-tight mt-0.5">
                   {config.slogan || "أهلاً بكم في متجرنا"}
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* Mobile Right Controls: Cart */}
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex lg:hidden items-center gap-2">
               <button
-                onClick={() => setIsCartDrawerOpen(true)}
+                type="button"
+                onClick={(event) => openCart(event.currentTarget)}
+                aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
                 className="p-2.5 rounded-xl relative transition flex items-center justify-center text-white"
-                style={{ backgroundColor: primaryColor }}
+                style={{ backgroundColor: primaryColor, color: primaryForeground }}
               >
                 <ShoppingBag className="w-4 h-4" />
                 {totalItems > 0 && (
-                  <span 
-                    className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shadow-md text-white"
-                    style={{ backgroundColor: secondaryColor }}
+                  <span
+                    data-storefront-cart-count
+                    className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shadow-md"
+                    style={{ backgroundColor: secondaryColor, color: secondaryForeground }}
                   >
                     {totalItems}
                   </span>
@@ -448,7 +630,7 @@ export default function StorePreview({
           </div>
 
           {/* Center Page Navigation Bar (Desktop Only) */}
-          <nav className="hidden md:flex items-center justify-center gap-1 p-1 rounded-xl self-center border bg-slate-400/10"
+          <nav aria-label="التنقل الرئيسي في المتجر" className="hidden lg:flex items-center justify-center gap-1 p-1 rounded-xl self-center border bg-slate-400/10"
                style={{ borderColor: "#f2eae1" }}>
             {[
               { id: "home", label: "الرئيسية", icon: "🏠" },
@@ -460,13 +642,16 @@ export default function StorePreview({
               return (
                 <button
                   key={nav.id}
+                  data-storefront-nav={nav.id}
+                  type="button"
                   onClick={() => setStorePage(nav.id as any)}
+                  aria-current={isActive ? "page" : undefined}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                     isActive ? "shadow-2xs" : "hover:text-slate-600 opacity-80 hover:opacity-100"
                   }`}
                   style={{
                     backgroundColor: isActive ? primaryColor : "transparent",
-                    color: isActive ? "#ffffff" : secondaryColor
+                    color: isActive ? primaryForeground : secondaryOnCard
                   }}
                 >
                   <span>{nav.icon}</span>
@@ -477,14 +662,14 @@ export default function StorePreview({
           </nav>
 
           {/* Desktop Header Actions */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             {canonicalPhone && (
               <a 
                 href={`tel:${canonicalPhone}`}
                 className="p-2 px-3 rounded-xl transition flex items-center gap-1.5 text-xs font-bold"
                 style={{ 
                   backgroundColor: "#f5efe6",
-                  color: primaryColor 
+                  color: primaryOnWarmSurface
                 }}
               >
                 <Phone className="w-3.5 h-3.5" />
@@ -493,9 +678,11 @@ export default function StorePreview({
             )}
 
             <button
-              onClick={() => setIsCartDrawerOpen(true)}
+              type="button"
+              onClick={(event) => openCart(event.currentTarget)}
+              aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
               className="p-2.5 px-4 rounded-xl relative transition flex items-center gap-2 font-bold text-xs text-white"
-              style={{ backgroundColor: primaryColor }}
+              style={{ backgroundColor: primaryColor, color: primaryForeground }}
             >
               <ShoppingBag className="w-4 h-4" />
               <span>السلة</span>
@@ -536,7 +723,7 @@ export default function StorePreview({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4"
                  style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
               <div className="text-right">
-                <h2 className={`font-black text-xl ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
+                <h2 data-storefront-products-heading className={`font-black text-xl ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryOnPage : undefined }}>
                   معرض جميع المنتجات المعروضة
                 </h2>
                 <p className="text-xs text-slate-500">استعرض المنتجات المنشورة في المتجر</p>
@@ -546,6 +733,7 @@ export default function StorePreview({
               <div className="relative w-full md:w-72">
                 <input 
                   type="text" 
+                  aria-label="البحث في كتالوج المنتجات"
                   placeholder="ابحث عن منتج بالاسم أو الوصف..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -560,7 +748,7 @@ export default function StorePreview({
                 />
                 <Search className="w-4 h-4 absolute right-3 top-2.5 text-slate-400" />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} className="absolute left-3 top-2.5 text-xs text-slate-400">
+                  <button type="button" onClick={() => setSearchQuery("")} aria-label="مسح البحث" className="absolute left-3 top-2.5 text-xs text-slate-400">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -573,15 +761,18 @@ export default function StorePreview({
                 {categories.map((cat) => (
                   <button
                     key={cat}
+                    data-storefront-category={cat}
+                    type="button"
                     onClick={() => setSelectedCategory(cat)}
+                    aria-pressed={selectedCategory === cat}
                     className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition duration-200 shrink-0 ${
                       selectedCategory === cat ? "shadow-sm" : "hover:bg-slate-200/60"
                     }`}
                     style={{ 
                       backgroundColor: selectedCategory === cat ? (isElegant ? primaryColor : "#0284c7") : (isElegant ? "#f5efe6" : "#f1f5f9"),
                       color: selectedCategory === cat 
-                        ? "#ffffff" 
-                        : (isElegant ? secondaryColor : "#334155")
+                        ? (isElegant ? primaryForeground : "#ffffff")
+                        : (isElegant ? secondaryOnWarmSurface : "#334155")
                     }}
                   >
                     {cat}
@@ -603,11 +794,13 @@ export default function StorePreview({
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
                 {displayedProducts.map((p) => (
                   <motion.div
                     key={p.id}
-                    layoutId={p.id}
+                    layoutId={prefersReducedMotion ? undefined : p.id}
+                    data-storefront-product-card
+                    data-reduced-motion={prefersReducedMotion ? "true" : undefined}
                     className={`rounded-2xl border flex flex-col justify-between overflow-hidden group transition ${
                       !isElegant ? "bg-white border-slate-200 hover:border-sky-400 hover:shadow-lg" : "hover:shadow-md"
                     }`}
@@ -616,8 +809,10 @@ export default function StorePreview({
                       borderColor: isElegant ? "#f2eae1" : undefined
                     }}
                   >
-                    <div 
+                    <button
+                      type="button"
                       onClick={() => handleOpenProductProfile(p)}
+                      aria-label={`عرض تفاصيل ${p.name}`}
                       className="aspect-square w-full p-3 sm:p-4 flex items-center justify-center cursor-pointer relative bg-slate-50/60 hover:bg-sky-50/40 transition"
                     >
                       <ProductArt keyword={p.imageKeyword} primaryColor={primaryColor} imageUrl={p.imageUrl} />
@@ -626,34 +821,37 @@ export default function StorePreview({
                       }`}>
                         {p.category}
                       </span>
-                    </div>
+                    </button>
 
                     <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between text-right space-y-2.5">
                       <div className="space-y-1">
-                        <h4 
+                        <button
+                          type="button"
                           onClick={() => handleOpenProductProfile(p)}
-                          className={`font-extrabold text-xs sm:text-sm line-clamp-1 hover:underline cursor-pointer ${
+                          className={`block w-full text-right font-extrabold text-xs sm:text-sm line-clamp-1 hover:underline cursor-pointer rounded-md ${
                             !isElegant ? "text-slate-900 hover:text-sky-700" : ""
                           }`}
-                          style={{ color: isElegant ? secondaryColor : undefined }}
+                          style={{ color: isElegant ? secondaryOnCard : undefined }}
                         >
                           {p.name}
-                        </h4>
+                        </button>
                         <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
                           {p.description}
                         </p>
                       </div>
 
                       <div className="flex items-center justify-between pt-1 gap-1">
-                        <span className={`font-black text-xs sm:text-sm whitespace-nowrap ${!isElegant ? "text-sky-700" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
+                        <span className={`font-black text-xs sm:text-sm whitespace-nowrap ${!isElegant ? "text-sky-700" : ""}`} style={{ color: isElegant ? primaryOnWhite : undefined }}>
                           {p.price} {config.currency || "ر.س"}
                         </span>
                         <button
+                          type="button"
                           onClick={() => addToCart(p)}
+                          aria-label={`إضافة ${p.name} إلى السلة`}
                           className={`p-1.5 rounded-lg text-white font-bold text-xs transition flex items-center justify-center shrink-0 hover:opacity-90 ${
                             !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 shadow-xs hover:shadow-md" : ""
                           }`}
-                          style={{ backgroundColor: isElegant ? primaryColor : undefined }}
+                          style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
                           title="أضف للسلة"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -671,14 +869,14 @@ export default function StorePreview({
         {storePage === "about" && (
           <div className="mx-auto max-w-6xl space-y-7 px-4 py-10 text-right animate-fadeIn">
             <header className="space-y-2 border-b border-slate-200 pb-6 text-center">
-              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black" style={{ color: primaryColor }}>من نحن</span>
-              <h2 className="text-2xl font-black md:text-3xl" style={{ color: secondaryColor }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2>
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black" style={{ color: primaryOnWhite }}>من نحن</span>
+              <h2 className="text-2xl font-black md:text-3xl" style={{ color: secondaryOnPage }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2>
               <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">{config.aboutText?.trim() || config.slogan}</p>
             </header>
             <div className={`grid gap-6 ${config.aboutImage ? "md:grid-cols-2 md:items-center" : ""}`}>
               {config.aboutImage && <img src={config.aboutImage} alt="" className="aspect-video w-full rounded-3xl border border-slate-200 object-cover" referrerPolicy="no-referrer" />}
               <div className="space-y-4">
-                {config.aboutVision?.trim() && <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black" style={{ color: primaryColor }}>رؤية المتجر</h3><p className="mt-3 text-sm leading-7 text-slate-600">{config.aboutVision}</p></section>}
+                {config.aboutVision?.trim() && <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black" style={{ color: primaryOnWhite }}>رؤية المتجر</h3><p className="mt-3 text-sm leading-7 text-slate-600">{config.aboutVision}</p></section>}
                 <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black text-slate-900">بيانات منشورة</h3><div className="mt-3 space-y-2 text-xs text-slate-600">{config.address?.trim() && <p><strong>العنوان:</strong> {config.address}</p>}{config.workingHours?.trim() && <p><strong>ساعات العمل:</strong> {config.workingHours}</p>}{!config.address?.trim() && !config.workingHours?.trim() && <p>لم يضف المتجر معلومات إضافية بعد.</p>}</div></section>
               </div>
             </div>
@@ -752,6 +950,11 @@ export default function StorePreview({
           ];
           const codAvailable = config.enableCashOnDelivery === true;
           const transferAvailable = WALLETS.length > 0;
+          const effectivePaymentMethod = codAvailable && paymentMethod === "cod"
+            ? "cod"
+            : transferAvailable && paymentMethod === "wallet"
+              ? "wallet"
+              : codAvailable ? "cod" : "wallet";
           const effectiveWalletId = WALLETS.some((wallet) => wallet.selectionKey === selectedWallet) ? selectedWallet : WALLETS[0]?.selectionKey;
 
           const handleApplyCoupon = () => {
@@ -798,32 +1001,39 @@ export default function StorePreview({
           const handlePlaceOrderSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
             if (!checkoutForm.fullName.trim() || !checkoutForm.phone.trim() || !checkoutForm.address.trim() || (config.requireEmail && !checkoutForm.email.trim())) {
-              setFormValidationErr("يرجى تعبئة كافة الحقول المطلوبة (الاسم الكامل، رقم الجوال، والعنوان) للمتابعة.");
+              const firstMissingId = !checkoutForm.fullName.trim()
+                ? "checkout-full-name"
+                : !checkoutForm.phone.trim()
+                  ? "checkout-phone"
+                  : config.requireEmail && !checkoutForm.email.trim()
+                    ? "checkout-email"
+                    : "checkout-address";
+              reportCheckoutError("يرجى تعبئة كافة الحقول المطلوبة (الاسم الكامل، رقم الجوال، والعنوان) للمتابعة.", firstMissingId);
               return;
             }
             setFormValidationErr("");
 
             const currentWallet = WALLETS.find(w => w.selectionKey === effectiveWalletId);
             if (!codAvailable && !transferAvailable) {
-              setFormValidationErr("لا توجد وسيلة دفع مفعلة لهذا المتجر حالياً.");
+              reportCheckoutError("لا توجد وسيلة دفع مفعلة لهذا المتجر حالياً.");
               return;
             }
             if (paymentMethod === "wallet" && (!currentWallet || !transferRefNumber.trim())) {
-              setFormValidationErr("أدخل رقم مرجع التحويل بعد تنفيذ العملية؛ سيبقى بانتظار تحقق المتجر.");
+              reportCheckoutError("أدخل رقم مرجع التحويل بعد تنفيذ العملية؛ سيبقى بانتظار تحقق المتجر.", "checkout-transfer-reference");
               return;
             }
             if (paymentMethod === "cod" && !codAvailable) {
-              setFormValidationErr("الدفع عند الاستلام غير مفعّل لهذا المتجر. اختر وسيلة تحويل متاحة.");
+              reportCheckoutError("الدفع عند الاستلام غير مفعّل لهذا المتجر. اختر وسيلة تحويل متاحة.", "checkout-payment-wallet");
               return;
             }
             if (mode === "preview" && !previewTotals.minimumMet) {
-              setFormValidationErr(`الطلب أقل من الحد الأدنى المحفوظ (${Number(config.minOrderAmount ?? 0)} ${config.currency}).`);
+              reportCheckoutError(`الطلب أقل من الحد الأدنى المحفوظ (${Number(config.minOrderAmount ?? 0)} ${config.currency}).`);
               return;
             }
             if (mode === "live") {
               if (!submitOrder || orderSubmitting) return;
               if ((paymentMethod === "cod" && !codAvailable) || (paymentMethod === "wallet" && !currentWallet)) {
-                setFormValidationErr("وسيلة الدفع المحددة غير مفعلة لهذا المتجر. اختر وسيلة متاحة قبل إرسال الطلب.");
+                reportCheckoutError("وسيلة الدفع المحددة غير مفعلة لهذا المتجر. اختر وسيلة متاحة قبل إرسال الطلب.", paymentMethod === "cod" ? "checkout-payment-wallet" : "checkout-payment-cod");
                 return;
               }
               setOrderSubmitting(true);
@@ -875,7 +1085,7 @@ export default function StorePreview({
                 setOrderCompleted(true);
                 handleCheckout();
               } catch (error) {
-                setFormValidationErr(error instanceof Error ? error.message : "تعذر إرسال الطلب. حاول مرة أخرى.");
+                reportCheckoutError(error instanceof Error ? error.message : "تعذر إرسال الطلب. حاول مرة أخرى.");
               } finally {
                 setOrderSubmitting(false);
               }
@@ -940,7 +1150,7 @@ export default function StorePreview({
           return (
             <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-8 animate-fadeIn pb-16 text-right">
               <header className="space-y-2 text-center">
-                <h2 className="text-2xl font-black text-slate-900">{config.checkoutTitle?.trim() || "إتمام الطلب"}</h2>
+                <h2 id="storefront-checkout-title" tabIndex={-1} className="text-2xl font-black text-slate-900">{config.checkoutTitle?.trim() || "إتمام الطلب"}</h2>
                 {config.checkoutSubtitle?.trim() && <p className="text-sm text-slate-600">{config.checkoutSubtitle}</p>}
                 {config.checkoutNotice?.trim() && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">{config.checkoutNotice}</p>}
               </header>
@@ -983,7 +1193,7 @@ export default function StorePreview({
 
               {/* SUCCESS VIEW / ORDER COMPLETED RECEIPT */}
               {orderCompleted && placedOrderDetails ? (
-                <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
+                <div ref={receiptRef} tabIndex={-1} role="status" aria-live="polite" className="max-w-3xl mx-auto space-y-6 animate-fadeIn outline-none">
                   {/* Top Success Banner */}
                   <div className="p-6 md:p-8 rounded-3xl bg-emerald-900/90 text-white text-center space-y-3 shadow-xl border border-emerald-500/30">
                     <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce">
@@ -1168,7 +1378,7 @@ export default function StorePreview({
                 </div>
               ) : (
                 /* ACTIVE CHECKOUT FORM & PAYMENT SELECTION */
-                <form onSubmit={handlePlaceOrderSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <form onSubmit={handlePlaceOrderSubmit} noValidate className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" aria-describedby={formValidationErr ? "checkout-error" : undefined}>
                   
                   {/* RIGHT / MAIN COLUMN: Form & Payment (7 cols) */}
                   <div className="lg:col-span-7 space-y-6">
@@ -1186,7 +1396,7 @@ export default function StorePreview({
                       </div>
 
                       {formValidationErr && (
-                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                        <div ref={checkoutErrorRef} id="checkout-error" role="alert" tabIndex={-1} className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-fadeIn outline-none">
                           <span>⚠️</span>
                           <span>{formValidationErr}</span>
                         </div>
@@ -1195,12 +1405,17 @@ export default function StorePreview({
                       <div className="space-y-3.5">
                         {/* Full Name */}
                         <div className="space-y-1">
-                          <label className="block text-xs font-extrabold text-slate-700">
+                          <label htmlFor="checkout-full-name" className="block text-xs font-extrabold text-slate-700">
                             الاسم الكامل الثلاثي <span className="text-rose-500">*</span>
                           </label>
                           <input 
                             type="text"
+                            id="checkout-full-name"
+                            name="name"
+                            autoComplete="name"
                             required
+                            aria-invalid={Boolean(formValidationErr && !checkoutForm.fullName.trim())}
+                            aria-describedby={formValidationErr ? "checkout-error" : undefined}
                             placeholder="مثال: عبدالله محمد الشمري"
                             value={checkoutForm.fullName}
                             onChange={(e) => setCheckoutForm({ ...checkoutForm, fullName: e.target.value })}
@@ -1211,12 +1426,18 @@ export default function StorePreview({
                         {/* Phone Number */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="block text-xs font-extrabold text-slate-700">
+                            <label htmlFor="checkout-phone" className="block text-xs font-extrabold text-slate-700">
                               رقم الجوال / الواتساب <span className="text-rose-500">*</span>
                             </label>
                             <input 
                               type="tel"
+                              id="checkout-phone"
+                              name="tel"
+                              autoComplete="tel"
+                              inputMode="tel"
                               required
+                              aria-invalid={Boolean(formValidationErr && !checkoutForm.phone.trim())}
+                              aria-describedby={formValidationErr ? "checkout-error" : undefined}
                               placeholder="0500000000 أو 770000000"
                               value={checkoutForm.phone}
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, phone: e.target.value })}
@@ -1226,10 +1447,13 @@ export default function StorePreview({
 
                           {/* City / Governorate */}
                           <div className="space-y-1">
-                            <label className="block text-xs font-extrabold text-slate-700">
+                            <label htmlFor="checkout-city" className="block text-xs font-extrabold text-slate-700">
                               المحافظة / المدينة <span className="text-rose-500">*</span>
                             </label>
                             <select
+                              id="checkout-city"
+                              name="address-level2"
+                              autoComplete="address-level2"
                               value={checkoutForm.city}
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, city: e.target.value })}
                               className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition cursor-pointer"
@@ -1253,12 +1477,18 @@ export default function StorePreview({
 
                         {config.requireEmail && (
                           <div className="space-y-1">
-                            <label className="block text-xs font-extrabold text-slate-700">
+                            <label htmlFor="checkout-email" className="block text-xs font-extrabold text-slate-700">
                               البريد الإلكتروني <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="email"
+                              id="checkout-email"
+                              name="email"
+                              autoComplete="email"
+                              inputMode="email"
                               required
+                              aria-invalid={Boolean(formValidationErr && !checkoutForm.email.trim())}
+                              aria-describedby={formValidationErr ? "checkout-error" : undefined}
                               value={checkoutForm.email}
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, email: e.target.value })}
                               className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
@@ -1268,12 +1498,17 @@ export default function StorePreview({
 
                         {/* Detailed Address */}
                         <div className="space-y-1">
-                          <label className="block text-xs font-extrabold text-slate-700">
+                          <label htmlFor="checkout-address" className="block text-xs font-extrabold text-slate-700">
                             عنوان التسليم التفصيلي <span className="text-rose-500">*</span>
                           </label>
                           <input 
                             type="text"
+                            id="checkout-address"
+                            name="street-address"
+                            autoComplete="street-address"
                             required
+                            aria-invalid={Boolean(formValidationErr && !checkoutForm.address.trim())}
+                            aria-describedby={formValidationErr ? "checkout-error" : undefined}
                             placeholder="اسم الشارع، الحي، المعلم الشهير القريب..."
                             value={checkoutForm.address}
                             onChange={(e) => setCheckoutForm({ ...checkoutForm, address: e.target.value })}
@@ -1284,11 +1519,13 @@ export default function StorePreview({
                         {/* Delivery Notes */}
                         {config.enableCustomerNotes !== false && (
                         <div className="space-y-1">
-                          <label className="block text-xs font-extrabold text-slate-700">
+                          <label htmlFor="checkout-notes" className="block text-xs font-extrabold text-slate-700">
                             ملاحظات اختيارية لمندوب التوصيل
                           </label>
                           <input 
                             type="text"
+                            id="checkout-notes"
+                            name="delivery-notes"
                             placeholder="مثال: يرجى الاتصال قبل الوصول بـ 15 دقيقة..."
                             value={checkoutForm.notes}
                             onChange={(e) => setCheckoutForm({ ...checkoutForm, notes: e.target.value })}
@@ -1306,18 +1543,24 @@ export default function StorePreview({
                       <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
                         <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs">2</div>
                         <div>
-                          <h3 className="font-black text-sm text-slate-900">طريقة الدفع المناسبة</h3>
+                          <h3 id="checkout-payment-heading" className="font-black text-sm text-slate-900">طريقة الدفع المناسبة</h3>
                           <p className="text-[11px] text-slate-500">اختر إما الدفع نقداً عند التوصيل أو عبر إحدى المحافظ الإلكترونية المتاحة.</p>
                         </div>
                       </div>
 
                       {/* Payment Mode Options (COD vs WALLET) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-labelledby="checkout-payment-heading">
                         
                         {/* Option A: Cash on Delivery */}
-                        {codAvailable && (<div
+                        {codAvailable && (<button
+                          id="checkout-payment-cod"
+                          type="button"
+                          role="radio"
+                          aria-checked={effectivePaymentMethod === "cod"}
+                          tabIndex={effectivePaymentMethod === "cod" ? 0 : -1}
+                          onKeyDown={handleRadioArrowNavigation}
                           onClick={() => setPaymentMethod("cod")}
-                          className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
+                          className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 text-right ${
                             paymentMethod === "cod"
                               ? "border-sky-500 bg-sky-50/50 ring-2 ring-sky-400/30"
                               : "border-slate-200 bg-white hover:border-slate-300"
@@ -1335,12 +1578,18 @@ export default function StorePreview({
                               تسليم مبلغ الشحنة نقداً لمندوب التوصيل عند استلام واستكشاف منتجاتك بنفسك.
                             </p>
                           </div>
-                        </div>)}
+                        </button>)}
 
                         {/* Option B: E-Wallets */}
-                        {transferAvailable && (<div
+                        {transferAvailable && (<button
+                          id="checkout-payment-wallet"
+                          type="button"
+                          role="radio"
+                          aria-checked={effectivePaymentMethod === "wallet"}
+                          tabIndex={effectivePaymentMethod === "wallet" ? 0 : -1}
+                          onKeyDown={handleRadioArrowNavigation}
                           onClick={() => setPaymentMethod("wallet")}
-                          className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
+                          className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 text-right ${
                             paymentMethod === "wallet"
                               ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-400/30"
                               : "border-slate-200 bg-white hover:border-slate-300"
@@ -1356,7 +1605,7 @@ export default function StorePreview({
                             <h4 className="font-black text-xs text-slate-900">الدفع عبر المحافظ الإلكترونية</h4>
                             <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">استخدم فقط الحساب أو المحفظة التي فعّلها هذا المتجر.</p>
                           </div>
-                        </div>)}
+                        </button>)}
                       </div>
 
                       {!codAvailable && !transferAvailable && (
@@ -1377,14 +1626,19 @@ export default function StorePreview({
                           </div>
 
                           {/* Wallets Selector Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="radiogroup" aria-label="حساب التحويل">
                             {WALLETS.map((w) => {
                               const isSelected = effectiveWalletId === w.selectionKey;
                               return (
-                                <div
+                                <button
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={isSelected}
+                                  tabIndex={isSelected ? 0 : -1}
+                                  onKeyDown={handleRadioArrowNavigation}
                                   key={w.selectionKey}
                                   onClick={() => setSelectedWallet(w.selectionKey)}
-                                  className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between gap-2 ${
+                                  className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between gap-2 text-right ${
                                     isSelected 
                                       ? "border-emerald-600 bg-white shadow-xs ring-1 ring-emerald-500" 
                                       : "border-slate-200 bg-white/80 hover:bg-white"
@@ -1398,7 +1652,7 @@ export default function StorePreview({
                                     </div>
                                   </div>
                                   {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                                </div>
+                                </button>
                               );
                             })}
                           </div>
@@ -1434,12 +1688,16 @@ export default function StorePreview({
 
                                 {/* Transaction Ref / Receipt Number Input */}
                                 <div className="space-y-1.5 pt-1">
-                                  <label className="block text-xs font-bold text-slate-800">
+                                  <label htmlFor="checkout-transfer-reference" className="block text-xs font-bold text-slate-800">
                                     رقم السند المالي / إشعار الحوالة (بعد التحويل)
                                   </label>
                                   <input 
                                     type="text"
+                                    id="checkout-transfer-reference"
+                                    name="transaction-reference"
                                     required
+                                    aria-invalid={Boolean(formValidationErr && paymentMethod === "wallet" && !transferRefNumber.trim())}
+                                    aria-describedby={formValidationErr ? "checkout-error" : undefined}
                                     maxLength={200}
                                     placeholder="رقم مرجع التحويل أو الإيداع"
                                     value={transferRefNumber}
@@ -1568,10 +1826,11 @@ export default function StorePreview({
                       <button
                         type="submit"
                         disabled={orderSubmitting || (!codAvailable && !transferAvailable)}
+                        aria-describedby={formValidationErr ? "checkout-error" : undefined}
                         className={`w-full py-4 rounded-2xl text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] ${
                           !isElegant ? "bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 font-mono shadow-sky-600/20" : "hover:opacity-90"
                         }`}
-                        style={{ backgroundColor: isElegant ? primaryColor : undefined }}
+                        style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
                       >
                         <span>{orderSubmitting ? "جارٍ تثبيت السعر وحجز المخزون..." : mode === "live" ? "تأكيد الطلب بالسعر الخادمي" : "معاينة إرسال الطلب"}</span>
                         <Check className="w-5 h-5 stroke-[3]" />
@@ -1598,20 +1857,26 @@ export default function StorePreview({
           <p className="text-[10px] text-slate-400">{platformSettings.storefrontAttributionText}</p>
         )}
       </footer>
+      </div>
 
       {/* ----------------- SHOPPING CART DRAWER ----------------- */}
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={handleCartExitComplete}>
         {isCartDrawerOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs" data-storefront-cart-overlay>
             {/* Click outside to close */}
-            <div className="absolute inset-0" onClick={() => setIsCartDrawerOpen(false)} />
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => closeCart()} aria-label="إغلاق سلة التسوق" tabIndex={-1} />
 
             <motion.div
-              initial={{ x: "100%" }}
+              ref={cartDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="storefront-cart-title"
+              tabIndex={-1}
+              initial={prefersReducedMotion ? false : { x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className={`w-full max-w-md h-full flex flex-col justify-between shadow-2xl relative z-10 text-right ${
+              exit={{ x: prefersReducedMotion ? 0 : "100%" }}
+              transition={prefersReducedMotion ? { duration: 0 } : { type: "spring", damping: 25, stiffness: 200 }}
+              className={`w-full max-w-md h-[100dvh] max-h-[100dvh] flex flex-col justify-between shadow-2xl relative z-10 text-right ${
                 !isElegant ? "bg-white border-r border-slate-200 text-slate-900 font-mono" : ""
               }`}
               style={{ 
@@ -1626,13 +1891,16 @@ export default function StorePreview({
               >
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-sky-600" />
-                  <span className={`font-extrabold text-base ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
+                  <span id="storefront-cart-title" className={`font-extrabold text-base ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryOnCard : undefined }}>
                     {!isElegant ? `سلة المشتريات [CART: ${totalItems}]` : `سلة التسوق (${totalItems} قطع)`}
                   </span>
                 </div>
                 <button 
-                  onClick={() => setIsCartDrawerOpen(false)}
-                  className={`p-1.5 rounded-full hover:bg-slate-200/60 ${!isElegant ? "text-slate-600 hover:text-sky-600 hover:bg-sky-50" : ""}`}
+                  ref={cartCloseButtonRef}
+                  type="button"
+                  onClick={() => closeCart()}
+                  aria-label="إغلاق سلة التسوق"
+                  className={`min-h-11 min-w-11 p-2.5 rounded-full hover:bg-slate-200/60 ${!isElegant ? "text-slate-600 hover:text-sky-600 hover:bg-sky-50" : ""}`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1676,10 +1944,10 @@ export default function StorePreview({
 
                         {/* Name and Price */}
                         <div className="flex-1 min-w-0 text-right">
-                          <h4 className={`font-bold text-xs truncate ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryColor : undefined }}>
+                          <h4 className={`font-bold text-xs truncate ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryOnCard : undefined }}>
                             {item.product.name}
                           </h4>
-                          <span className={`text-[11px] font-bold ${!isElegant ? "text-sky-700" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
+                          <span className={`text-[11px] font-bold ${!isElegant ? "text-sky-700" : ""}`} style={{ color: isElegant ? primaryOnWhite : undefined }}>
                             {item.product.price} {config.currency}
                           </span>
                         </div>
@@ -1688,6 +1956,7 @@ export default function StorePreview({
                         <div className="flex items-center gap-2 border rounded-lg bg-white shrink-0"
                              style={{ borderColor: isElegant ? "#f2eae1" : "#cbd5e1" }}>
                           <button 
+                            type="button"
                             onClick={() => updateQuantity(item.product.id, 1)}
                             aria-label={`زيادة كمية ${item.product.name}`}
                             className="p-1 hover:text-sky-600"
@@ -1696,6 +1965,7 @@ export default function StorePreview({
                           </button>
                           <span className="text-xs font-bold w-4 text-center text-slate-800">{item.quantity}</span>
                           <button 
+                            type="button"
                             onClick={() => updateQuantity(item.product.id, -1)}
                             aria-label={`تقليل كمية ${item.product.name}`}
                             className="p-1 hover:text-rose-600"
@@ -1712,12 +1982,12 @@ export default function StorePreview({
               {/* Drawer Footer */}
               {!hasOrdered && cart.length > 0 && (
                 <div 
-                  className="p-5 border-t space-y-4"
+                  className="p-5 border-t space-y-4 [padding-bottom:max(1.25rem,env(safe-area-inset-bottom))]"
                   style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}
                 >
                   <div className="flex items-center justify-between font-bold text-sm">
                     <span className="text-slate-600">المجموع الفرعي:</span>
-                    <span className={`text-lg ${!isElegant ? "text-sky-700 font-mono font-black" : ""}`} style={{ color: isElegant ? primaryColor : undefined }}>
+                    <span className={`text-lg ${!isElegant ? "text-sky-700 font-mono font-black" : ""}`} style={{ color: isElegant ? primaryOnWhite : undefined }}>
                       {cartTotal} {config.currency}
                     </span>
                   </div>
@@ -1730,18 +2000,19 @@ export default function StorePreview({
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => {
-                      setIsCartDrawerOpen(false);
                       setStorePage("checkout");
+                      closeCart("checkout");
                       const container = document.getElementById("store-preview-scroll-container");
                       if (container && typeof container.scrollTo === "function") {
-                        container.scrollTo({ top: 0, behavior: "smooth" });
+                        container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
                       }
                     }}
                     className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] ${
                       !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 font-mono shadow-sm" : "hover:opacity-90"
                     }`}
-                    style={{ backgroundColor: isElegant ? primaryColor : undefined }}
+                    style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
                   >
                     <span>{!isElegant ? "المتابعة لإتمام الطلب والدفع ➔" : "إتمام الطلب وتعبئة البيانات ➔"}</span>
                     <ArrowRight className="w-4 h-4 rotate-180" />
@@ -1754,7 +2025,10 @@ export default function StorePreview({
       </AnimatePresence>
       {/* Mobile Sticky Bottom Dock Navigation Bar */}
       <nav 
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl border-t py-1.5 px-3 flex items-center justify-around shadow-2xl touch-manipulation"
+        aria-label="التنقل السريع في المتجر"
+        aria-hidden={isCartModalPresent ? "true" : undefined}
+        inert={isCartModalPresent ? true : undefined}
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl border-t pt-1.5 px-3 flex items-center justify-around shadow-2xl touch-manipulation [padding-bottom:max(0.375rem,env(safe-area-inset-bottom))]"
         style={{
           backgroundColor: cardBgColor,
           borderColor: borderColor
@@ -1771,27 +2045,31 @@ export default function StorePreview({
           return (
             <button
               key={item.id}
+              type="button"
               onClick={() => {
                 setStorePage(item.id as any);
                 const container = document.getElementById("store-preview-scroll-container");
                 if (container) {
-                  container.scrollTo({ top: 0, behavior: "smooth" });
+                  container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
                 }
               }}
-              className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-h-[48px] rounded-xl transition text-[10px] font-extrabold cursor-pointer active:scale-90 ${
+              aria-current={isActive ? "page" : undefined}
+              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 min-h-[48px] rounded-xl transition text-[10px] font-extrabold cursor-pointer active:scale-90 ${
                 isActive
                   ? !isElegant ? "text-sky-600 font-black scale-105" : "text-amber-800 font-black scale-105"
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >
               <IconComp className={`w-5 h-5 ${isActive ? (!isElegant ? "text-sky-600" : "text-amber-700") : "text-slate-500"}`} />
-              <span>{item.label}</span>
+              <span className="max-w-full truncate">{item.label}</span>
             </button>
           );
         })}
         <button
-          onClick={() => setIsCartDrawerOpen(true)}
-          className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-h-[48px] rounded-xl text-slate-500 hover:text-slate-900 text-[10px] font-extrabold relative cursor-pointer active:scale-90"
+          type="button"
+          onClick={(event) => openCart(event.currentTarget)}
+          aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
+          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 min-h-[48px] rounded-xl text-slate-500 hover:text-slate-900 text-[10px] font-extrabold relative cursor-pointer active:scale-90"
         >
           <div className="relative">
             <ShoppingBag className="w-5 h-5 text-slate-700" />

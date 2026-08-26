@@ -1,5 +1,6 @@
 import { apiClient, ApiError } from "./apiClient";
 import { numberField, record, stringField } from "./apiContract";
+import { randomUuid } from "../utils/randomUuid";
 
 export interface StoreAssetUpload {
   id: string;
@@ -31,7 +32,7 @@ function mapUpload(value: unknown): StoreAssetUpload {
 
 export const storeAssetApi = {
   async upload(tenantId: string, file: File, signal?: AbortSignal): Promise<StoreAssetUpload> {
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = randomUuid();
     const body = new FormData();
     body.append("image", file);
     body.append("idempotencyKey", idempotencyKey);

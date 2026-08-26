@@ -1,5 +1,6 @@
 import { apiClient, ApiError } from "./apiClient";
 import { arrayField, booleanField, numberField, record, stringField } from "./apiContract";
+import { randomUuid } from "../utils/randomUuid";
 
 export interface InventoryItem {
   productId: string;
@@ -98,7 +99,7 @@ export const inventoryApi = {
     lines: InventoryAdjustmentLine[],
     reasonCode: string,
     note?: string,
-    idempotencyKey = crypto.randomUUID(),
+    idempotencyKey = randomUuid(),
     signal?: AbortSignal,
   ): Promise<InventoryMutationResult> {
     return mapMutation(await apiClient.request(
@@ -119,7 +120,7 @@ export const inventoryApi = {
     expectedInventoryRevision: number,
     manageStock: boolean,
     lowStockThreshold: number,
-    idempotencyKey = crypto.randomUUID(),
+    idempotencyKey = randomUuid(),
     signal?: AbortSignal,
   ): Promise<InventoryPolicyMutationResult> {
     return mapPolicy(await apiClient.request(

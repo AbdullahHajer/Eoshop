@@ -1,4 +1,5 @@
 import type { UiErrorCategory } from "../contracts/uiError";
+import { randomUuid } from "../utils/randomUuid";
 
 export type ApiErrorCategory = UiErrorCategory;
 
@@ -183,7 +184,7 @@ class SameOriginApiClient {
     if (options.retrySafety === "idempotent" && !safeToRetry) {
       throw new ApiError("تتطلب إعادة المحاولة الآمنة مفتاح idempotency.", "unexpected", null);
     }
-    const logicalRequestId = crypto.randomUUID();
+    const logicalRequestId = randomUuid();
 
     return this.execute<T>(path, { ...options, method, csrf }, true, logicalRequestId, safeToRetry);
   }
@@ -259,7 +260,7 @@ class SameOriginApiClient {
 
     const generation = this.csrfGeneration;
     let request!: Promise<string>;
-    const logicalRequestId = crypto.randomUUID();
+    const logicalRequestId = randomUuid();
     request = this.execute<{ csrf_token: string }>(
       "/api/auth/csrf",
       { method: "GET", csrf: false },

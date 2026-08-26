@@ -2,6 +2,7 @@ import { apiClient, ApiError } from "./apiClient";
 import type { Product } from "../types";
 import { arrayField, numberField, record, stringField } from "./apiContract";
 import { mapProduct } from "./workspaceApi";
+import { randomUuid } from "../utils/randomUuid";
 
 export interface CatalogMediaUpload {
   id: string;
@@ -53,7 +54,7 @@ export const catalogApi = {
   },
 
   async uploadMedia(tenantId: string, file: File, signal?: AbortSignal): Promise<CatalogMediaUpload> {
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = randomUuid();
     const body = new FormData();
     body.append("image", file);
     body.append("idempotencyKey", idempotencyKey);

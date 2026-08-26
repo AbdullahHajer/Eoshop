@@ -38,6 +38,7 @@ import {
   type OrderReceipt,
   type StorefrontBootstrap,
 } from "./adapters/uiAdapters";
+import { requestFingerprint } from "./utils/requestFingerprint";
 import {
   LatestWorkspaceLoad,
   classifyMerchantRestore,
@@ -63,6 +64,7 @@ import MerchantOnboardingPage from "./features/onboarding/MerchantOnboardingPage
 import { refreshMerchantLifecycleSnapshot } from "./workflows/merchantLifecycleRefresh";
 import { coordinateCustomizationCompletion } from "./workflows/customizationCompletion";
 import { loadPublicStorefrontWithRecovery, publicStorefrontFailureMessage } from "./workflows/publicStorefrontRecovery";
+import { randomUuid } from "./utils/randomUuid";
 
 export default function App() {
   const {
@@ -988,7 +990,7 @@ export default function App() {
     if (workspaceEditorLocked) return;
     workspaceEditGeneration.current += 1;
     const newProduct: Product = {
-      id: `draft:${crypto.randomUUID()}`,
+      id: `draft:${randomUuid()}`,
       name: "منتج جديد للتعديل",
       price: 150,
       basePrice: 150,
@@ -1046,10 +1048,9 @@ export default function App() {
       catalogRevision: publicStorefront.catalogRevision,
     };
     const serialized = JSON.stringify(payload);
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serialized));
-    const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const fingerprint = await requestFingerprint(serialized);
     const storageKey = `eoshop:checkout:${window.location.host}`;
-    let idempotencyKey: string = crypto.randomUUID();
+    let idempotencyKey: string = randomUuid();
     try {
       const pending = JSON.parse(sessionStorage.getItem(storageKey) || "null") as { fingerprint?: string; key?: string } | null;
       if (pending?.fingerprint === fingerprint && typeof pending.key === "string") idempotencyKey = pending.key;

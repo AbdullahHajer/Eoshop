@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { BadgePercent, CreditCard, Eye, Plus, ReceiptText, Trash2, Truck } from "lucide-react";
 import { canonicalWalletId } from "../../contracts/checkoutPolicy";
 import type { Coupon, EWallet, StoreConfig } from "../../types";
+import { randomUuid } from "../../utils/randomUuid";
 
 interface Props {
   config: StoreConfig;
@@ -34,8 +35,8 @@ export default function MerchantCheckoutSettingsEditor({ config, onChange, onOpe
   const updateCoupon = (index: number, patch: Partial<Coupon>) => set("customCoupons", coupons.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   const addWallet = () => {
     if (!wallet.name.trim() || !wallet.accountNumber.trim() || !wallet.accountName.trim()) return;
-    let id = canonicalWalletId(`wallet-${crypto.randomUUID()}`) ?? `wallet-${Date.now()}`;
-    while (walletIds.has(id)) id = `wallet-${crypto.randomUUID()}`;
+    let id = canonicalWalletId(`wallet-${randomUuid()}`) ?? `wallet-${Date.now()}`;
+    while (walletIds.has(id)) id = `wallet-${randomUuid()}`;
     const next: EWallet = { id, name: wallet.name.trim(), accountNumber: wallet.accountNumber.trim(), accountName: wallet.accountName.trim(), active: true, icon: "💳" };
     set("customWallets", [...wallets, next]);
     setWallet({ name: "", accountNumber: "", accountName: "" });
