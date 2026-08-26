@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Product experience and incremental frontend decomposition |
 | Work Package | WP 5.20 |
-| Status | In progress |
+| Status | Complete and merged |
 | Started | 2026-08-25 |
 | Branch | `codex/wp-5.20-merchant-entry-storefront-recovery` |
 | Base | Protected `main` at `f70c8a19` |
@@ -45,24 +45,24 @@ Make the existing-store management and editing path obvious from the merchant po
 
 ### T2 — Implementation
 
-- [ ] Activate store navigation and clear management/edit entry points.
-- [ ] Add capability-aware shortcuts without bypassing the operations center.
-- [ ] Add bounded public-storefront recovery and in-place retry.
+- [x] Activate store navigation and clear management/edit entry points.
+- [x] Add capability-aware shortcuts without bypassing the operations center.
+- [x] Add bounded public-storefront recovery and in-place retry.
 
 ### T3 — Verification
 
-- [ ] Add focused regressions.
-- [ ] Pass frontend, backend, repository and container gates.
+- [x] Add focused regressions.
+- [x] Pass frontend, backend, repository and container gates.
 
 ### T4 — Pilot
 
-- [ ] Verify merchant entry, design route and public-store recovery on the retained Pilot.
+- [x] Verify merchant entry, design route and public-store recovery on the retained Pilot.
 
 ### T5 — Delivery
 
-- [ ] Obtain independent read-only approval.
-- [ ] Record evidence and rollback.
-- [ ] Commit, push, pass required CI and merge.
+- [x] Obtain independent read-only approval.
+- [x] Record evidence and rollback.
+- [x] Commit, push, pass required CI and merge.
 
 ## Acceptance criteria
 
@@ -76,3 +76,7 @@ Make the existing-store management and editing path obvious from the merchant po
 ## Rollback
 
 Deploy the previous web image. This work package has no database or persisted-contract rollback.
+
+## Evidence
+
+See [WP 5.20 verification evidence](../evidence/WP-5.20/verification.md).

@@ -1,6 +1,6 @@
 # Eoshop current delivery state
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 ## Product position
 
@@ -27,17 +27,19 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a 
 - WP 5.17: nullable-contact workspace boundary hotfix for newly provisioned stores.
 - WP 5.18: authenticated-shell narrow-screen, keyboard and structural accessibility acceptance hardening.
 - WP 5.19: end-to-end existing-store customization completion, bounded provisioning refresh and server-confirmed publication continuity.
+- WP 5.20: discoverable merchant store management, capability-aware shortcuts and recoverable public-storefront loading.
 
 ## Active
 
-- WP 5.20: merchant management entry points and recoverable public-storefront loading.
+- Comprehensive cross-phase review after WP 5.20. This review is evidence-first and read-only; findings require approval before implementation.
 
 ## Approved next sequence
 
-1. Complete WP 5.20 merchant entry and public-storefront recovery.
-2. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.21.
-3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
-4. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
+1. Review the backend, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
+2. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
+3. Complete public-storefront narrow-screen, keyboard and cross-browser acceptance as WP 5.21.
+4. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
+5. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 
