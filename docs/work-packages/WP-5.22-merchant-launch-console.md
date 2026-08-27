@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Launch product completion |
 | Work Package | WP 5.22 |
-| Status | Implementation, review, Pilot deployment and required PR checks complete; merge in progress |
+| Status | Complete and merged |
 | Started | 2026-08-27 |
 | Branch | `codex/wp-5.22-merchant-launch-console` |
 | Base | Protected `main` at `f0ba6b88` |
@@ -68,13 +68,13 @@ Turn the existing route-owned store operations center into the merchant's truthf
 ### T4 — Pilot
 
 - [x] Deploy the final backend and web images to the retained local Pilot and migrate all active tenant schemas through the lifecycle-aware QA command.
-- [ ] Verify merchant store selection, dashboard loading, tasks and direct module navigation in-browser.
+- [x] Verify merchant store selection, dashboard loading, tasks and direct module navigation in-browser.
 
 ### T5 — Delivery
 
 - [x] Obtain independent read-only approval with no remaining P0/P1/P2 findings.
 - [x] Record final evidence, commits, PR and required CI.
-- [ ] Merge through protected `main`.
+- [x] Merge through protected `main`.
 
 ## Acceptance criteria
 

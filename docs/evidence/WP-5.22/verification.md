@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Work Package | WP 5.22 — Merchant launch console |
-| Status | Final local gates passed; independent review and delivery in progress |
+| Status | Complete and merged |
 | Verified | 2026-08-27 |
 | Branch | `codex/wp-5.22-merchant-launch-console` |
 | Base | `f0ba6b88473d5d26be922338aca9918767176db9` |
@@ -43,10 +43,13 @@
 - Recent orders expose order number, state, payment state, currency, total and timestamp only.
 - Tenant switching cannot apply a stale response to the next store.
 
-## Pending delivery evidence
+## Authenticated merchant browser acceptance
 
-- Authenticated merchant browser acceptance in the retained Pilot; the isolated browser has no merchant session and no credentials were entered.
-- Protected `main` merge.
+- Created a disposable non-platform QA identity in the retained local Pilot, attached it temporarily as an active merchant owner to the existing published store and removed the identity and memberships after capture.
+- `/app` remained the account-level selector and exposed both eligible stores; direct navigation to `/app/stores/01m0sbyckn1jkzqnapyj9dtwhz` loaded the canonical published-store center.
+- The overview loaded the server dashboard projection and displayed the authorized daily task, completed-sales/order/product/stock metrics, recent-order privacy notice, seven-day series, top-products empty state and direct module tools.
+- Direct navigation from the store center to Products and Design succeeded without a hidden URL or platform role.
+- Live evidence: [merchant dashboard](live-merchant-dashboard-viewport.png), [products module](live-products.png) and [design module](live-design.png).
 
 ## Independent review
 
@@ -67,7 +70,9 @@
 - Implementation commit: `04b33d1e60373dc5d273f29b2cf63a5f66f221b4`.
 - CI-determinism follow-up: `7e6c8058b0e21314b329dbffcb89e4c55c6832f2`; an existing storefront test now waits for the accessible checkout heading instead of racing the animated cart drawer.
 - Pull request: [#68](https://github.com/sas-prog1/Eoshop/pull/68).
-- Required CI run `33037418893`: Repository safety PASS (14s), Frontend quality PASS (56s), Backend quality PASS (1m), Container integration PASS (5m 9s).
+- Final implementation-head CI run `33037864256`: Repository safety PASS (10s), Frontend quality PASS (1m 12s), Backend quality PASS (1m 2s), Container integration PASS (5m 8s).
+- Pull request #68 merged through protected `main` as `337a6669f72be310887b8f8b6d34685099e52896`.
+- Protected-`main` CI run `33038244805`: Repository safety PASS (15s), Frontend quality PASS (1m 8s), Backend quality PASS (55s), Container integration PASS (4m 45s).
 - The first CI attempt identified the existing storefront timing race and correctly skipped integration; the isolated same-version local rerun and the follow-up GitHub run both passed all 57 files / 315 frontend tests.
 
 ## Rollback
