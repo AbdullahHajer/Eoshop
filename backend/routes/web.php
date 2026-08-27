@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\CatalogMediaController;
 use App\Http\Controllers\DomainAvailabilityController;
 use App\Http\Controllers\MerchantCatalogMediaController;
+use App\Http\Controllers\MerchantDashboardController;
 use App\Http\Controllers\MerchantInventoryController;
 use App\Http\Controllers\MerchantOrderController;
 use App\Http\Controllers\MerchantProductCatalogController;
@@ -134,6 +135,8 @@ Route::middleware('central.domain')->group(function (): void {
             ->can('managePublication', 'tenant')
             ->middleware('throttle:merchant.mutations');
         Route::get('/merchant/stores/{tenant}/publication', [MerchantStoreController::class, 'show'])
+            ->can('viewMerchant', 'tenant');
+        Route::get('/merchant/stores/{tenant}/dashboard', [MerchantDashboardController::class, 'show'])
             ->can('viewMerchant', 'tenant');
         Route::get('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'show'])
             ->can('viewMerchant', 'tenant');

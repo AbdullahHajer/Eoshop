@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
 import { createFakeUiAdapters } from "../../adapters/testing/fakeUiAdapters";
-import type { StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
+import type { MerchantDashboardSnapshot, StoreSubmission, UserProfile } from "../../adapters/uiAdapters";
 import { UiAdapterError } from "../../contracts/uiError";
 import MerchantStoreOperations from "../../components/MerchantStoreOperations";
 
@@ -16,6 +16,27 @@ const store = (overrides: Partial<StoreSubmission> = {}): StoreSubmission => ({
   capabilities: { workspaceManage: true, catalogManage: true, inventoryView: true, inventoryManage: true, ordersView: true, ordersManage: true, draftEdit: false, resubmit: false, publish: false, unpublish: false },
   internalDomain: "store-a.example.test", requestedDomain: "sanaa.example.test", publicDomain: null,
   plan: { key: "starter", name: "البداية", activationMode: "automatic" }, subscriptionStatus: "active", publicationBlockers: [], createdAt: null, activeAt: null, publishedAt: null,
+  ...overrides,
+});
+
+const dashboardSnapshot = (overrides: Partial<MerchantDashboardSnapshot> = {}): MerchantDashboardSnapshot => ({
+  tenantId: "tenant-a",
+  generatedAt: "2026-08-27T08:00:00Z",
+  currencyCode: "YER",
+  visibility: { orders: true, inventory: true, analytics: true, productsManage: true, workspaceManage: true },
+  metrics: { salesTodayMinor: 125000, ordersToday: 4, openOrders: 2, publishedProducts: 1, draftProducts: 0, lowStockProducts: 1 },
+  tasks: [{ code: "orders_new", count: 2, section: "orders", priority: "high" }],
+  recentOrders: [],
+  salesSeries: [
+    { date: "2026-08-21", totalMinor: 0 },
+    { date: "2026-08-22", totalMinor: 10000 },
+    { date: "2026-08-23", totalMinor: 0 },
+    { date: "2026-08-24", totalMinor: 20000 },
+    { date: "2026-08-25", totalMinor: 0 },
+    { date: "2026-08-26", totalMinor: 30000 },
+    { date: "2026-08-27", totalMinor: 125000 },
+  ],
+  topProducts: [],
   ...overrides,
 });
 
@@ -37,24 +58,23 @@ describe("MerchantStoreOperations", () => {
     expect(within(navigation).getByRole("button", { name: "نظرة عامة" }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("loads independent server-owned overview snapshots", async () => {
+  it("loads one permission-aware server-owned launch dashboard", async () => {
     const adapters = createFakeUiAdapters({
-      catalog: { load: vi.fn(async () => ({ tenantId: "tenant-a", revision: 2, currencyCode: "YER", products: [{ id: "p1", name: "منتج", price: 10, status: "published" as const, description: "", category: "", imageKeyword: "default" }] })) },
-      orders: { list: vi.fn(async () => ({ items: [], total: 4 })) },
-      inventory: { load: vi.fn(async () => [{ productId: "p1", onHand: 2, reserved: 1, available: 1, manageStock: true, lowStockThreshold: 2, inventoryRevision: 1 }]) },
+      merchantDashboard: { load: vi.fn(async () => dashboardSnapshot()) },
     });
     render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store()} section="overview" {...callbacks()} /></UiAdaptersProvider>);
 
     await waitFor(() => expect(screen.getByText("4")).toBeTruthy());
-    expect(screen.getAllByText("1").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("المنتجات الفعالة")).toBeTruthy();
+    expect(screen.getByText("المنتجات المنشورة")).toBeTruthy();
+    expect(screen.getByText("راجع 2 طلبات جديدة")).toBeTruthy();
+    expect(screen.getByText("مبيعات اليوم المكتملة")).toBeTruthy();
   });
 
   it("keeps a catalog-only staff member inside the read module without opening the builder", async () => {
     const onNavigate = vi.fn();
     const onOpenBuilder = vi.fn();
     const staffStore = store({ capabilities: { workspaceManage: false, catalogManage: true, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false } });
-    const adapters = createFakeUiAdapters({ catalog: { load: vi.fn(async () => ({ tenantId: "tenant-a", revision: 1, currencyCode: "YER", products: [] })) } });
+    const adapters = createFakeUiAdapters({ merchantDashboard: { load: vi.fn(async () => dashboardSnapshot({ visibility: { orders: false, inventory: false, analytics: false, productsManage: true, workspaceManage: false }, metrics: { salesTodayMinor: null, ordersToday: null, openOrders: null, publishedProducts: 0, draftProducts: 0, lowStockProducts: null }, tasks: [], salesSeries: [], topProducts: [] })) } });
     render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={staffStore} section="overview" {...callbacks()} onNavigate={onNavigate} onOpenBuilder={onOpenBuilder} /></UiAdaptersProvider>);
 
     await userEvent.click(screen.getAllByRole("button", { name: /المنتجات/ })[0]);
@@ -64,35 +84,33 @@ describe("MerchantStoreOperations", () => {
   });
 
   it("does not request operational data for an unknown store", () => {
-    const catalogLoad = vi.fn();
-    const adapters = createFakeUiAdapters({ catalog: { load: catalogLoad } });
+    const dashboardLoad = vi.fn();
+    const adapters = createFakeUiAdapters({ merchantDashboard: { load: dashboardLoad } });
     render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={null} section="overview" {...callbacks()} /></UiAdaptersProvider>);
     expect(screen.getByRole("heading", { name: "المتجر غير متاح لهذا الحساب" })).toBeTruthy();
-    expect(catalogLoad).not.toHaveBeenCalled();
+    expect(dashboardLoad).not.toHaveBeenCalled();
   });
 
   it("keeps denied overview facts unavailable instead of inventing zero values", async () => {
-    const ordersList = vi.fn();
-    const inventoryLoad = vi.fn();
+    const dashboardLoad = vi.fn(async () => dashboardSnapshot({
+      visibility: { orders: false, inventory: false, analytics: false, productsManage: false, workspaceManage: false },
+      metrics: { salesTodayMinor: null, ordersToday: null, openOrders: null, publishedProducts: null, draftProducts: null, lowStockProducts: null },
+      tasks: [], recentOrders: [], salesSeries: [], topProducts: [],
+    }));
     const adapters = createFakeUiAdapters({
-      catalog: { load: vi.fn(async () => ({ tenantId: "tenant-a", revision: 1, currencyCode: "YER", products: [] })) },
-      orders: { list: ordersList },
-      inventory: { load: inventoryLoad },
+      merchantDashboard: { load: dashboardLoad },
     });
     const deniedStore = store({ capabilities: { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false } });
     render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={deniedStore} section="overview" {...callbacks()} /></UiAdaptersProvider>);
 
-    await waitFor(() => expect(screen.getAllByText("غير متاح لصلاحيات الحساب")).toHaveLength(2));
-    expect(ordersList).not.toHaveBeenCalled();
-    expect(inventoryLoad).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getAllByText("غير متاح لصلاحيات الحساب").length).toBeGreaterThanOrEqual(3));
+    expect(dashboardLoad).toHaveBeenCalledWith("tenant-a", expect.any(AbortSignal));
   });
 
   it("expires the local merchant context when an operations request returns 401", async () => {
     const onSessionExpired = vi.fn();
     const adapters = createFakeUiAdapters({
-      catalog: { load: vi.fn(async () => { throw new UiAdapterError("انتهت الجلسة", "unauthenticated"); }) },
-      orders: { list: vi.fn(async () => ({ items: [], total: 0 })) },
-      inventory: { load: vi.fn(async () => []) },
+      merchantDashboard: { load: vi.fn(async () => { throw new UiAdapterError("انتهت الجلسة", "unauthenticated"); }) },
     });
     render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store()} section="overview" {...callbacks()} onSessionExpired={onSessionExpired} /></UiAdaptersProvider>);
 
@@ -132,22 +150,22 @@ describe("MerchantStoreOperations", () => {
   });
 
   it("ignores an older store snapshot that resolves after a tenant switch", async () => {
-    let resolveFirst!: (value: Awaited<ReturnType<ReturnType<typeof createFakeUiAdapters>["catalog"]["load"]>>) => void;
-    const first = new Promise<Awaited<ReturnType<ReturnType<typeof createFakeUiAdapters>["catalog"]["load"]>>>((resolve) => { resolveFirst = resolve; });
-    const catalogLoad = vi.fn((tenantId: string) => tenantId === "tenant-a"
+    let resolveFirst!: (value: MerchantDashboardSnapshot) => void;
+    const first = new Promise<MerchantDashboardSnapshot>((resolve) => { resolveFirst = resolve; });
+    const dashboardLoad = vi.fn((tenantId: string) => tenantId === "tenant-a"
       ? first
-      : Promise.resolve({ tenantId: "tenant-b", revision: 1, currencyCode: "YER", products: [{ id: "b", name: "B", price: 1, status: "published" as const, description: "", category: "", imageKeyword: "default" }] }));
-    const adapters = createFakeUiAdapters({ catalog: { load: catalogLoad } });
-    const restricted = { workspaceManage: false, catalogManage: false, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false };
-    const rendered = render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store({ capabilities: restricted })} section="overview" {...callbacks()} /></UiAdaptersProvider>);
-    rendered.rerender(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store({ id: "tenant-b", storeName: "متجر تعز", capabilities: restricted })} section="overview" {...callbacks()} /></UiAdaptersProvider>);
+      : Promise.resolve(dashboardSnapshot({ tenantId: "tenant-b", metrics: { ...dashboardSnapshot().metrics, publishedProducts: 1 } })));
+    const adapters = createFakeUiAdapters({ merchantDashboard: { load: dashboardLoad } });
+    const catalogOnly = { workspaceManage: false, catalogManage: true, inventoryView: false, inventoryManage: false, ordersView: false, ordersManage: false, draftEdit: false, resubmit: false, publish: false, unpublish: false };
+    const rendered = render(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store({ capabilities: catalogOnly })} section="overview" {...callbacks()} /></UiAdaptersProvider>);
+    rendered.rerender(<UiAdaptersProvider adapters={adapters}><MerchantStoreOperations user={user} store={store({ id: "tenant-b", storeName: "متجر تعز", capabilities: catalogOnly })} section="overview" {...callbacks()} /></UiAdaptersProvider>);
 
-    await waitFor(() => expect(screen.getByText("1")).toBeTruthy());
-    resolveFirst({ tenantId: "tenant-a", revision: 1, currencyCode: "YER", products: [
-      { id: "a1", name: "A1", price: 1, status: "published", description: "", category: "", imageKeyword: "default" },
-      { id: "a2", name: "A2", price: 1, status: "published", description: "", category: "", imageKeyword: "default" },
-    ] });
+    const publishedLabel = await screen.findByText("المنتجات المنشورة");
+    const publishedMetric = publishedLabel.closest("div");
+    expect(publishedMetric).not.toBeNull();
+    await waitFor(() => expect(within(publishedMetric!).getByText("1")).toBeTruthy());
+    resolveFirst(dashboardSnapshot({ metrics: { ...dashboardSnapshot().metrics, publishedProducts: 2 } }));
     await Promise.resolve();
-    expect(screen.queryByText("2")).toBeNull();
+    expect(within(publishedMetric!).queryByText("2")).toBeNull();
   });
 });
