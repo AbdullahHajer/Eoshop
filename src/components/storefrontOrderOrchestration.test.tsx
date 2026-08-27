@@ -104,6 +104,7 @@ describe("tenant storefront order orchestration", () => {
     expect(cartButton).toBeTruthy();
     await user.click(cartButton!);
     await user.click(await screen.findByRole("button", { name: /إتمام الطلب وتعبئة البيانات/ }));
+    await screen.findByRole("heading", { name: /إتمام الطلب/ });
     await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "Stale Customer");
     await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000010");
     await user.type(screen.getByPlaceholderText(/اسم الشارع/), "Stale Address");
