@@ -30,6 +30,7 @@
 - [WP 5.3 — Pilot QA readiness](work-packages/WP-5.3-pilot-qa-readiness.md)
 - [WP 5.4 — Merchant portal and store lifecycle](work-packages/WP-5.4-merchant-portal-lifecycle.md)
 - [WP 5.5 — Server-owned draft, resubmission and merchant publication](work-packages/WP-5.5-store-draft-resubmission-publication.md)
+- [WP 5.22 — Merchant launch console](work-packages/WP-5.22-merchant-launch-console.md)
 
 ## Architecture decisions
 
@@ -51,6 +52,7 @@
 - [ADR 0015 — Incremental frontend feature boundaries](decisions/ADR-0015-incremental-frontend-feature-boundaries.md)
 - [ADR 0016 — Merchant and platform product shells](decisions/ADR-0016-merchant-and-platform-product-shells.md)
 - [ADR 0017 — Server-owned draft, resubmission and merchant publication](decisions/ADR-0017-server-owned-draft-resubmission-merchant-publication.md)
+- [ADR 0034 — Canonical merchant launch console](decisions/ADR-0034-canonical-merchant-launch-console.md)
 
 ## Evidence
 
@@ -73,6 +75,7 @@
 - [WP 5.1 verification — 2026-08-18](evidence/WP-5.1/verification.md)
 - [WP 5.2 verification — 2026-08-18](evidence/WP-5.2/verification.md)
 - [WP 5.3 verification — 2026-08-19](evidence/WP-5.3/verification.md)
+- [WP 5.22 verification — 2026-08-27](evidence/WP-5.22/verification.md)
 
 ## QA handoff
 

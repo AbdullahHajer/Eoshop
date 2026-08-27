@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eoshop — تصور نسخة الإطلاق</title>
+  <style>
+    :root {
+      --ink: #10223f;
+      --muted: #66758d;
+      --line: #dfe7f1;
+      --surface: #ffffff;
+      --canvas: #f3f6fa;
+      --nav: #0b1830;
+      --blue: #1976ed;
+      --blue-soft: #eaf3ff;
+      --green: #0d9b70;
+      --green-soft: #eafaf4;
+      --amber: #d88716;
+      --amber-soft: #fff8e8;
+      --red: #dc4c63;
+      --red-soft: #fff0f3;
+      --violet: #7655e8;
+      --shadow: 0 12px 34px rgba(32, 57, 86, .08);
+    }
+    * { box-sizing: border-box; }
+    html, body { direction: ltr; }
+    body { margin: 0; background: #dbe4ef; color: var(--ink); font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+    button { font: inherit; }
+    .prototype-bar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; background: #071226; color: white; direction: rtl; }
+    .prototype-brand strong { display: block; font-size: 16px; }
+    .prototype-brand span { color: #9fb0ca; font-size: 12px; }
+    .prototype-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .prototype-tabs button { border: 1px solid #253957; color: #c8d4e7; background: #10203a; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+    .prototype-tabs button.active { background: #fff; color: #10203a; border-color: #fff; font-weight: 800; }
+    .screen { display: none; min-height: 900px; background: var(--canvas); }
+    .screen.active { display: grid; grid-template-columns: minmax(0,1fr) 250px; direction: ltr; }
+    .side { background: var(--nav); color: white; padding: 26px 18px; display: flex; flex-direction: column; min-height: 900px; grid-column: 2; grid-row: 1; direction: rtl; }
+    .logo { display: flex; align-items: center; gap: 12px; padding: 0 10px 24px; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .logo-mark { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: linear-gradient(135deg,#2a8cff,#56d9ca); font-size: 23px; box-shadow: 0 10px 26px rgba(42,140,255,.28); }
+    .logo small { color: #92a6c4; display: block; margin-top: 4px; }
+    .nav-label { color: #7186a4; font-size: 10px; font-weight: 800; margin: 24px 12px 8px; letter-spacing: .08em; }
+    .side nav { display: grid; gap: 5px; }
+    .nav-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #c3cfe0; padding: 12px 13px; border-radius: 13px; font-size: 13px; font-weight: 700; }
+    .nav-item.active { color: white; background: linear-gradient(90deg,#1f7ff0,#4664e8); box-shadow: 0 10px 24px rgba(33,111,238,.26); }
+    .nav-item .right { display: flex; gap: 10px; align-items: center; }
+    .nav-item .ico { width: 22px; text-align: center; opacity: .95; }
+    .count { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 20px; display: grid; place-items: center; background: #e84d66; color: white; font-size: 10px; }
+    .side-bottom { margin-top: auto; display: grid; gap: 8px; }
+    .store-link { color: white; text-align: center; padding: 12px; border: 1px solid rgba(255,255,255,.15); border-radius: 13px; font-size: 12px; }
+    .side-hint { border-radius: 16px; padding: 14px; background: rgba(255,255,255,.06); color: #c0cee1; font-size: 11px; line-height: 1.8; }
+    .app { min-width: 0; grid-column: 1; grid-row: 1; direction: rtl; }
+    .topbar { height: 76px; padding: 0 30px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+    .top-title { display: flex; align-items: center; gap: 11px; font-weight: 900; }
+    .top-title .crumb { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .round { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line); background: white; position: relative; }
+    .round .dot { position: absolute; top: -4px; left: -4px; background: var(--red); color: white; border-radius: 20px; font-size: 9px; padding: 3px 6px; }
+    .user { display: flex; align-items: center; gap: 10px; padding-right: 8px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #dfe8f3; color: #5e718a; font-weight: 900; }
+    .user strong { font-size: 12px; display: block; }
+    .user small { color: var(--muted); font-size: 10px; }
+    .content { padding: 26px 30px 40px; max-width: 1500px; margin: 0 auto; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+    .page-head h1 { margin: 0; font-size: 24px; }
+    .page-head p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn { border: 0; border-radius: 12px; padding: 11px 16px; font-weight: 800; font-size: 12px; background: white; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+    .btn.primary { background: var(--blue); color: white; box-shadow: none; }
+    .btn.success { background: var(--green); color: white; box-shadow: none; }
+    .btn.danger { color: #b92e48; background: var(--red-soft); box-shadow: inset 0 0 0 1px #ffc9d3; }
+    .btn.amber { color: #8f5a09; background: var(--amber-soft); box-shadow: inset 0 0 0 1px #f5d899; }
+    .status-strip { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #bee7d6; background: linear-gradient(90deg,#edfbf6,#f8fffc); border-radius: 16px; padding: 14px 16px; margin-bottom: 18px; }
+    .status-strip strong { color: #087452; font-size: 13px; }
+    .status-strip p { display: inline; color: #50776b; font-size: 11px; margin-right: 8px; }
+    .status-pill { background: white; border: 1px solid #bfe8d8; color: #087452; border-radius: 30px; padding: 8px 12px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 13px; margin-bottom: 18px; }
+    .metric { background: var(--surface); border: 1px solid var(--line); border-radius: 17px; padding: 16px; box-shadow: var(--shadow); }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; }
+    .metric .icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 17px; }
+    .metric small { color: var(--muted); font-size: 10px; font-weight: 800; }
+    .metric strong { display: block; font-size: 25px; margin-top: 10px; }
+    .metric .trend { margin-top: 8px; color: #6b7b90; font-size: 9px; }
+    .metric .trend b { color: var(--green); }
+    .grid-main { display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-bottom: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { min-height: 58px; padding: 15px 18px; border-bottom: 1px solid #eaf0f6; display: flex; align-items: center; justify-content: space-between; }
+    .card-head strong { font-size: 14px; }
+    .card-head span { color: var(--muted); font-size: 10px; }
+    .card-body { padding: 17px 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: right; padding: 9px 7px; color: #78869a; font-weight: 700; border-bottom: 1px solid #edf1f6; }
+    td { padding: 12px 7px; border-bottom: 1px solid #f0f3f7; }
+    tr:last-child td { border-bottom: 0; }
+    .tag { display: inline-flex; align-items: center; gap: 5px; border-radius: 30px; padding: 6px 9px; font-size: 9px; font-weight: 900; }
+    .tag.blue { background: var(--blue-soft); color: #1469c9; }
+    .tag.green { background: var(--green-soft); color: #08795a; }
+    .tag.amber { background: var(--amber-soft); color: #a0640d; }
+    .tag.red { background: var(--red-soft); color: #b8384e; }
+    .task-list { display: grid; gap: 10px; }
+    .task { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 11px; }
+    .task .task-ico { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--blue-soft); }
+    .task strong { font-size: 11px; display: block; }
+    .task small { color: var(--muted); font-size: 9px; }
+    .task a { color: var(--blue); font-size: 10px; font-weight: 900; }
+    .bottom-grid { display: grid; grid-template-columns: .9fr .9fr 1.2fr; gap: 16px; }
+    .chart { height: 180px; padding: 10px 5px 0; }
+    .chart svg { width: 100%; height: 100%; overflow: visible; }
+    .stock-list { display: grid; gap: 10px; }
+    .stock { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .product { display: flex; align-items: center; gap: 10px; }
+    .product-img { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(145deg,#e8eef6,#ccd9e8); display: grid; place-items: center; }
+    .product strong { display: block; font-size: 10px; }
+    .product small { color: var(--muted); font-size: 9px; }
+    .stock b { color: var(--red); font-size: 10px; }
+
+    /* Review and operations */
+    .summary-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+    .field { padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfe; }
+    .field small { color: var(--muted); display: block; font-size: 9px; margin-bottom: 5px; }
+    .field strong { font-size: 11px; }
+    .review-layout { display: grid; grid-template-columns: 1fr 330px; gap: 16px; margin-top: 16px; }
+    .preview { min-height: 300px; border-radius: 16px; background: linear-gradient(135deg,#142e4a,#0c1428); color: white; padding: 24px; position: relative; overflow: hidden; }
+    .preview:after { content:""; position:absolute; width:260px; height:260px; border-radius:50%; background:rgba(55,171,255,.18); left:-60px; top:-70px; }
+    .preview-nav { display: flex; justify-content: space-between; font-size: 10px; color: #cad5e6; position: relative; z-index: 1; }
+    .preview h2 { font-size: 28px; max-width: 480px; margin: 60px 0 10px; position: relative; z-index: 1; }
+    .preview p { color: #b8c8dc; font-size: 11px; position: relative; z-index: 1; }
+    .preview .shop-btn { display: inline-block; margin-top: 18px; padding: 10px 16px; border-radius: 10px; background: #35bda0; color: #062b25; font-size: 10px; font-weight: 900; position: relative; z-index: 1; }
+    .check-list { display: grid; gap: 9px; }
+    .check { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; font-size: 10px; }
+    .check .ok { color: var(--green); font-weight: 900; }
+    .check .wait { color: var(--amber); font-weight: 900; }
+    .doc { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; margin-bottom: 9px; }
+    .doc-ico { width: 42px; height: 42px; border-radius: 11px; background: #eef3f9; display: grid; place-items: center; }
+    .doc strong { font-size: 10px; display: block; }
+    .doc small { color: var(--muted); font-size: 9px; }
+    .decision-bar { position: static; margin-top: -78px; margin-bottom: 188px; background: rgba(255,255,255,.97); border-top: 1px solid var(--line); padding: 14px 30px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 -10px 28px rgba(30,54,82,.08); }
+    .decision-bar p { margin: 0; color: var(--muted); font-size: 10px; }
+    .timeline { display: grid; gap: 0; }
+    .timeline-item { display: grid; grid-template-columns: 24px 1fr; gap: 10px; min-height: 58px; }
+    .timeline-rail { position: relative; display: flex; justify-content: center; }
+    .timeline-rail:after { content:""; position:absolute; top:17px; bottom:-4px; width:2px; background:#dbe4ef; }
+    .timeline-item:last-child .timeline-rail:after { display:none; }
+    .node { width: 14px; height: 14px; margin-top: 4px; border-radius:50%; background:#fff; border:4px solid #b8c6d8; z-index:1; }
+    .node.done { border-color: var(--green); }
+    .node.current { border-color: var(--blue); box-shadow: 0 0 0 5px var(--blue-soft); }
+    .timeline-item strong { font-size: 10px; display:block; }
+    .timeline-item small { font-size:9px; color:var(--muted); }
+    .journey-hero { background: linear-gradient(120deg,#0e2544,#133d64); color:white; border-radius:20px; padding:24px; display:flex; justify-content:space-between; gap:20px; margin-bottom:16px; }
+    .journey-hero h2 { margin:0 0 8px; font-size:20px; }
+    .journey-hero p { margin:0; color:#b9cce2; font-size:11px; }
+    .progress-ring { width:84px; height:84px; border-radius:50%; background:conic-gradient(#3bc7a4 0 72%,rgba(255,255,255,.12) 72%); display:grid; place-items:center; }
+    .progress-ring:after { content:"72%"; display:grid; place-items:center; width:64px; height:64px; border-radius:50%; background:#123354; font-weight:900; }
+    .steps { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+    .step { background:#fff; border:1px solid var(--line); border-radius:15px; padding:14px; text-align:center; position:relative; }
+    .step .step-no { width:30px; height:30px; margin:0 auto 8px; border-radius:50%; display:grid; place-items:center; background:#edf2f8; color:#718097; font-size:10px; font-weight:900; }
+    .step.done .step-no { background:var(--green-soft); color:var(--green); }
+    .step.current { border-color:#8bbcf4; box-shadow:0 0 0 3px var(--blue-soft); }
+    .step.current .step-no { background:var(--blue); color:white; }
+    .step strong { font-size:10px; display:block; }
+    .step small { color:var(--muted); font-size:8px; }
+    .callout { border-radius:16px; padding:16px; border:1px solid #f2d293; background:var(--amber-soft); }
+    .callout strong { font-size:12px; color:#8a5709; }
+    .callout p { color:#80673c; font-size:10px; line-height:1.8; margin:7px 0 0; }
+    .health-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+    .health { background:white; border:1px solid var(--line); border-radius:15px; padding:14px; }
+    .health .health-head { display:flex; justify-content:space-between; align-items:center; }
+    .health small { color:var(--muted); font-size:9px; }
+    .health strong { display:block; font-size:12px; margin-top:8px; }
+    .health em { font-style:normal; font-size:9px; color:var(--green); }
+    .activity { display:grid; gap:8px; }
+    .activity-row { display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #eef2f6; }
+    .activity-row:last-child { border:0; }
+    .activity-row .bubble { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background:#edf3fa; }
+    .activity-row strong { font-size:10px; display:block; }
+    .activity-row small { color:var(--muted); font-size:8px; }
+    .activity-row time { color:var(--muted); font-size:8px; }
+    .privacy-note { border:1px solid #cbdaf0; background:#f2f7ff; color:#33577f; border-radius:13px; padding:12px; font-size:9px; line-height:1.7; }
+
+    @media (max-width: 900px) {
+      .prototype-bar { align-items: flex-start; flex-direction: column; }
+      .screen.active { grid-template-columns: minmax(0,1fr); width: 100%; }
+      .side { min-height: auto; min-width: 0; width: 100%; max-width: 100vw; padding: 14px; grid-column: 1; grid-row: auto; overflow: hidden; }
+      .app { min-width: 0; width: 100%; grid-column: 1; grid-row: auto; overflow: hidden; }
+      .side nav { width: 100%; max-width: 100%; grid-template-columns: repeat(4,110px); overflow-x:auto; }
+      .nav-label,.side-bottom { display:none; }
+      .logo { border:0; padding-bottom:10px; }
+      .topbar { padding: 0 16px; }
+      .content { padding: 18px 16px 30px; }
+      .metrics,.health-grid { grid-template-columns:repeat(2,1fr); }
+      .grid-main,.bottom-grid,.summary-grid,.review-layout { grid-template-columns:1fr; }
+      .steps { grid-template-columns:1fr 1fr; }
+      .decision-bar { position:static; margin: 0; flex-direction:column; align-items:stretch; gap:10px; padding:14px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="prototype-bar">
+    <div class="prototype-brand"><strong>تصور Eoshop لنسخة الإطلاق</strong><span>نماذج تخطيطية أصلية — ليست شاشة النظام الحالية</span></div>
+    <div class="prototype-tabs" role="tablist" aria-label="نماذج الشاشات">
+      <button data-target="merchant-dashboard">لوحة التاجر</button>
+      <button data-target="merchant-application">متابعة طلب المتجر</button>
+      <button data-target="application-review">مراجعة طلب المتجر</button>
+      <button data-target="store-operations">إدارة متجر مفتوح</button>
+    </div>
+  </header>
+
+  <section id="merchant-dashboard" class="screen" aria-label="نموذج لوحة التاجر">
+    <aside class="side">
+      <div class="logo"><div class="logo-mark">🛍</div><div><strong>متجري</strong><small>مركز إدارة المتجر</small></div></div>
+      <div class="nav-label">التشغيل اليومي</div>
+      <nav>
+        <div class="nav-item active"><span class="right"><span class="ico">⌂</span>الرئيسية</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">▣</span>الطلبات</span><span class="count">7</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">◇</span>المنتجات</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">▦</span>المخزون</span><span class="count">3</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">♙</span>العملاء</span></div>
+      </nav>
+      <div class="nav-label">بناء المتجر</div>
+      <nav>
+        <div class="nav-item"><span class="right"><span class="ico">✦</span>التصميم والمحتوى</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">◫</span>الدفع والتوصيل</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">⚙</span>إعدادات المتجر</span></div>
+        <div class="nav-item"><span class="right"><span class="ico">♧</span>الفريق والصلاحيات</span></div>
+      </nav>
+      <div class="side-bottom"><div class="side-hint"><b>متجرك يعمل بشكل طبيعي</b><br>آخر فحص قبل 3 دقائق</div><div class="store-link">◉ عرض المتجر للعملاء</div></div>
+    </aside>
+    <main class="app">
+      <div class="topbar"><div class="top-title">لوحة التحكم <span class="crumb">/ تور للتسويق</span></div><div class="top-actions"><div class="round">✉</div><div class="round">♢<span class="dot">4</span></div><div class="user"><div class="avatar">ن</div><div><strong>نور الدين</strong><small>مالك المتجر</small></div></div></div></div>
+      <div class="content">
+        <div class="page-head"><div><h1>صباح الخير يا نور 👋</h1><p>هذه الأعمال التي تحتاج انتباهك اليوم، ثم أهم مؤشرات متجرك.</p></div><div class="actions"><button class="btn">نسخ رابط المتجر</button><button class="btn primary">+ إضافة منتج</button></div></div>
+        <div class="status-strip"><div><strong>● المتجر منشور ويستقبل الطلبات</strong><p>noor.eoshop.local</p></div><span class="status-pill">سلامة المتجر 100%</span></div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-top"><small>مبيعات اليوم</small><span class="icon" style="background:#eafaf4;color:#0d9b70">﷼</span></div><strong>24,560</strong><div class="trend"><b>↑ 12.5%</b> عن متوسط الأسبوع</div></div>
+          <div class="metric"><div class="metric-top"><small>طلبات اليوم</small><span class="icon" style="background:#eaf3ff;color:#1976ed">▣</span></div><strong>24</strong><div class="trend"><b>7 جديدة</b> تحتاج معالجة</div></div>
+          <div class="metric"><div class="metric-top"><small>المنتجات المنشورة</small><span class="icon" style="background:#f2edff;color:#7655e8">◇</span></div><strong>38</strong><div class="trend">من أصل 42 منتجًا</div></div>
+          <div class="metric"><div class="metric-top"><small>تنبيهات المخزون</small><span class="icon" style="background:#fff0f3;color:#dc4c63">!</span></div><strong>3</strong><div class="trend">منتجات توشك على النفاد</div></div>
+        </div>
+        <div class="grid-main">
+          <section class="card"><div class="card-head"><strong>أحدث الطلبات</strong><span>عرض جميع الطلبات ←</span></div><div class="card-body"><table><thead><tr><th>الطلب</th><th>العميل</th><th>الإجمالي</th><th>الدفع</th><th>الحالة</th></tr></thead><tbody>
+            <tr><td><b>#1052</b></td><td>أحمد محمد</td><td>560 ر.ي</td><td>عند الاستلام</td><td><span class="tag blue">جديد</span></td></tr>
+            <tr><td><b>#1051</b></td><td>سارة علي</td><td>230 ر.ي</td><td>محفظة</td><td><span class="tag amber">قيد التجهيز</span></td></tr>
+            <tr><td><b>#1050</b></td><td>محمد خالد</td><td>320 ر.ي</td><td>تحويل</td><td><span class="tag green">جاهز</span></td></tr>
+            <tr><td><b>#1049</b></td><td>نورة سعيد</td><td>175 ر.ي</td><td>عند الاستلام</td><td><span class="tag green">مكتمل</span></td></tr>
+          </tbody></table></div></section>
+          <section class="card"><div class="card-head"><strong>مهام اليوم</strong><span>مرتبة حسب الأولوية</span></div><div class="card-body task-list">
+            <div class="task"><div class="task-ico">▣</div><div><strong>راجع 7 طلبات جديدة</strong><small>أقدم طلب منذ 38 دقيقة</small></div><a>ابدأ</a></div>
+            <div class="task"><div class="task-ico" style="background:#fff0f3">!</div><div><strong>حدّث مخزون 3 منتجات</strong><small>منتج واحد نفد تمامًا</small></div><a>افتح</a></div>
+            <div class="task"><div class="task-ico" style="background:#fff8e8">✓</div><div><strong>أكمل وسيلة التواصل</strong><small>أضف رقم واتساب لخدمة العملاء</small></div><a>أكمل</a></div>
+          </div></section>
+        </div>
+        <div class="bottom-grid">
+          <section class="card"><div class="card-head"><strong>الأكثر مبيعًا</strong><span>آخر 30 يومًا</span></div><div class="card-body stock-list"><div class="stock"><div class="product"><div class="product-img">🎧</div><div><strong>سماعات بلوتوث</strong><small>320 قطعة</small></div></div><b style="color:#0d9b70">#1</b></div><div class="stock"><div class="product"><div class="product-img">⌚</div><div><strong>ساعة ذكية</strong><small>210 قطع</small></div></div><b style="color:#7655e8">#2</b></div><div class="stock"><div class="product"><div class="product-img">⚡</div><div><strong>شاحن سريع</strong><small>189 قطعة</small></div></div><b style="color:#d88716">#3</b></div></div></section>
+          <section class="card"><div class="card-head"><strong>تنبيهات المخزون</strong><span>الأكثر إلحاحًا</span></div><div class="card-body stock-list"><div class="stock"><div class="product"><div class="product-img">🎧</div><div><strong>سماعات بلوتوث</strong><small>حد التنبيه 5</small></div></div><b>متبقي 3</b></div><div class="stock"><div class="product"><div class="product-img">⌚</div><div><strong>ساعة ذكية</strong><small>حد التنبيه 8</small></div></div><b>متبقي 5</b></div><div class="stock"><div class="product"><div class="product-img">🔌</div><div><strong>شاحن لاسلكي</strong><small>حد التنبيه 3</small></div></div><b>متبقي 2</b></div></div></section>
+          <section class="card"><div class="card-head"><strong>المبيعات خلال 7 أيام</strong><span>من الطلبات المكتملة</span></div><div class="card-body chart"><svg viewBox="0 0 500 170" role="img" aria-label="رسم تقريبي للمبيعات"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1976ed" stop-opacity=".28"/><stop offset="1" stop-color="#1976ed" stop-opacity="0"/></linearGradient></defs><g stroke="#e4ebf3" stroke-width="1"><line x1="20" y1="30" x2="480" y2="30"/><line x1="20" y1="75" x2="480" y2="75"/><line x1="20" y1="120" x2="480" y2="120"/></g><path d="M20,125 L90,100 L160,55 L230,78 L300,35 L370,66 L445,42 L480,82 L480,145 L20,145 Z" fill="url(#area)"/><path d="M20,125 L90,100 L160,55 L230,78 L300,35 L370,66 L445,42 L480,82" fill="none" stroke="#1976ed" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><g fill="#fff" stroke="#1976ed" stroke-width="3"><circle cx="20" cy="125" r="5"/><circle cx="90" cy="100" r="5"/><circle cx="160" cy="55" r="5"/><circle cx="230" cy="78" r="5"/><circle cx="300" cy="35" r="5"/><circle cx="370" cy="66" r="5"/><circle cx="445" cy="42" r="5"/><circle cx="480" cy="82" r="5"/></g></svg></div></section>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <section id="merchant-application" class="screen" aria-label="نموذج متابعة طلب المتجر">
+    <aside class="side">
+      <div class="logo"><div class="logo-mark">🛍</div><div><strong>متجري</strong><small>بوابة التاجر</small></div></div>
+      <div class="nav-label">حسابي</div><nav><div class="nav-item"><span class="right"><span class="ico">⌂</span>نظرة عامة</span></div><div class="nav-item active"><span class="right"><span class="ico">◎</span>طلب المتجر</span><span class="count" style="background:#d88716">1</span></div><div class="nav-item"><span class="right"><span class="ico">⚙</span>الحساب والأمان</span></div></nav>
+      <div class="side-bottom"><div class="side-hint"><b>تحتاج مساعدة؟</b><br>تواصل مع الدعم وأرفق رقم الطلب #ES-2408</div></div>
+    </aside>
+    <main class="app">
+      <div class="topbar"><div class="top-title">متابعة طلب المتجر <span class="crumb">/ نوران</span></div><div class="top-actions"><div class="round">?</div><div class="user"><div class="avatar">ن</div><div><strong>نور الدين</strong><small>صاحب الطلب</small></div></div></div></div>
+      <div class="content">
+        <div class="page-head"><div><h1>طلب فتح متجر «نوران»</h1><p>رقم الطلب ES-2408 · آخر تحديث اليوم، 10:45 ص</p></div><div class="actions"><button class="btn">معاينة المتجر</button><button class="btn primary">تعديل البيانات المطلوبة</button></div></div>
+        <div class="journey-hero"><div><span class="tag amber">بانتظار استكمال منك</span><h2>طلبك اجتاز المراجعة الأولية</h2><p>طلب فريق المراجعة تحديث إثبات هوية المسؤول. لن تحتاج لإعادة إدخال بقية البيانات.</p></div><div class="progress-ring"></div></div>
+        <div class="steps"><div class="step done"><div class="step-no">✓</div><strong>بيانات النشاط</strong><small>مكتملة</small></div><div class="step done"><div class="step-no">✓</div><strong>التصميم والمعاينة</strong><small>مكتملة</small></div><div class="step current"><div class="step-no">3</div><strong>الوثائق والمراجعة</strong><small>إجراء مطلوب</small></div><div class="step"><div class="step-no">4</div><strong>التجهيز</strong><small>بعد الموافقة</small></div><div class="step"><div class="step-no">5</div><strong>النشر</strong><small>الرابط العام</small></div></div>
+        <div class="summary-grid">
+          <div class="card"><div class="card-head"><strong>الإجراء المطلوب منك</strong><span>المهلة المقترحة: 7 أيام</span></div><div class="card-body"><div class="callout"><strong>استبدل صورة إثبات هوية المسؤول</strong><p>الصورة الحالية غير واضحة من الجهة اليمنى. ارفع صورة كاملة بصيغة JPG أو PNG لا تتجاوز 5MB. تظهر الوثيقة لفريق المراجعة المخول فقط.</p></div><div class="doc" style="margin-top:12px"><div class="doc-ico">▤</div><div><strong>إثبات هوية المسؤول</strong><small>تم الرفع 24 أغسطس · يحتاج استبدال</small></div><span class="tag red">غير واضح</span></div><div class="actions" style="margin-top:14px"><button class="btn primary">رفع وثيقة بديلة</button><button class="btn">حفظ والمتابعة لاحقًا</button></div></div></div>
+          <div class="card"><div class="card-head"><strong>سجل رحلة الطلب</strong><span>واضح وغير قابل للحذف</span></div><div class="card-body timeline"><div class="timeline-item"><div class="timeline-rail"><span class="node current"></span></div><div><strong>طُلب استكمال وثيقة</strong><small>اليوم 10:45 ص · بواسطة فريق المراجعة</small></div></div><div class="timeline-item"><div class="timeline-rail"><span class="node done"></span></div><div><strong>بدأت المراجعة</strong><small>أمس 2:18 م</small></div></div><div class="timeline-item"><div class="timeline-rail"><span class="node done"></span></div><div><strong>تم إرسال الطلب</strong><small>24 أغسطس 7:13 م</small></div></div><div class="timeline-item"><div class="timeline-rail"><span class="node done"></span></div><div><strong>تم حفظ التصميم والبيانات</strong><small>24 أغسطس 7:08 م</small></div></div></div></div>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <section id="application-review" class="screen" aria-label="نموذج مراجعة طلب المتجر">
+    <aside class="side">
+      <div class="logo"><div class="logo-mark">◆</div><div><strong>مبتكر</strong><small>إدارة المنصة</small></div></div>
+      <div class="nav-label">التشغيل</div><nav><div class="nav-item"><span class="right"><span class="ico">⌂</span>نظرة تشغيلية</span></div><div class="nav-item active"><span class="right"><span class="ico">▤</span>طلبات فتح المتاجر</span><span class="count">6</span></div><div class="nav-item"><span class="right"><span class="ico">▣</span>المتاجر المفتوحة</span></div><div class="nav-item"><span class="right"><span class="ico">♙</span>مستخدمو المنصة</span></div></nav>
+      <div class="nav-label">الضبط</div><nav><div class="nav-item"><span class="right"><span class="ico">⚙</span>إعدادات المنصة</span></div><div class="nav-item"><span class="right"><span class="ico">≡</span>سجل التدقيق</span></div></nav>
+      <div class="side-bottom"><div class="side-hint"><b>طابور المراجعة</b><br>6 جديدة · أقدم طلب منذ 18 ساعة</div></div>
+    </aside>
+    <main class="app">
+      <div class="topbar"><div class="top-title">طلبات فتح المتاجر <span class="crumb">/ الطلب ES-2408</span></div><div class="top-actions"><div class="round">⌕</div><div class="round">♢<span class="dot">6</span></div><div class="user"><div class="avatar">م</div><div><strong>محمد القاضي</strong><small>مراجع المنصة</small></div></div></div></div>
+      <div class="content">
+        <div class="page-head"><div><span class="tag amber">قيد المراجعة</span><h1 style="margin-top:9px">نوران للهدايا</h1><p>ES-2408 · أُرسل 24 أغسطس · الباقة المبتدئة · nooran.eoshop.local</p></div><div class="actions"><button class="btn">← الطلب السابق</button><button class="btn">الطلب التالي →</button></div></div>
+        <div class="summary-grid">
+          <section class="card"><div class="card-head"><strong>بيانات النشاط والمالك</strong><span>بيانات الخادم وقت الإرسال</span></div><div class="card-body detail-grid"><div class="field"><small>اسم النشاط</small><strong>نوران للهدايا</strong></div><div class="field"><small>نوع النشاط</small><strong>هدايا ومنتجات يدوية</strong></div><div class="field"><small>المالك المسؤول</small><strong>نور الدين وادعي</strong></div><div class="field"><small>رقم التواصل</small><strong dir="ltr">+967 777 123 456</strong></div><div class="field"><small>البريد</small><strong>noor@example.com</strong></div><div class="field"><small>المحافظة / المدينة</small><strong>صنعاء / التحرير</strong></div></div></section>
+          <section class="card"><div class="card-head"><strong>الوثائق</strong><span>2 من 3 مكتملة</span></div><div class="card-body"><div class="doc"><div class="doc-ico">▤</div><div><strong>إثبات هوية المسؤول</strong><small>JPG · 1.8 MB</small></div><button class="btn" style="padding:8px 10px">فتح</button></div><div class="doc"><div class="doc-ico">▤</div><div><strong>إثبات ملكية رقم التواصل</strong><small>PDF · 640 KB</small></div><span class="tag green">واضح</span></div><div class="doc"><div class="doc-ico">—</div><div><strong>سجل تجاري</strong><small>غير مطلوب لهذا النوع من النشاط</small></div><span class="tag blue">مُعفى</span></div></div></section>
+        </div>
+        <div class="review-layout">
+          <section class="card"><div class="card-head"><strong>معاينة المتجر المرسل</strong><span>المعاينة مرتبطة بإصدار الطلب</span></div><div class="card-body"><div class="preview"><div class="preview-nav"><b>نوران ✦</b><span>الرئيسية &nbsp; المنتجات &nbsp; عن المتجر &nbsp; التواصل</span></div><h2>تفاصيل جميلة تصنع فرقًا</h2><p>هدايا ومنتجات مختارة بعناية لتبقى الذكرى أجمل.</p><span class="shop-btn">تصفح المنتجات</span></div></div></section>
+          <aside class="card"><div class="card-head"><strong>قائمة تحقق المراجع</strong><span>4 من 5</span></div><div class="card-body check-list"><div class="check"><span>هوية المالك واضحة</span><span class="wait">يحتاج تحقق</span></div><div class="check"><span>بيانات التواصل صحيحة</span><span class="ok">✓ مكتمل</span></div><div class="check"><span>النشاط غير محظور</span><span class="ok">✓ مكتمل</span></div><div class="check"><span>النطاق مناسب ومحجوز</span><span class="ok">✓ مكتمل</span></div><div class="check"><span>المتجر قابل للعرض</span><span class="ok">✓ مكتمل</span></div><label style="font-size:10px;font-weight:800;margin-top:4px">ملاحظة للمستخدم<textarea style="width:100%;min-height:78px;margin-top:7px;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit" placeholder="اكتب سبب طلب الاستكمال أو الرفض..."></textarea></label></div></aside>
+        </div>
+      </div>
+      <div class="decision-bar"><p>كل قرار يُحفظ باسم المراجع ووقته وسببه في سجل التدقيق.</p><div class="actions"><button class="btn danger">رفض الطلب</button><button class="btn amber">طلب استكمال</button><button class="btn success">موافقة وبدء التجهيز</button></div></div>
+    </main>
+  </section>
+
+  <section id="store-operations" class="screen" aria-label="نموذج إدارة متجر مفتوح">
+    <aside class="side">
+      <div class="logo"><div class="logo-mark">◆</div><div><strong>مبتكر</strong><small>إدارة المنصة</small></div></div>
+      <div class="nav-label">التشغيل</div><nav><div class="nav-item"><span class="right"><span class="ico">⌂</span>نظرة تشغيلية</span></div><div class="nav-item"><span class="right"><span class="ico">▤</span>طلبات فتح المتاجر</span><span class="count">6</span></div><div class="nav-item active"><span class="right"><span class="ico">▣</span>المتاجر المفتوحة</span></div><div class="nav-item"><span class="right"><span class="ico">♙</span>مستخدمو المنصة</span></div></nav>
+      <div class="nav-label">الضبط</div><nav><div class="nav-item"><span class="right"><span class="ico">⚙</span>إعدادات المنصة</span></div><div class="nav-item"><span class="right"><span class="ico">≡</span>سجل التدقيق</span></div></nav>
+      <div class="side-bottom"><div class="side-hint"><b>سلامة المنصة</b><br>18 متجرًا يعمل · متجر واحد يحتاج متابعة</div></div>
+    </aside>
+    <main class="app">
+      <div class="topbar"><div class="top-title">المتاجر المفتوحة <span class="crumb">/ تور للتسويق</span></div><div class="top-actions"><div class="round">⌕</div><div class="user"><div class="avatar">م</div><div><strong>محمد القاضي</strong><small>مشغل المنصة</small></div></div></div></div>
+      <div class="content">
+        <div class="page-head"><div><span class="tag green">منشور ويعمل</span><h1 style="margin-top:9px">تور للتسويق</h1><p>متجر 01M0SBY… · المالك نور الدين · أُنشئ 24 أغسطس</p></div><div class="actions"><button class="btn">فتح المتجر العام</button><button class="btn">الدخول إلى سجل التدقيق</button><button class="btn danger">تعليق المتجر</button></div></div>
+        <div class="health-grid"><div class="health"><div class="health-head"><small>النطاق العام</small><em>● سليم</em></div><strong>noor.eoshop.local</strong></div><div class="health"><div class="health-head"><small>التجهيز</small><em>● مكتمل</em></div><strong>Schema جاهز · Run #1</strong></div><div class="health"><div class="health-head"><small>الاشتراك</small><em>● فعال</em></div><strong>المبتدئة · 29 يومًا</strong></div><div class="health"><div class="health-head"><small>آخر طلب عميل</small><em>● طبيعي</em></div><strong>منذ 18 دقيقة</strong></div></div>
+        <div class="summary-grid">
+          <section class="card"><div class="card-head"><strong>ملف المتجر التشغيلي</strong><span>بيانات مركزية</span></div><div class="card-body detail-grid"><div class="field"><small>المالك الأساسي</small><strong>نور الدين وادعي</strong></div><div class="field"><small>البريد</small><strong>noor@example.com</strong></div><div class="field"><small>حالة التحقق</small><strong>مقبول · 24 أغسطس</strong></div><div class="field"><small>حالة النشر</small><strong>منشور · 24 أغسطس</strong></div><div class="field"><small>المنتجات / المنشور</small><strong>42 / 38</strong></div><div class="field"><small>الطلبات خلال 30 يومًا</small><strong>156 طلبًا</strong></div></div></section>
+          <section class="card"><div class="card-head"><strong>إجراءات الدعم المسموحة</strong><span>بحسب الصلاحية</span></div><div class="card-body task-list"><div class="task"><div class="task-ico">↻</div><div><strong>إعادة محاولة التجهيز</strong><small>متاح فقط عند فشل خطوة خادمية</small></div><a>غير مطلوب</a></div><div class="task"><div class="task-ico">◫</div><div><strong>إدارة الاشتراك</strong><small>التفعيل والتمديد مع سبب</small></div><a>فتح</a></div><div class="task"><div class="task-ico">◎</div><div><strong>عرض مؤشرات الطلبات</strong><small>دون كشف بيانات العملاء افتراضيًا</small></div><a>عرض</a></div></div></section>
+        </div>
+        <div class="review-layout">
+          <section class="card"><div class="card-head"><strong>آخر الأحداث التشغيلية</strong><span>من سجل المنصة</span></div><div class="card-body activity"><div class="activity-row"><div class="bubble">▣</div><div><strong>تم إنشاء طلب عميل جديد</strong><small>مرجع تشغيلي فقط · لا تعرض البيانات الشخصية هنا</small></div><time>18 دقيقة</time></div><div class="activity-row"><div class="bubble">◇</div><div><strong>حُفظت تعديلات على منتجين</strong><small>بواسطة مالك المتجر</small></div><time>ساعتان</time></div><div class="activity-row"><div class="bubble">↗</div><div><strong>تم نشر المتجر</strong><small>النطاق العام يعمل بصورة طبيعية</small></div><time>3 أيام</time></div><div class="activity-row"><div class="bubble">✓</div><div><strong>اكتمل تجهيز قاعدة المتجر</strong><small>جميع خطوات provisioning ناجحة</small></div><time>3 أيام</time></div></div></section>
+          <aside class="card"><div class="card-head"><strong>سلامة التشغيل</strong><span>آخر فحص قبل دقيقة</span></div><div class="card-body"><div class="check-list"><div class="check"><span>قاعدة بيانات المتجر</span><span class="ok">● متصلة</span></div><div class="check"><span>النطاق والنشر</span><span class="ok">● متاح</span></div><div class="check"><span>مساحة التخزين</span><span class="ok">● 18%</span></div><div class="check"><span>الطلبات المتعثرة</span><span class="ok">0</span></div></div><div class="privacy-note" style="margin-top:12px"><b>مبدأ الخصوصية:</b> إدارة المنصة ترى صحة الطلبات وأعدادها. فتح بيانات عميل محدد يحتاج صلاحية دعم وسببًا مسجلًا؛ إدارة الطلب اليومية مسؤولية التاجر.</div></div></aside>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <script>
+    const buttons = [...document.querySelectorAll('[data-target]')];
+    const screens = [...document.querySelectorAll('.screen')];
+    function show(target) {
+      screens.forEach(screen => screen.classList.toggle('active', screen.id === target));
+      buttons.forEach(button => button.classList.toggle('active', button.dataset.target === target));
+      const url = new URL(window.location.href); url.searchParams.set('screen', target); history.replaceState({}, '', url);
+    }
+    buttons.forEach(button => button.addEventListener('click', () => show(button.dataset.target)));
+    const requested = new URLSearchParams(location.search).get('screen');
+    show(screens.some(screen => screen.id === requested) ? requested : 'merchant-dashboard');
+  </script>
+</body>
+</html>

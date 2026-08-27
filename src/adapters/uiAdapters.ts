@@ -7,6 +7,7 @@ import { workspaceApi } from "../services/workspaceApi";
 import { catalogApi } from "../services/catalogApi";
 import { inventoryApi } from "../services/inventoryApi";
 import { orderApi } from "../services/orderApi";
+import { merchantDashboardApi } from "../services/merchantDashboardApi";
 import { storeAssetApi } from "../services/storeAssetApi";
 import { platformSettingsApi } from "../services/platformSettingsApi";
 
@@ -37,6 +38,7 @@ export type { StoreWorkspace } from "../services/workspaceApi";
 export type { CatalogSnapshot } from "../services/catalogApi";
 export type { StoreAssetUpload } from "../services/storeAssetApi";
 export type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../services/orderApi";
+export type { MerchantDashboardSnapshot, MerchantDashboardTaskCode } from "../services/merchantDashboardApi";
 export type { AdminPlatformSettings, PlatformNavigationItem, PlatformNavigationKey, PlatformSettings, UpdatePlatformSettingsInput } from "../services/platformSettingsApi";
 export {
   UiAdapterError,
@@ -84,6 +86,7 @@ export interface UiAdapters {
   catalog: typeof catalogApi;
   inventory: typeof inventoryApi;
   orders: typeof orderApi;
+  merchantDashboard: typeof merchantDashboardApi;
   storeAssets: typeof storeAssetApi;
 }
 
@@ -116,5 +119,6 @@ export const productionUiAdapters: UiAdapters = {
   catalog: catalogApi,
   inventory: inventoryApi,
   orders: orderApi,
+  merchantDashboard: merchantDashboardApi,
   storeAssets: storeAssetApi,
 };

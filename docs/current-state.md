@@ -1,6 +1,6 @@
 # Eoshop current delivery state
 
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 ## Product position
 
@@ -29,17 +29,19 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot and a 
 - WP 5.19: end-to-end existing-store customization completion, bounded provisioning refresh and server-confirmed publication continuity.
 - WP 5.20: discoverable merchant store management, capability-aware shortcuts and recoverable public-storefront loading.
 - WP 5.21: public-storefront loading/error semantics, keyboard and cart/checkout focus behavior, reduced motion, readable merchant colors, secure local-HTTP request identity and verified 320–1440 px reflow.
+- WP 5.22 implementation: one canonical, permission-aware merchant launch console backed by tenant database aggregates and existing operational modules; delivery gates are in progress.
 
 ## Active
 
-- No implementation work package is open. The approved comprehensive connected-system review is the next controlled activity.
+- WP 5.22 — merchant launch console delivery and Pilot acceptance.
 
 ## Approved next sequence
 
-1. Perform the approved comprehensive review of backend authority, tenant isolation, merchant journey, platform administration and public storefront as one connected system.
-2. Convert approved review findings into bounded work packages without reopening delivered architecture unnecessarily.
-3. Review management tabs, then restore richer appearance options through bounded server-owned contracts before the broader visual refinement.
-4. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
+1. Close WP 5.22 through complete container, Pilot, review, CI and protected-branch gates.
+2. Implement the platform application-review workspace and active-store operations view as a separate bounded work package.
+3. Add only the launch-required merchant/platform management gaps, then run the connected-system acceptance review.
+4. Restore richer appearance options through bounded server-owned contracts before broader visual refinement.
+5. Complete local-market payment verification/notifications, then continue to Phase 6 staging, observability, backup and scale work.
 
 ## Deliberately deferred
 

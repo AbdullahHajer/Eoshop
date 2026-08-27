@@ -44,6 +44,7 @@ use App\Services\StoreWorkspaceService;
 use App\Services\TenantProvisioningExecutor;
 use App\Support\StorefrontSectionLayout;
 use App\Support\TenantWorkspaceReadiness;
+use Carbon\CarbonImmutable;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -614,6 +615,156 @@ class StoreWorkspaceTest extends TestCase
             }
             $this->assertSame(2, DB::table('order_status_history')->where('order_id', $orderId)->count());
         });
+    }
+
+    public function test_merchant_dashboard_is_authoritative_permission_scoped_and_excludes_customer_pii(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('merchant-dashboard');
+        $dashboardUrl = "http://127.0.0.1/api/merchant/stores/{$tenant->id}/dashboard";
+
+        $this->getJson($dashboardUrl)->assertUnauthorized();
+        $outsider = $this->user('merchant-dashboard-outsider@example.test');
+        $this->actingAs($outsider)->getJson($dashboardUrl)->assertForbidden();
+
+        $restricted = $this->user('merchant-dashboard-restricted@example.test');
+        $restrictedRole = Role::query()->create([
+            'key' => 'tenant_dashboard_restricted_'.Str::lower(Str::random(8)),
+            'name' => 'Tenant dashboard restricted',
+            'scope' => RoleScope::Tenant,
+            'system' => false,
+        ]);
+        $this->roleIds[] = (int) $restrictedRole->id;
+        app(RoleAssignmentService::class)->assignTenantRole($tenant, $restricted, $restrictedRole, $owner);
+        Auth::forgetGuards();
+        $this->flushSession();
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($restricted)
+            ->getJson($dashboardUrl)
+            ->assertOk()
+            ->assertJsonPath('data.visibility.orders', false)
+            ->assertJsonPath('data.visibility.inventory', false)
+            ->assertJsonPath('data.visibility.analytics', false)
+            ->assertJsonPath('data.visibility.productsManage', false)
+            ->assertJsonPath('data.visibility.workspaceManage', false)
+            ->assertJsonPath('data.metrics.publishedProducts', null)
+            ->assertJsonPath('data.metrics.draftProducts', null)
+            ->assertJsonPath('data.metrics.ordersToday', null)
+            ->assertJsonPath('data.metrics.salesTodayMinor', null)
+            ->assertJsonPath('data.metrics.lowStockProducts', null)
+            ->assertJsonPath('data.tasks', [])
+            ->assertJsonPath('data.recentOrders', []);
+
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+        $created = $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                'workspaceRevision' => (int) $bootstrap['workspaceRevision'],
+                'catalogRevision' => (int) $bootstrap['catalogRevision'],
+                'lines' => [['productId' => $productId, 'quantity' => 1]],
+                'payment' => ['method' => 'cod'],
+                'customer' => ['name' => 'Private dashboard customer', 'phone' => '+967700000009'],
+                'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Private address'],
+            ])
+            ->assertCreated()
+            ->json('data.order');
+
+        Auth::forgetGuards();
+        $this->flushSession();
+        $response = $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->getJson($dashboardUrl)
+            ->assertOk()
+            ->assertJsonPath('data.tenantId', $tenant->id)
+            ->assertJsonPath('data.visibility.orders', true)
+            ->assertJsonPath('data.visibility.inventory', true)
+            ->assertJsonPath('data.visibility.analytics', true)
+            ->assertJsonPath('data.visibility.productsManage', true)
+            ->assertJsonPath('data.visibility.workspaceManage', true)
+            ->assertJsonPath('data.metrics.ordersToday', 1)
+            ->assertJsonPath('data.metrics.openOrders', 1)
+            ->assertJsonPath('data.metrics.publishedProducts', 1)
+            ->assertJsonPath('data.metrics.draftProducts', 0)
+            ->assertJsonPath('data.metrics.lowStockProducts', 0)
+            ->assertJsonPath('data.metrics.salesTodayMinor', 0)
+            ->assertJsonPath('data.tasks.0.code', 'orders_new')
+            ->assertJsonPath('data.tasks.0.count', 1)
+            ->assertJsonPath('data.recentOrders.0.id', $created['id'])
+            ->assertJsonPath('data.recentOrders.0.grandTotalMinor', $created['totals']['grandTotalMinor']);
+
+        $recentOrder = $response->json('data.recentOrders.0');
+        $this->assertArrayNotHasKey('customer', $recentOrder);
+        $this->assertArrayNotHasKey('address', $recentOrder);
+        $this->assertStringNotContainsString('Private dashboard customer', json_encode($response->json(), JSON_THROW_ON_ERROR));
+        $this->assertCount(7, $response->json('data.salesSeries'));
+        $tenant->run(function (): void {
+            $dashboardIndexes = DB::table('pg_indexes')
+                ->where('schemaname', DB::raw('current_schema()'))
+                ->whereIn('indexname', [
+                    'orders_created_at_id_index',
+                    'orders_status_completed_at_index',
+                    'products_status_index',
+                    'products_managed_active_inventory_index',
+                ])->pluck('indexname')->sort()->values()->all();
+            $this->assertSame([
+                'orders_created_at_id_index',
+                'orders_status_completed_at_index',
+                'products_managed_active_inventory_index',
+                'products_status_index',
+            ], $dashboardIndexes);
+        });
+    }
+
+    public function test_merchant_dashboard_uses_the_configured_business_day_boundary(): void
+    {
+        [$tenant, $owner, $domain] = $this->readyTenant('merchant-dashboard-timezone');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $productId = (string) $bootstrap['config']['products'][0]['id'];
+        $orderPayload = [
+            'workspaceRevision' => (int) $bootstrap['workspaceRevision'],
+            'catalogRevision' => (int) $bootstrap['catalogRevision'],
+            'lines' => [['productId' => $productId, 'quantity' => 1]],
+            'payment' => ['method' => 'cod'],
+            'customer' => ['name' => 'Boundary customer', 'phone' => '+967700000008'],
+            'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Boundary'],
+        ];
+
+        $previousBusinessDayOrder = $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", $orderPayload)
+            ->assertCreated()
+            ->json('data.order.id');
+
+        $currentBusinessDayOrder = $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", $orderPayload)
+            ->assertCreated()
+            ->json('data.order.id');
+
+        $tenant->run(function () use ($previousBusinessDayOrder, $currentBusinessDayOrder): void {
+            DB::statement('ALTER TABLE orders DISABLE TRIGGER orders_guarded_update');
+            try {
+                DB::table('orders')->where('id', $previousBusinessDayOrder)->update([
+                    'created_at' => CarbonImmutable::parse('2026-08-27T20:59:00Z'),
+                ]);
+                DB::table('orders')->where('id', $currentBusinessDayOrder)->update([
+                    'created_at' => CarbonImmutable::parse('2026-08-27T21:00:30Z'),
+                ]);
+            } finally {
+                DB::statement('ALTER TABLE orders ENABLE TRIGGER orders_guarded_update');
+            }
+        });
+
+        $this->travelTo(CarbonImmutable::parse('2026-08-27T21:01:00Z'));
+
+        Auth::forgetGuards();
+        $this->flushSession();
+        $response = $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->getJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/dashboard")
+            ->assertOk()
+            ->assertJsonPath('data.metrics.ordersToday', 1)
+            ->assertJsonPath('data.salesSeries.6.date', '2026-08-28');
+
+        $this->assertSame('2026-08-28T00:01:00+03:00', $response->json('data.generatedAt'));
+        $this->travelBack();
     }
 
     public function test_checkout_rejects_stale_quotes_client_totals_and_insufficient_stock_without_side_effects(): void
