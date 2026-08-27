@@ -46,7 +46,7 @@
 ## Pending delivery evidence
 
 - Authenticated merchant browser acceptance in the retained Pilot; the isolated browser has no merchant session and no credentials were entered.
-- Commit, pull request, required CI and protected `main` merge.
+- Protected `main` merge.
 
 ## Independent review
 
@@ -61,6 +61,14 @@
 - Confirmed the lifecycle-aware `qa:migrate-active-tenants` command succeeds idempotently for all three active tenants and correctly excludes three `not_started` records that do not own schemas yet.
 - Backend and web health checks: PASS; public Pilot HTTP check on `http://127.0.0.1:8010/`: 200.
 - Public browser smoke check: PASS; the platform landing page loaded after deployment with the expected Arabic navigation and onboarding content.
+
+## GitHub delivery
+
+- Implementation commit: `04b33d1e60373dc5d273f29b2cf63a5f66f221b4`.
+- CI-determinism follow-up: `7e6c8058b0e21314b329dbffcb89e4c55c6832f2`; an existing storefront test now waits for the accessible checkout heading instead of racing the animated cart drawer.
+- Pull request: [#68](https://github.com/sas-prog1/Eoshop/pull/68).
+- Required CI run `33037418893`: Repository safety PASS (14s), Frontend quality PASS (56s), Backend quality PASS (1m), Container integration PASS (5m 9s).
+- The first CI attempt identified the existing storefront timing race and correctly skipped integration; the isolated same-version local rerun and the follow-up GitHub run both passed all 57 files / 315 frontend tests.
 
 ## Rollback
 

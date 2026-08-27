@@ -4,7 +4,7 @@
 |---|---|
 | Phase | Phase 5 — Launch product completion |
 | Work Package | WP 5.22 |
-| Status | Implementation and final local gates complete; review and delivery in progress |
+| Status | Implementation, review, Pilot deployment and required PR checks complete; merge in progress |
 | Started | 2026-08-27 |
 | Branch | `codex/wp-5.22-merchant-launch-console` |
 | Base | Protected `main` at `f0ba6b88` |
@@ -73,7 +73,8 @@ Turn the existing route-owned store operations center into the merchant's truthf
 ### T5 — Delivery
 
 - [x] Obtain independent read-only approval with no remaining P0/P1/P2 findings.
-- [ ] Record final evidence, commit, PR, required CI and protected-branch merge.
+- [x] Record final evidence, commits, PR and required CI.
+- [ ] Merge through protected `main`.
 
 ## Acceptance criteria
 
