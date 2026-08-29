@@ -250,7 +250,12 @@ $env:QA_ADMIN_PASSWORD='<ephemeral-generated-value>'; .\scripts\qa\prepare-pilot
 
 ## 14. Commit / PR / CI / Merge
 
-لا ينطبق في T0: لم يُنشأ commit ولم يحدث push أو PR. الفرع محلي فقط، و`main` و`upstream` لم يتغيرا.
+رُفع تنفيذ WP 5.27.1 إلى المستودع الفرعي `AbdullahHajer/Eoshop` على الفرع `codex/wp5-27-1-public-storefront` فقط:
+
+- `ad22b5d` — `feat(storefront): complete server-authoritative purchase flow` لإغلاق T2.
+- `22c34c1` — `feat(storefront): complete elegant storefront experience` لإغلاق T3 وT4.
+
+لم يحدث push إلى `sas-prog1/Eoshop:main`، ولم يحدث Merge. يفتح T5 طلب سحب من فرع المستودع الفرعي إلى `sas-prog1/Eoshop:main` بعد إعادة البوابات على الرأس النهائي، ثم يتوقف بانتظار مراجعة المالك.
 
 ## 15. قرار T1
 
@@ -363,10 +368,10 @@ docker run --rm --network eoshop-wp5271-t0_app --env-file backend/.env `
 - لا توجد فجوة تحقق خادمية متبقية في نطاق T2؛ نجحت اختبارات العزل والسعر والطلب والمخزون المركزة.
 - زيادة bundle الحالية صغيرة لكنها ليست إغلاقًا لدين chunk الكبير؛ يعالج في T4 دون refactor واسع.
 
-### المتبقي لـT3 وT4
+### حالة T3 وT4 بعد التنفيذ
 
-- T3: إكمال Elegant بصريًا: `heroBannerHeight`، تباين hero، الهوية والألوان، header/footer، الصور وlazy loading، الحالات والـresponsive.
-- T4: فصل المكونات الضروري فقط، تحسين الصور والحزمة، الاختبارات الشاملة وDocker والبوابات الأربع، وتسجيل القياسات النهائية.
+- T3 مكتملة: طُبق `heroBannerHeight` وتباين Hero والهوية والألوان وheader/footer وتحسين الصور والحالات وRTL والاستجابة، ضمن Elegant الحالي.
+- T4 مكتملة: تم الفصل المحدود للمكونات، وتشغيل الاختبارات الشاملة وDocker والبوابات الأربع وتسجيل القياسات النهائية.
 - `DEFERRED-QA-VISUAL-RESPONSIVE-NETWORK`: الصور اليدوية الإضافية ولقطات الهاتف وسجل Network والمقارنات التفصيلية تبقى مؤجلة وفق القرار المعتمد.
 
 ## 17. إغلاق T3 وT4
@@ -406,6 +411,14 @@ docker run --rm --network eoshop-wp5271-t0_app --env-file backend/.env `
 - بقي `GET /api/store/config` و`POST /api/store/orders` وعقد revisions كما هما.
 - السعر وtenant والمخزون والطلب بقيت خادمية السلطة؛ تغييرات T3 عرضية ولا تضيف مصدر حقيقة في العميل.
 - بوابة التكامل أعادت اختبارات قاعدة البيانات الكاملة على PostgreSQL معزول: **171 اختبارًا / 1,918 assertion ناجحة**، وتشمل حدود tenants والطلبات وidempotency وrollback والمخزون.
+
+### حد إنجاز WP 5.27.1
+
+أنجزت هذه الحزمة **الأساس الوظيفي للمتجر العام** فوق renderer والعقود المشتركة، وأكملت تجربة **قالب Elegant الحالي** بما يكفي للرحلة العامة من العرض إلى الطلب. لا تدّعي الحزمة تنفيذ التصميم النهائي لقالبين مختلفين بصريًا وبنيويًا؛ قالب Elegant التحريري الفاخر وقالب Tech بنمط Bento هما مهمة لاحقة مستقلة فوق الأساس الحالي، حتى لا تتكرر السلة والمنتجات والطلبات أو تتفرع عقودها.
+
+### إعداد Checkout التشغيلي
+
+`ORDER_CHECKOUT_ENABLED` هو مفتاح تشغيل يجب ضبطه إلى `true` في بيئة الإطلاق التي ستسمح بإنشاء الطلبات العامة. تبقى قيمته الافتراضية الآمنة `false` في `backend/.env.example` و`backend/config/orders.php`، ولم تغير WP 5.27.1 هذه القيمة. تضبطه بيئة الاختبار إلى `true` صراحةً عبر `backend/phpunit.xml` حتى تختبر الرحلة الخادمية كاملة دون تغيير default الإنتاجي.
 
 ### أوامر ونتائج T4
 
