@@ -2,11 +2,11 @@
 
 | الحقل | القيمة |
 |---|---|
-| النقطة | T1 — Contracts and boundaries / T2 — Functional vertical slice |
-| الحالة | T2 complete — الرحلة الوظيفية واختبارات الواجهة وPHPUnit المركزة ناجحة؛ متوقف قبل T3 |
+| النقطة | T4 — Quality, integration and handoff evidence |
+| الحالة | T4 complete — البوابات الأربع ناجحة؛ متوقف قبل T5 لاعتماد المالك |
 | Baseline SHA | `1621417d74f324a4b570f3a7ffa5e27d96bc1c4d` |
 | الفرع | `codex/wp5-27-1-public-storefront` |
-| تاريخ التقييم | 2026-08-29 |
+| تاريخ التقييم | 2026-08-30 |
 
 تحقق T0 بعد `git fetch upstream`: كل من `main` و`origin/main` و`upstream/main` عند SHA أعلاه. الفرع الحالي هو `codex/wp5-27-1-public-storefront`، وكانت الحالة عند آخر تحقق:
 
@@ -83,7 +83,7 @@ Host غير مركزي
 - يعرض `StorefrontHome` الأقسام الخمسة المملوكة للخادم بالترتيب المحفوظ: `hero`, `trust`, `categories`, `featured_products`, `about`، ويحذف draft/archived ولا يخترع منتجات أو وعود خدمة.
 - توجد رؤوس وتنقلات منفصلة للقالبين، قائمة منتجات، صفحات عن المتجر والتواصل والمنتج، تذييل، وسلة قابلة للوصول مع تنقل جوال ثابت.
 
-### بعد — مقترح، لم يبدأ تنفيذه
+### بعد — منفذ في T3/T4
 
 - واجهة أساسية فاخرة متماسكة بصريًا تحترم إعدادات الهوية المحفوظة فعليًا عبر الصفحة الرئيسية والهيدر والبطاقات والتذييل.
 - hero آمن التباين في كامل مجال التعتيم المسموح، ويطبق ارتفاع الواجهة المحفوظ.
@@ -368,3 +368,110 @@ docker run --rm --network eoshop-wp5271-t0_app --env-file backend/.env `
 - T3: إكمال Elegant بصريًا: `heroBannerHeight`، تباين hero، الهوية والألوان، header/footer، الصور وlazy loading، الحالات والـresponsive.
 - T4: فصل المكونات الضروري فقط، تحسين الصور والحزمة، الاختبارات الشاملة وDocker والبوابات الأربع، وتسجيل القياسات النهائية.
 - `DEFERRED-QA-VISUAL-RESPONSIVE-NETWORK`: الصور اليدوية الإضافية ولقطات الهاتف وسجل Network والمقارنات التفصيلية تبقى مؤجلة وفق القرار المعتمد.
+
+## 17. إغلاق T3 وT4
+
+### الصفحات والتنقلات المكتملة
+
+- الصفحة الرئيسية بالقالب `elegant`: إعلان المتجر، header، بحث فعلي، تنقل، Hero، معلومات الخدمة، التصنيفات، المنتجات المنشورة، نبذة المتجر والتذييل.
+- البحث ينقل إلى صفحة المنتجات ويطبق الاستعلام نفسه، مع إجراء واضح لمسحه وإعادة ضبط عوامل التصفية.
+- بطاقة المنتج تفتح التفاصيل وتضيف للسلة فعليًا، وتمنع الإضافة عند نفاد المخزون.
+- تفاصيل المنتج تعرض الصور والوصف والسعر العام والتوفر وحد الكمية، ثم تضيف الكمية المسموحة إلى السلة.
+- السلة تسمح بالزيادة والنقصان ضمن الحد العام، ثم تنتقل إلى checkout وتعيد التركيز إلى عنوانه.
+- checkout يعرض وسائل الدفع المنشورة فقط، يرسل طلبًا خادميًا، ثم يعرض صفحة نجاح وإيصالًا خادميًا مع الطباعة وWhatsApp عندما يكون الهدف صالحًا.
+- صفحات «عن المتجر» و«التواصل» والتذييل تعرض بيانات التاجر المحفوظة فقط، وروابط الهاتف والبريد وWhatsApp والحسابات الصالحة دون وجهات وهمية.
+- بقيت حالات loading، الخطأ مع retry، المتجر غير المنشور/النطاق غير الصالح، الكتالوج الفارغ والمنتج المختفي صريحة وغير فارغة.
+- أضيف `dir=rtl` إلى renderer، وبقيت شبكة البطاقات والتنقل السفلي والسلة متجاوبة مع الشاشات الصغيرة والحواف الآمنة.
+
+### الفصل المحدود والمحرك المشترك
+
+استُخرجت المكونات التالية دون إعادة كتابة `StorePreview`:
+
+- `StorefrontHero.tsx`: يطبق `heroBannerHeight` فعليًا للأنماط `compact/medium/large`، ويحافظ على طبقة تباين واقية مستقلة حتى عندما يحفظ التاجر opacity بقيمة صفر.
+- `StorefrontProductCard.tsx`: بطاقة واحدة مشتركة بين الرئيسية وقائمة المنتجات، مع عقد فتح/إضافة واحد وحالة مخزون وصور محسنة.
+- `StorefrontFooter.tsx`: تنقل فعلي ومعلومات اتصال وروابط اجتماعية محققة وplatform attribution.
+
+يبقى `StorePreview` renderer الجامع نفسه في وضعي `live` و`preview`، وتستخدم المكونات الجديدة `StoreConfig` و`Product` ومعالجات السلة والتنقل الحالية. لم يُنشأ renderer أو عقد أو مسار خاص للواجهة العامة، ولم يبدأ القالب الثاني.
+
+### الهوية والصور والوصول
+
+- طُبقت `bgColor`, `cardBgColor`, `borderColor`, `textColor`, `primaryColor` و`secondaryColor` على الأسطح الرئيسية والمنتجات والتفاصيل وصفحتي المعلومات والتواصل والسلة والتذييل مع تصحيح تباين الألوان المحفوظة.
+- Hero الحرج يستخدم `loading=eager`, `fetchPriority=high`, `decoding=async` و`sizes=100vw`؛ صور المنتجات والنبذة والمصغرات غير الحرجة تستخدم lazy loading وdecoding و`sizes` مناسبة.
+- أزيلت الزخارف النصية من إجراءات Elegant التي لها أيقونة فعلية، ولم تُترك أزرار جديدة بلا handler.
+- بقي trap التركيز في السلة، استعادته عند الإغلاق، رابط التخطي، semantics للـnavigation/radio، وحالة `prefers-reduced-motion` مغطاة بالاختبارات.
+
+### أثر Backend وAPI وقاعدة البيانات والعزل
+
+- لا Migration أو dependency أو تغيير API أو schema أو كود Backend إنتاجي في T3/T4.
+- بقي `GET /api/store/config` و`POST /api/store/orders` وعقد revisions كما هما.
+- السعر وtenant والمخزون والطلب بقيت خادمية السلطة؛ تغييرات T3 عرضية ولا تضيف مصدر حقيقة في العميل.
+- بوابة التكامل أعادت اختبارات قاعدة البيانات الكاملة على PostgreSQL معزول: **171 اختبارًا / 1,918 assertion ناجحة**، وتشمل حدود tenants والطلبات وidempotency وrollback والمخزون.
+
+### أوامر ونتائج T4
+
+Frontend quality:
+
+```powershell
+npm.cmd run check
+npm.cmd run audit
+```
+
+- `tsc --noEmit`: **PASS**.
+- Vitest: **66 ملفًا / 344 اختبارًا ناجحًا** في 198.06 ثانية.
+- Vite production build: **PASS**؛ 2,163 module في 25.25 ثانية.
+- npm audit: **0 vulnerabilities**.
+
+Backend quality داخل `eoshop/backend-quality:t2`، وهو مطابق لكود Backend الحالي الذي لم يتغير بعد T2:
+
+```powershell
+docker run --rm eoshop/backend-quality:t2 sh -lc "composer validate --strict --no-check-publish && composer audit --locked && composer check"
+```
+
+- Composer validate: **PASS**، وComposer audit: لا تنبيهات.
+- Pint: **295 ملفًا ناجحًا**.
+- Larastan: **255/255 بلا أخطاء**.
+- PHPUnit ضمن `composer check`: **3 اختبارات / 6 assertions ناجحة**.
+
+بوابة المستودع:
+
+```powershell
+.\scripts\ci\repository-gate.ps1
+```
+
+النتيجة: **Repository gate passed**. استُخدم `DOCKER_CONFIG` المحلي الذي يحتوي إضافة Docker Compose؛ لم يتغير سكربت CI.
+
+Container integration:
+
+```powershell
+.\scripts\ci\integration-gate.ps1 -ProjectName 'eoshop-wp5271-t4' -Port 18271
+```
+
+النتيجة: **Container integration gate passed** بعد بناء `eoshop/backend:ci` و`eoshop/web:ci`، migrations نظيفة، اختبارات قاعدة البيانات، migration/rollback guards، HTTP/session/publication smoke، وتشغيل worker/scheduler. حُذفت حاويات وشبكة وvolumes المشروع المعزول تلقائيًا في النهاية.
+
+### البوابات الأربع
+
+| البوابة | النتيجة |
+|---|---|
+| Repository safety | PASS |
+| Frontend quality + audit | PASS |
+| Backend quality | PASS |
+| Container integration | PASS |
+
+`git diff --check`: **PASS** دون أخطاء whitespace.
+
+### حجم Build قبل وبعد T3
+
+| الأصل | قبل T3 (T2) | بعد T3/T4 | الفرق |
+|---|---:|---:|---:|
+| JavaScript | `984,016` بايت | `993,081` بايت | `+9,065` بايت (`+0.92%`) |
+| CSS | `123,007` بايت | `124,816` بايت | `+1,809` بايت (`+1.47%`) |
+| الصورة الثابتة | `819,418` بايت | `819,418` بايت | دون تغيير |
+
+القياس المحلي بعد T3: JS gzip `261.97 kB` وCSS gzip `18.65 kB`. بناء Web داخل Docker أكد JS `993.08 kB` gzip `261.97 kB` وCSS `124.66 kB` gzip `18.61 kB`. يبقى تحذير chunk الأكبر من `500 kB` دين أداء سابقًا، ولا يُعالج هنا بإعادة تقسيم شاملة خارج النطاق.
+
+### التراجع والمؤجل
+
+- التراجع: revert لالتزام T3/T4 أو إعادة نشر صورة Web السابقة؛ لا rollback قاعدة بيانات لأن الحزمة لم تضف Migration.
+- `DEFERRED-QA-VISUAL-RESPONSIVE-NETWORK`: لقطات الهاتف وقياسات Network والمقارنة البصرية اليدوية ما زالت مؤجلة حسب الاعتماد ولا تمنع T4.
+- code splitting واسع، القالب الثاني، وإعادة بناء checkout أو `StorePreview` مؤجلة؛ لا توجد مشكلة API أو عزل أو dependency كبيرة ظهرت.
+- يتوقف العمل بعد هذا التقرير ولا يبدأ T5 قبل اعتماد المالك.

@@ -57,7 +57,7 @@ describe("tenant storefront order orchestration", () => {
 
     render(<UiAdaptersProvider adapters={adapters}><App /></UiAdaptersProvider>);
 
-    expect(await screen.findByText("Live Server Store")).toBeTruthy();
+    expect((await screen.findAllByText("Live Server Store")).length).toBeGreaterThan(0);
     expect(loadStorefront).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("heading", { name: "تعذر تحميل المتجر" })).toBeNull();
   });
@@ -77,7 +77,7 @@ describe("tenant storefront order orchestration", () => {
     expect(await screen.findByText(/لا يوجد متجر منشور لهذا العنوان/)).toBeTruthy();
     expect(loadStorefront).toHaveBeenCalledOnce();
     await user.click(screen.getByRole("button", { name: "إعادة المحاولة" }));
-    expect(await screen.findByText("Live Server Store")).toBeTruthy();
+    expect((await screen.findAllByText("Live Server Store")).length).toBeGreaterThan(0);
     expect(loadStorefront).toHaveBeenCalledTimes(2);
   });
 
@@ -97,7 +97,7 @@ describe("tenant storefront order orchestration", () => {
     const user = userEvent.setup();
     render(<UiAdaptersProvider adapters={adapters}><App /></UiAdaptersProvider>);
 
-    expect(await screen.findByText("Live Server Store")).toBeTruthy();
+    expect((await screen.findAllByText("Live Server Store")).length).toBeGreaterThan(0);
     expect(loadStorefront).toHaveBeenCalledTimes(1);
     await user.click(screen.getAllByTitle("أضف للسلة")[0]);
     const cartButton = screen.getAllByRole("button").find((button) => button.textContent?.includes("السلة"));
