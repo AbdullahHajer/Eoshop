@@ -5,6 +5,7 @@ import { storefrontSectionsOrDefault } from "../contracts/storefrontSections";
 import ProductArt from "./ProductArt";
 import { canonicalContactTarget } from "../contracts/checkoutPolicy";
 import { readableAccent, readableForeground } from "../utils/readableForeground";
+import { storefrontAvailableQuantity } from "../workflows/orderState";
 
 interface Props {
   config: StoreConfig;
@@ -111,7 +112,37 @@ export default function StorefrontHome({
     featured_products: (
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-3"><div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>المنتجات المنشورة</h2><p className="mt-1 text-xs text-slate-500">منتجات من كتالوج المتجر الحالي.</p></div>{products.length > 0 && <button type="button" onClick={onOpenProducts} className="text-xs font-black" style={{ color: primaryPageAccent }}>عرض الكل</button>}</div>
-        {products.length > 0 ? <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">{products.slice(0, 8).map((product) => <article key={product.id} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white"><button type="button" aria-label={`فتح تفاصيل ${product.name}`} onClick={() => onOpenProduct(product)} className="block aspect-square w-full bg-slate-50 p-3"><ProductArt keyword={product.imageKeyword} primaryColor={primaryColor} imageUrl={product.imageUrl} /></button><div className="space-y-2 p-3"><p className="line-clamp-2 break-words text-right text-xs font-black text-slate-900">{product.name}</p><div className="flex flex-wrap items-center justify-between gap-2"><span className="break-all text-xs font-black" style={{ color: primaryCardAccent }}>{product.price} {config.currency}</span><button type="button" title="أضف للسلة" aria-label={`إضافة ${product.name} إلى السلة`} onClick={() => onAddProduct(product)} className="min-h-11 rounded-lg px-3 py-2 text-[10px] font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>إضافة</button></div></div></article>)}</div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم ينشر المتجر منتجات بعد.</div>}
+        {products.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
+            {products.slice(0, 8).map((product) => {
+              const outOfStock = storefrontAvailableQuantity(product) === 0;
+              return (
+                <article key={product.id} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <button type="button" aria-label={`فتح تفاصيل ${product.name}`} onClick={() => onOpenProduct(product)} className="block aspect-square w-full bg-slate-50 p-3">
+                    <ProductArt keyword={product.imageKeyword} primaryColor={primaryColor} imageUrl={product.imageUrl} />
+                  </button>
+                  <div className="space-y-2 p-3">
+                    <p className="line-clamp-2 break-words text-right text-xs font-black text-slate-900">{product.name}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="break-all text-xs font-black" style={{ color: primaryCardAccent }}>{product.price} {config.currency}</span>
+                      <button
+                        type="button"
+                        disabled={outOfStock}
+                        title={outOfStock ? "غير متوفر حاليًا" : "أضف للسلة"}
+                        aria-label={`إضافة ${product.name} إلى السلة`}
+                        onClick={() => onAddProduct(product)}
+                        className="min-h-11 rounded-lg px-3 py-2 text-[10px] font-black disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ backgroundColor: primaryColor, color: primaryForeground }}
+                      >
+                        {outOfStock ? "غير متوفر" : "إضافة"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم ينشر المتجر منتجات بعد.</div>}
       </section>
     ),
     about: (

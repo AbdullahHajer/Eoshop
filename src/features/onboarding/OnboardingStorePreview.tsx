@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Monitor, Smartphone } from "lucide-react";
 import StorePreview from "../../components/StorePreview";
 import type { Product, StoreConfig } from "../../types";
+import { addProductToCart, changeCartLineQuantity } from "../../workflows/orderState";
 
 interface OnboardingStorePreviewProps {
   config: StoreConfig;
@@ -14,20 +15,14 @@ export default function OnboardingStorePreview({ config, compact = false }: Onbo
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("الكل");
 
-  const addToCart = (product: Product) => {
-    setCart((current) => {
-      const existing = current.find((item) => item.product.id === product.id);
-      return existing
-        ? current.map((item) => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
-        : [...current, { product, quantity: 1 }];
-    });
-    setDrawerOpen(true);
+  const addToCart = (product: Product, quantity = 1) => {
+    const mutation = addProductToCart(cart, product, quantity);
+    setCart((current) => addProductToCart(current, product, quantity).items);
+    if (mutation.acceptedQuantity > 0) setDrawerOpen(true);
   };
 
   const updateQuantity = (productId: string, amount: number) => {
-    setCart((current) => current
-      .map((item) => item.product.id === productId ? { ...item, quantity: item.quantity + amount } : item)
-      .filter((item) => item.quantity > 0));
+    setCart((current) => changeCartLineQuantity(current, productId, amount).items);
   };
 
   return (
@@ -64,4 +59,3 @@ export default function OnboardingStorePreview({ config, compact = false }: Onbo
     </div>
   );
 }
-

@@ -14,11 +14,12 @@ import StorefrontProductDetail from "./StorefrontProductDetail";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import { readableAccent, readableForeground } from "../utils/readableForeground";
+import { storefrontAvailableQuantity, storefrontCartLineLimit } from "../workflows/orderState";
 
 interface StorePreviewProps {
   config: StoreConfig;
   cart: { product: Product; quantity: number }[];
-  addToCart: (product: Product) => void;
+  addToCart: (product: Product, quantity?: number) => void;
   updateQuantity: (productId: string, amount: number) => void;
   calculateTotal: () => void; // not used as we can calculate locally
   isCartDrawerOpen: boolean;
@@ -273,15 +274,16 @@ export default function StorePreview({
     setActiveImageIndex(0);
     setStorePage("product");
     const container = document.getElementById("store-preview-scroll-container");
-    if (container) {
+    if (container && typeof container.scrollTo === "function") {
       container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
     }
   };
 
   const handleAddToCartWithQty = (product: Product, qty: number) => {
-    for (let i = 0; i < qty; i++) {
-      addToCart(product);
-    }
+    const available = storefrontCartLineLimit(product);
+    const currentQuantity = cart.find((item) => item.product.id === product.id)?.quantity ?? 0;
+    if (currentQuantity >= available) return;
+    addToCart(product, qty);
     setAddedSuccess(true);
     setTimeout(() => setAddedSuccess(false), 3000);
   };
@@ -308,7 +310,9 @@ export default function StorePreview({
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const publishedProducts = config.products.filter((product) => product.status !== "archived" && product.status !== "draft");
-  const detailProduct = publishedProducts.find((product) => product.id === selectedProduct?.id) ?? publishedProducts[0] ?? null;
+  const detailProduct = selectedProduct
+    ? publishedProducts.find((product) => product.id === selectedProduct.id) ?? null
+    : publishedProducts[0] ?? null;
 
   // Categories list
   const categories = ["الكل"];
@@ -795,7 +799,9 @@ export default function StorePreview({
               </div>
             ) : (
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                {displayedProducts.map((p) => (
+                {displayedProducts.map((p) => {
+                  const outOfStock = storefrontAvailableQuantity(p) === 0;
+                  return (
                   <motion.div
                     key={p.id}
                     layoutId={prefersReducedMotion ? undefined : p.id}
@@ -816,11 +822,11 @@ export default function StorePreview({
                       className="aspect-square w-full p-3 sm:p-4 flex items-center justify-center cursor-pointer relative bg-slate-50/60 hover:bg-sky-50/40 transition"
                     >
                       <ProductArt keyword={p.imageKeyword} primaryColor={primaryColor} imageUrl={p.imageUrl} />
-                      <span className={`absolute top-2 right-2 text-[9px] px-2 py-0.5 rounded-full font-bold truncate max-w-[85%] ${
+                      {p.category && <span className={`absolute top-2 right-2 text-[9px] px-2 py-0.5 rounded-full font-bold truncate max-w-[85%] ${
                         !isElegant ? "bg-sky-100 text-sky-800 border border-sky-300/80" : "bg-black/60 text-white backdrop-blur"
                       }`}>
                         {p.category}
-                      </span>
+                      </span>}
                     </button>
 
                     <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between text-right space-y-2.5">
@@ -846,20 +852,22 @@ export default function StorePreview({
                         </span>
                         <button
                           type="button"
+                          disabled={outOfStock}
                           onClick={() => addToCart(p)}
                           aria-label={`إضافة ${p.name} إلى السلة`}
-                          className={`p-1.5 rounded-lg text-white font-bold text-xs transition flex items-center justify-center shrink-0 hover:opacity-90 ${
+                          className={`p-1.5 rounded-lg text-white font-bold text-xs transition flex items-center justify-center shrink-0 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
                             !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 shadow-xs hover:shadow-md" : ""
                           }`}
                           style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
-                          title="أضف للسلة"
+                          title={outOfStock ? "غير متوفر حاليًا" : "أضف للسلة"}
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -920,9 +928,18 @@ export default function StorePreview({
             config={config}
             primaryColor={primaryColor}
             secondaryColor={secondaryColor}
+            cartQuantity={cart.find((item) => item.product.id === detailProduct.id)?.quantity ?? 0}
             onBack={() => setStorePage("products")}
             onAdd={handleAddToCartWithQty}
           />
+        )}
+        {storePage === "product" && !detailProduct && (
+          <section className="mx-auto my-10 max-w-lg rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center" role="status">
+            <ShoppingBag className="mx-auto h-10 w-10 text-slate-400" />
+            <h1 className="mt-4 text-lg font-black text-slate-900">المنتج غير متاح</h1>
+            <p className="mt-2 text-sm leading-7 text-slate-600">قد يكون المنتج أُلغي نشره أو لم يعد موجودًا في هذا المتجر.</p>
+            <button type="button" onClick={() => setStorePage("products")} className="mt-5 min-h-11 rounded-xl px-5 py-3 text-xs font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>العودة إلى المنتجات</button>
+          </section>
         )}
         {/* 6. CHECKOUT PAGE (صفحة إتمام الطلب وتعبئة البيانات والدفع) */}
         {storePage === "checkout" && (() => {
@@ -1926,7 +1943,9 @@ export default function StorePreview({
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {cart.map((item) => (
+                    {cart.map((item) => {
+                      const atStockLimit = item.quantity >= storefrontCartLineLimit(item.product);
+                      return (
                       <div 
                         key={item.product.id}
                         className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
@@ -1957,9 +1976,11 @@ export default function StorePreview({
                              style={{ borderColor: isElegant ? "#f2eae1" : "#cbd5e1" }}>
                           <button 
                             type="button"
+                            disabled={atStockLimit}
                             onClick={() => updateQuantity(item.product.id, 1)}
                             aria-label={`زيادة كمية ${item.product.name}`}
-                            className="p-1 hover:text-sky-600"
+                            className="p-1 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            title={atStockLimit ? "وصلت إلى الكمية المتاحة" : undefined}
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -1974,7 +1995,8 @@ export default function StorePreview({
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

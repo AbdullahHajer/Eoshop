@@ -56,7 +56,11 @@ import {
   type WorkspaceConflictReviewState,
   type WorkspaceConflictState,
 } from "./workflows/merchantWorkspaceState";
-import { reconcileCartWithStorefront } from "./workflows/orderState";
+import {
+  addProductToCart,
+  changeCartLineQuantity,
+  reconcileCartWithStorefront,
+} from "./workflows/orderState";
 import { usePlatformSettings } from "./adapters/PlatformSettingsContext";
 import AuthRoutePage from "./features/auth/AuthRoutePage";
 import AccountPage from "./features/account/AccountPage";
@@ -923,31 +927,32 @@ export default function App() {
   };
 
   // Helper inside the preview store
-  const addToCart = (product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-    triggerToast(`تمت إضافة "${product.name}" إلى السلة 🛒`, "success");
+  const addToCart = (product: Product, quantity = 1) => {
+    const mutation = addProductToCart(cart, product, quantity);
+    setCart((current) => addProductToCart(current, product, quantity).items);
+
+    if (mutation.acceptedQuantity > 0) {
+      triggerToast(
+        mutation.reason === "stock_limit"
+          ? `أضيفت الكمية المتاحة فقط من "${product.name}".`
+          : `تمت إضافة "${product.name}" إلى السلة.`,
+        "success",
+      );
+      return;
+    }
+
+    triggerToast(
+      mutation.reason === "not_sellable"
+        ? "هذا المنتج غير منشور ولا يمكن إضافته إلى السلة."
+        : mutation.reason === "out_of_stock"
+          ? "هذا المنتج غير متوفر حاليًا."
+          : "وصلت الكمية في السلة إلى الحد المتاح.",
+      "error",
+    );
   };
 
   const updateQuantity = (productId: string, amount: number) => {
-    setCart((prev) => {
-      return prev
-        .map((item) => {
-          if (item.product.id === productId) {
-            const newQty = item.quantity + amount;
-            return { ...item, quantity: newQty };
-          }
-          return item;
-        })
-        .filter((item) => item.quantity > 0);
-    });
+    setCart((current) => changeCartLineQuantity(current, productId, amount).items);
   };
 
   // Store customization edits

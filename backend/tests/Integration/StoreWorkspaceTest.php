@@ -399,6 +399,31 @@ class StoreWorkspaceTest extends TestCase
         });
     }
 
+    public function test_public_checkout_rejects_a_product_owned_by_another_tenant_without_leaking_it(): void
+    {
+        [$tenant, , $domain] = $this->readyTenant('order-product-isolation');
+        [$foreignTenant, , $foreignDomain] = $this->readyTenant('order-product-foreign');
+        $bootstrap = $this->getJson("http://{$domain}/api/store/config")->assertOk()->json('data');
+        $foreignProductId = $this->getJson("http://{$foreignDomain}/api/store/config")
+            ->assertOk()
+            ->json('data.config.products.0.id');
+
+        $this->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("http://{$domain}/api/store/orders", [
+                'workspaceRevision' => (int) $bootstrap['workspaceRevision'],
+                'catalogRevision' => (int) $bootstrap['catalogRevision'],
+                'lines' => [['productId' => $foreignProductId, 'quantity' => 1]],
+                'payment' => ['method' => 'cod'],
+                'customer' => ['name' => 'Isolation Customer', 'phone' => '+967700000003'],
+                'address' => ['city' => 'Sanaa', 'area' => 'Center', 'details' => 'Isolation gate'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'order_product_unavailable');
+
+        $tenant->run(fn () => $this->assertSame(0, DB::table('orders')->count()));
+        $foreignTenant->run(fn () => $this->assertSame(0, DB::table('orders')->count()));
+    }
+
     public function test_public_checkout_prices_reserves_replays_and_merchant_accepts_atomically(): void
     {
         [$tenant, $owner, $domain] = $this->readyTenant('order-checkout');
