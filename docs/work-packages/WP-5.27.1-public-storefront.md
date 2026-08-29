@@ -2,8 +2,8 @@
 
 | الحقل | القيمة |
 |---|---|
-| النقطة | T4 — Quality, integration and handoff evidence |
-| الحالة | T4 complete — البوابات الأربع ناجحة؛ متوقف قبل T5 لاعتماد المالك |
+| النقطة | T5 — Documentation closeout and draft PR |
+| الحالة | T5 complete — فُتح PR #82 كمسودة؛ العمل متوقف قبل الدمج بانتظار CI ومراجعة المالك |
 | Baseline SHA | `1621417d74f324a4b570f3a7ffa5e27d96bc1c4d` |
 | الفرع | `codex/wp5-27-1-public-storefront` |
 | تاريخ التقييم | 2026-08-30 |
@@ -254,8 +254,9 @@ $env:QA_ADMIN_PASSWORD='<ephemeral-generated-value>'; .\scripts\qa\prepare-pilot
 
 - `ad22b5d` — `feat(storefront): complete server-authoritative purchase flow` لإغلاق T2.
 - `22c34c1` — `feat(storefront): complete elegant storefront experience` لإغلاق T3 وT4.
+- `9ae75be` — `docs(storefront): close WP 5.27.1` لإغلاق توثيق T5 وإعادة توثيق نتائج البوابات الأربع.
 
-لم يحدث push إلى `sas-prog1/Eoshop:main`، ولم يحدث Merge. يفتح T5 طلب سحب من فرع المستودع الفرعي إلى `sas-prog1/Eoshop:main` بعد إعادة البوابات على الرأس النهائي، ثم يتوقف بانتظار مراجعة المالك.
+فُتح [PR #82 — WP 5.27.1: public storefront foundation](https://github.com/sas-prog1/Eoshop/pull/82) كمسودة من `AbdullahHajer/Eoshop:codex/wp5-27-1-public-storefront` إلى `sas-prog1/Eoshop:main`، وبدأت فحوص GitHub CI. لم يحدث push مباشر إلى `sas-prog1/Eoshop:main` ولم يحدث Merge؛ اكتملت T5 والعمل متوقف قبل الدمج بانتظار نجاح CI ومراجعة المالك.
 
 ## 15. قرار T1
 
@@ -487,4 +488,4 @@ Container integration:
 - التراجع: revert لالتزام T3/T4 أو إعادة نشر صورة Web السابقة؛ لا rollback قاعدة بيانات لأن الحزمة لم تضف Migration.
 - `DEFERRED-QA-VISUAL-RESPONSIVE-NETWORK`: لقطات الهاتف وقياسات Network والمقارنة البصرية اليدوية ما زالت مؤجلة حسب الاعتماد ولا تمنع T4.
 - code splitting واسع، القالب الثاني، وإعادة بناء checkout أو `StorePreview` مؤجلة؛ لا توجد مشكلة API أو عزل أو dependency كبيرة ظهرت.
-- يتوقف العمل بعد هذا التقرير ولا يبدأ T5 قبل اعتماد المالك.
+- اكتملت T5، وفُتح PR #82 كمسودة، والعمل متوقف قبل الدمج بانتظار نتائج CI ومراجعة المالك.
