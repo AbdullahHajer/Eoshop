@@ -11,14 +11,17 @@ import type { CreateOrderInput, OrderReceipt } from "../adapters/uiAdapters";
 import ProductArt from "./ProductArt";
 import StorefrontHome from "./StorefrontHome";
 import StorefrontProductDetail from "./StorefrontProductDetail";
+import StorefrontProductCard from "./StorefrontProductCard";
+import StorefrontFooter from "./StorefrontFooter";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import { readableAccent, readableForeground } from "../utils/readableForeground";
+import { storefrontAvailableQuantity, storefrontCartLineLimit } from "../workflows/orderState";
 
 interface StorePreviewProps {
   config: StoreConfig;
   cart: { product: Product; quantity: number }[];
-  addToCart: (product: Product) => void;
+  addToCart: (product: Product, quantity?: number) => void;
   updateQuantity: (productId: string, amount: number) => void;
   calculateTotal: () => void; // not used as we can calculate locally
   isCartDrawerOpen: boolean;
@@ -273,15 +276,16 @@ export default function StorePreview({
     setActiveImageIndex(0);
     setStorePage("product");
     const container = document.getElementById("store-preview-scroll-container");
-    if (container) {
+    if (container && typeof container.scrollTo === "function") {
       container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
     }
   };
 
   const handleAddToCartWithQty = (product: Product, qty: number) => {
-    for (let i = 0; i < qty; i++) {
-      addToCart(product);
-    }
+    const available = storefrontCartLineLimit(product);
+    const currentQuantity = cart.find((item) => item.product.id === product.id)?.quantity ?? 0;
+    if (currentQuantity >= available) return;
+    addToCart(product, qty);
     setAddedSuccess(true);
     setTimeout(() => setAddedSuccess(false), 3000);
   };
@@ -308,7 +312,9 @@ export default function StorePreview({
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const publishedProducts = config.products.filter((product) => product.status !== "archived" && product.status !== "draft");
-  const detailProduct = publishedProducts.find((product) => product.id === selectedProduct?.id) ?? publishedProducts[0] ?? null;
+  const detailProduct = selectedProduct
+    ? publishedProducts.find((product) => product.id === selectedProduct.id) ?? null
+    : publishedProducts[0] ?? null;
 
   // Categories list
   const categories = ["الكل"];
@@ -330,6 +336,7 @@ export default function StorePreview({
   return (
     <div 
       id="store-preview-scroll-container"
+      dir="rtl"
       className="w-full h-full flex flex-col relative overflow-y-auto pb-24 lg:pb-6"
       style={{ 
         fontFamily: getFontFamilyStyle(config.fontFamily),
@@ -579,6 +586,9 @@ export default function StorePreview({
                 <img 
                   src={config.logoUrl} 
                   alt={config.storeName} 
+                  loading="eager"
+                  decoding="async"
+                  sizes="220px"
                   style={{ height: `${config.logoSize || 42}px` }} 
                   className="w-auto max-w-[150px] sm:max-w-[220px] object-contain shrink-0 transition group-hover:scale-105 filter drop-shadow-xs"
                   referrerPolicy="no-referrer" 
@@ -629,16 +639,34 @@ export default function StorePreview({
             </div>
           </div>
 
+          <div className="relative order-3 w-full md:order-none md:max-w-xs lg:max-w-[220px]">
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              aria-label="البحث في منتجات المتجر"
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                if (event.target.value.trim()) setStorePage("products");
+              }}
+              placeholder="ابحث في المنتجات"
+              className="min-h-11 w-full rounded-xl border py-2 pe-9 ps-9 text-xs font-bold outline-none transition focus:ring-2"
+              style={{ backgroundColor: bgColor, borderColor, color: effectiveTextColor, outlineColor: primaryColor }}
+            />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery("")} aria-label="مسح البحث" className="absolute left-2 top-1/2 min-h-8 min-w-8 -translate-y-1/2 rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>}
+          </div>
+
           {/* Center Page Navigation Bar (Desktop Only) */}
           <nav aria-label="التنقل الرئيسي في المتجر" className="hidden lg:flex items-center justify-center gap-1 p-1 rounded-xl self-center border bg-slate-400/10"
-               style={{ borderColor: "#f2eae1" }}>
+               style={{ borderColor }}>
             {[
-              { id: "home", label: "الرئيسية", icon: "🏠" },
-              { id: "products", label: "كتالوج المنتجات", icon: "🛍️" },
-              { id: "about", label: "عن المتجر", icon: "📖" },
-              { id: "contact", label: "التواصل", icon: "📞" }
+              { id: "home", label: "الرئيسية", icon: Home },
+              { id: "products", label: "المنتجات", icon: ShoppingBag },
+              { id: "about", label: "عن المتجر", icon: Info },
+              { id: "contact", label: "التواصل", icon: Phone }
             ].map((nav) => {
               const isActive = storePage === nav.id;
+              const IconComp = nav.icon;
               return (
                 <button
                   key={nav.id}
@@ -654,7 +682,7 @@ export default function StorePreview({
                     color: isActive ? primaryForeground : secondaryOnCard
                   }}
                 >
-                  <span>{nav.icon}</span>
+                  <IconComp className="h-3.5 w-3.5" />
                   <span>{nav.label}</span>
                 </button>
               );
@@ -721,7 +749,7 @@ export default function StorePreview({
         {storePage === "products" && (
           <div className="max-w-7xl mx-auto px-4 py-8 space-y-6 animate-fadeIn pb-12">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4"
-                 style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
+                 style={{ borderColor }}>
               <div className="text-right">
                 <h2 data-storefront-products-heading className={`font-black text-xl ${!isElegant ? "text-slate-900" : ""}`} style={{ color: isElegant ? secondaryOnPage : undefined }}>
                   معرض جميع المنتجات المعروضة
@@ -741,9 +769,9 @@ export default function StorePreview({
                     !isElegant ? "bg-white border-slate-300 focus:border-sky-500 text-slate-900 shadow-xs" : ""
                   }`}
                   style={{ 
-                    backgroundColor: isElegant ? "#ffffff" : undefined,
-                    borderColor: isElegant ? "#e5d5c5" : undefined,
-                    color: isElegant ? "#1c1917" : undefined
+                    backgroundColor: isElegant ? cardBgColor : undefined,
+                    borderColor: isElegant ? borderColor : undefined,
+                    color: isElegant ? secondaryOnCard : undefined
                   }}
                 />
                 <Search className="w-4 h-4 absolute right-3 top-2.5 text-slate-400" />
@@ -783,7 +811,7 @@ export default function StorePreview({
 
             {/* Products Grid */}
             {displayedProducts.length === 0 ? (
-              <div className="text-center py-16 bg-white/80 rounded-2xl border border-dashed border-slate-300">
+              <div className="rounded-2xl border border-dashed py-16 text-center" style={{ backgroundColor: cardBgColor, borderColor }}>
                 <ShoppingBag className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-60" />
                 <p className="text-sm font-semibold text-slate-500">لا توجد منتجات تطابق خياراتك حالياً</p>
                 <button 
@@ -795,71 +823,7 @@ export default function StorePreview({
               </div>
             ) : (
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                {displayedProducts.map((p) => (
-                  <motion.div
-                    key={p.id}
-                    layoutId={prefersReducedMotion ? undefined : p.id}
-                    data-storefront-product-card
-                    data-reduced-motion={prefersReducedMotion ? "true" : undefined}
-                    className={`rounded-2xl border flex flex-col justify-between overflow-hidden group transition ${
-                      !isElegant ? "bg-white border-slate-200 hover:border-sky-400 hover:shadow-lg" : "hover:shadow-md"
-                    }`}
-                    style={{ 
-                      backgroundColor: isElegant ? "#ffffff" : undefined,
-                      borderColor: isElegant ? "#f2eae1" : undefined
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleOpenProductProfile(p)}
-                      aria-label={`عرض تفاصيل ${p.name}`}
-                      className="aspect-square w-full p-3 sm:p-4 flex items-center justify-center cursor-pointer relative bg-slate-50/60 hover:bg-sky-50/40 transition"
-                    >
-                      <ProductArt keyword={p.imageKeyword} primaryColor={primaryColor} imageUrl={p.imageUrl} />
-                      <span className={`absolute top-2 right-2 text-[9px] px-2 py-0.5 rounded-full font-bold truncate max-w-[85%] ${
-                        !isElegant ? "bg-sky-100 text-sky-800 border border-sky-300/80" : "bg-black/60 text-white backdrop-blur"
-                      }`}>
-                        {p.category}
-                      </span>
-                    </button>
-
-                    <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between text-right space-y-2.5">
-                      <div className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenProductProfile(p)}
-                          className={`block w-full text-right font-extrabold text-xs sm:text-sm line-clamp-1 hover:underline cursor-pointer rounded-md ${
-                            !isElegant ? "text-slate-900 hover:text-sky-700" : ""
-                          }`}
-                          style={{ color: isElegant ? secondaryOnCard : undefined }}
-                        >
-                          {p.name}
-                        </button>
-                        <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                          {p.description}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 gap-1">
-                        <span className={`font-black text-xs sm:text-sm whitespace-nowrap ${!isElegant ? "text-sky-700" : ""}`} style={{ color: isElegant ? primaryOnWhite : undefined }}>
-                          {p.price} {config.currency || "ر.س"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => addToCart(p)}
-                          aria-label={`إضافة ${p.name} إلى السلة`}
-                          className={`p-1.5 rounded-lg text-white font-bold text-xs transition flex items-center justify-center shrink-0 hover:opacity-90 ${
-                            !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 shadow-xs hover:shadow-md" : ""
-                          }`}
-                          style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
-                          title="أضف للسلة"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                {displayedProducts.map((product) => <StorefrontProductCard key={product.id} product={product} currency={config.currency || "ر.س"} primaryColor={primaryColor} secondaryColor={secondaryColor} cardBackground={cardBgColor} borderColor={borderColor} onOpen={handleOpenProductProfile} onAdd={addToCart} showDescription reducedMotion={prefersReducedMotion} />)}
               </div>
             )}
           </div>
@@ -868,16 +832,16 @@ export default function StorePreview({
         {/* 3. ABOUT US PAGE (من نحن) */}
         {storePage === "about" && (
           <div className="mx-auto max-w-6xl space-y-7 px-4 py-10 text-right animate-fadeIn">
-            <header className="space-y-2 border-b border-slate-200 pb-6 text-center">
-              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black" style={{ color: primaryOnWhite }}>من نحن</span>
+            <header className="space-y-2 border-b pb-6 text-center" style={{ borderColor }}>
+              <span className="inline-flex rounded-full border px-3 py-1 text-xs font-black" style={{ backgroundColor: cardBgColor, borderColor, color: readableAccent(primaryColor, cardBgColor) }}>من نحن</span>
               <h2 className="text-2xl font-black md:text-3xl" style={{ color: secondaryOnPage }}>{config.aboutTitle?.trim() || `عن ${config.storeName}`}</h2>
-              <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">{config.aboutText?.trim() || config.slogan}</p>
+              <p className="mx-auto max-w-2xl text-sm leading-7" style={{ color: effectiveTextColor }}>{config.aboutText?.trim() || config.slogan}</p>
             </header>
             <div className={`grid gap-6 ${config.aboutImage ? "md:grid-cols-2 md:items-center" : ""}`}>
-              {config.aboutImage && <img src={config.aboutImage} alt="" className="aspect-video w-full rounded-3xl border border-slate-200 object-cover" referrerPolicy="no-referrer" />}
+              {config.aboutImage && <img src={config.aboutImage} alt="" loading="lazy" decoding="async" sizes="(min-width: 768px) 50vw, 100vw" className="aspect-video w-full rounded-3xl border object-cover" style={{ borderColor }} referrerPolicy="no-referrer" />}
               <div className="space-y-4">
-                {config.aboutVision?.trim() && <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black" style={{ color: primaryOnWhite }}>رؤية المتجر</h3><p className="mt-3 text-sm leading-7 text-slate-600">{config.aboutVision}</p></section>}
-                <section className="rounded-3xl border border-slate-200 bg-white p-6"><h3 className="text-base font-black text-slate-900">بيانات منشورة</h3><div className="mt-3 space-y-2 text-xs text-slate-600">{config.address?.trim() && <p><strong>العنوان:</strong> {config.address}</p>}{config.workingHours?.trim() && <p><strong>ساعات العمل:</strong> {config.workingHours}</p>}{!config.address?.trim() && !config.workingHours?.trim() && <p>لم يضف المتجر معلومات إضافية بعد.</p>}</div></section>
+                {config.aboutVision?.trim() && <section className="rounded-3xl border p-6" style={{ backgroundColor: cardBgColor, borderColor }}><h3 className="text-base font-black" style={{ color: readableAccent(primaryColor, cardBgColor) }}>رؤية المتجر</h3><p className="mt-3 text-sm leading-7" style={{ color: readableAccent(textColor, cardBgColor) }}>{config.aboutVision}</p></section>}
+                <section className="rounded-3xl border p-6" style={{ backgroundColor: cardBgColor, borderColor }}><h3 className="text-base font-black" style={{ color: secondaryOnCard }}>بيانات منشورة</h3><div className="mt-3 space-y-2 text-xs" style={{ color: readableAccent(textColor, cardBgColor) }}>{config.address?.trim() && <p><strong>العنوان:</strong> {config.address}</p>}{config.workingHours?.trim() && <p><strong>ساعات العمل:</strong> {config.workingHours}</p>}{!config.address?.trim() && !config.workingHours?.trim() && <p>لم يضف المتجر معلومات إضافية بعد.</p>}</div></section>
               </div>
             </div>
           </div>
@@ -893,20 +857,20 @@ export default function StorePreview({
           return (
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 text-right animate-fadeIn">
               <header className="space-y-2 text-center">
-                <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black text-sky-800">التواصل مع المتجر</span>
-                <h2 className="text-2xl font-black text-slate-900">اختر وسيلة التواصل المتاحة</h2>
-                <p className="text-xs text-slate-500">تعرض هذه الصفحة البيانات التي حفظها المتجر فقط، ولا تستقبل رسائل داخل المنصة.</p>
+                <span className="inline-flex rounded-full border px-3 py-1 text-xs font-black" style={{ backgroundColor: cardBgColor, borderColor, color: readableAccent(primaryColor, cardBgColor) }}>التواصل مع المتجر</span>
+                <h2 className="text-2xl font-black" style={{ color: secondaryOnPage }}>اختر وسيلة التواصل المتاحة</h2>
+                <p className="text-xs" style={{ color: effectiveTextColor }}>تعرض هذه الصفحة البيانات التي حفظها المتجر فقط، ولا تستقبل رسائل داخل المنصة.</p>
               </header>
               {hasDirectContact ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {phone && <a href={`tel:${phone}`} className="rounded-2xl border border-slate-200 bg-white p-5"><Phone className="mb-3 h-5 w-5 text-sky-600" /><h3 className="text-xs font-black">اتصال هاتفي</h3><p dir="ltr" className="mt-1 text-sm font-bold text-slate-700">{phone}</p></a>}
+                  {phone && <a href={`tel:${phone}`} className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><Phone className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">اتصال هاتفي</h3><p dir="ltr" className="mt-1 text-sm font-bold">{phone}</p></a>}
                   {whatsapp && <a href={`https://wa.me/${whatsapp.slice(1)}`} target="_blank" rel="noreferrer" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><MessageSquare className="mb-3 h-5 w-5 text-emerald-600" /><h3 className="text-xs font-black">بدء محادثة WhatsApp</h3><p dir="ltr" className="mt-1 text-sm font-bold text-emerald-800">{whatsapp}</p></a>}
-                  {email && <a href={`mailto:${email}`} className="rounded-2xl border border-slate-200 bg-white p-5"><Mail className="mb-3 h-5 w-5 text-indigo-600" /><h3 className="text-xs font-black">البريد الإلكتروني</h3><p dir="ltr" className="mt-1 break-all text-sm text-slate-700">{email}</p></a>}
-                  {address && <div className="rounded-2xl border border-slate-200 bg-white p-5"><MapPin className="mb-3 h-5 w-5 text-rose-600" /><h3 className="text-xs font-black">العنوان</h3><p className="mt-1 text-sm text-slate-700">{address}</p></div>}
-                  {hours && <div className="rounded-2xl border border-slate-200 bg-white p-5"><Clock className="mb-3 h-5 w-5 text-amber-600" /><h3 className="text-xs font-black">ساعات العمل</h3><p className="mt-1 text-sm text-slate-700">{hours}</p></div>}
+                  {email && <a href={`mailto:${email}`} className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><Mail className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">البريد الإلكتروني</h3><p dir="ltr" className="mt-1 break-all text-sm">{email}</p></a>}
+                  {address && <div className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><MapPin className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">العنوان</h3><p className="mt-1 text-sm">{address}</p></div>}
+                  {hours && <div className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><Clock className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">ساعات العمل</h3><p className="mt-1 text-sm">{hours}</p></div>}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm font-bold text-slate-500">لم يضف المتجر وسيلة تواصل مباشرة بعد.</div>
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm font-bold" style={{ backgroundColor: cardBgColor, borderColor, color: readableAccent(textColor, cardBgColor) }}>لم يضف المتجر وسيلة تواصل مباشرة بعد.</div>
               )}
               {(config.instagram || config.twitter || config.tiktok || config.snapchat) && <div className="flex flex-wrap justify-center gap-2">{([["Instagram", config.instagram], ["X", config.twitter], ["TikTok", config.tiktok], ["Snapchat", config.snapchat]] as const).filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => <span key={label} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold">{label}: @{value}</span>)}</div>}
             </div>
@@ -920,9 +884,18 @@ export default function StorePreview({
             config={config}
             primaryColor={primaryColor}
             secondaryColor={secondaryColor}
+            cartQuantity={cart.find((item) => item.product.id === detailProduct.id)?.quantity ?? 0}
             onBack={() => setStorePage("products")}
             onAdd={handleAddToCartWithQty}
           />
+        )}
+        {storePage === "product" && !detailProduct && (
+          <section className="mx-auto my-10 max-w-lg rounded-3xl border border-dashed p-8 text-center" style={{ backgroundColor: cardBgColor, borderColor }} role="status">
+            <ShoppingBag className="mx-auto h-10 w-10 text-slate-400" />
+            <h1 className="mt-4 text-lg font-black text-slate-900">المنتج غير متاح</h1>
+            <p className="mt-2 text-sm leading-7 text-slate-600">قد يكون المنتج أُلغي نشره أو لم يعد موجودًا في هذا المتجر.</p>
+            <button type="button" onClick={() => setStorePage("products")} className="mt-5 min-h-11 rounded-xl px-5 py-3 text-xs font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>العودة إلى المنتجات</button>
+          </section>
         )}
         {/* 6. CHECKOUT PAGE (صفحة إتمام الطلب وتعبئة البيانات والدفع) */}
         {storePage === "checkout" && (() => {
@@ -939,7 +912,7 @@ export default function StorePreview({
               name: config.bankName!.trim(),
               accountNumber: config.bankIban?.trim() ? `IBAN: ${config.bankIban.trim()}` : config.bankAccountNumber!.trim(),
               accountName: config.bankAccountName!.trim(),
-              icon: "💳",
+              icon: "",
               badge: "تحويل بنكي",
               bgColor: "bg-slate-100 border-slate-300 text-slate-900",
             } : null;
@@ -1270,7 +1243,7 @@ export default function StorePreview({
                           <div key={idx} className="p-3 bg-white flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2.5">
                               <div className="w-10 h-10 bg-slate-100 rounded-lg p-1 shrink-0 overflow-hidden border">
-                                <ProductArt keyword={it.product.imageKeyword} primaryColor={primaryColor} imageUrl={it.product.imageUrl} />
+                                <ProductArt keyword={it.product.imageKeyword} primaryColor={primaryColor} imageUrl={it.product.imageUrl} alt={it.product.name} sizes="40px" />
                               </div>
                               <div>
                                 <h5 className="font-bold text-slate-900">{it.product.name}</h5>
@@ -1300,7 +1273,7 @@ export default function StorePreview({
                       <div className="flex justify-between text-slate-300">
                         <span>رسوم الشحن:</span>
                         <span className="text-emerald-400 font-bold">
-                          {placedOrderDetails.shipping === 0 ? "مجاني 🚚" : `${placedOrderDetails.shipping} ${placedOrderDetails.currency}`}
+                          {placedOrderDetails.shipping === 0 ? "مجاني" : `${placedOrderDetails.shipping} ${placedOrderDetails.currency}`}
                         </span>
                       </div>
                       {placedOrderDetails.tax > 0 && (
@@ -1338,7 +1311,7 @@ export default function StorePreview({
                         className="w-full sm:w-auto py-3 px-4 min-h-[44px] rounded-xl border border-slate-300 hover:bg-slate-100 active:scale-95 text-slate-800 font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer touch-manipulation shadow-2xs"
                       >
                         <Printer className="w-4 h-4 text-sky-600" />
-                        <span>طباعة الفاتورة 🖨️</span>
+                        <span>طباعة الفاتورة</span>
                       </button>
 
                       <button
@@ -1350,7 +1323,7 @@ export default function StorePreview({
                         className="w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition"
                       >
                         <ShoppingBag className="w-4 h-4" />
-                        <span>طلب جديد 🛒</span>
+                        <span>طلب جديد</span>
                       </button>
                     </div>
                   </div>
@@ -1567,9 +1540,9 @@ export default function StorePreview({
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-xl">💵</span>
+                            <CreditCard className="h-5 w-5 text-emerald-700" aria-hidden="true" />
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              موصى به 🔥
+                              الدفع عند الاستلام
                             </span>
                           </div>
                           <div>
@@ -1596,9 +1569,9 @@ export default function StorePreview({
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-xl">📱</span>
+                            <Wallet className="h-5 w-5 text-purple-700" aria-hidden="true" />
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">
-                              محافظ رقمية ⚡
+                              محافظ رقمية
                             </span>
                           </div>
                           <div>
@@ -1732,7 +1705,7 @@ export default function StorePreview({
                           <div key={item.product.id} className="pt-2 flex items-center justify-between gap-3 text-xs">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="w-10 h-10 bg-slate-100 rounded-lg p-1 shrink-0 overflow-hidden border border-slate-200">
-                                <ProductArt keyword={item.product.imageKeyword} primaryColor={primaryColor} imageUrl={item.product.imageUrl} />
+                                <ProductArt keyword={item.product.imageKeyword} primaryColor={primaryColor} imageUrl={item.product.imageUrl} alt={item.product.name} sizes="48px" />
                               </div>
                               <div className="min-w-0">
                                 <h4 className="font-bold text-slate-900 truncate">{item.product.name}</h4>
@@ -1802,7 +1775,7 @@ export default function StorePreview({
                         <div className="flex justify-between text-slate-600">
                           <span>رسوم الشحن والتوصيل:</span>
                           <span className="font-mono font-bold text-slate-800">
-                            {shippingCost === 0 ? "مجاني 🚚" : `${shippingCost} ${config.currency}`}
+                            {shippingCost === 0 ? "مجاني" : `${shippingCost} ${config.currency}`}
                           </span>
                         </div>
 
@@ -1850,13 +1823,15 @@ export default function StorePreview({
 
       </div>
 
-      {/* Informative footer */}
-      <footer className="pt-6 border-t border-slate-300/10 text-center space-y-2 text-slate-500 text-[11px] pb-12 bg-slate-400/5">
-        <p>© {new Date().getFullYear()} {config.storeName} - جميع الحقوق محفوظة.</p>
-        {platformSettings.storefrontAttributionEnabled && platformSettings.storefrontAttributionText && (
-          <p className="text-[10px] text-slate-400">{platformSettings.storefrontAttributionText}</p>
-        )}
-      </footer>
+      <StorefrontFooter
+        config={config}
+        primaryColor={primaryColor}
+        secondaryColor={secondaryColor}
+        cardBackground={cardBgColor}
+        borderColor={borderColor}
+        attribution={platformSettings.storefrontAttributionEnabled ? platformSettings.storefrontAttributionText : null}
+        onNavigate={(page) => setStorePage(page)}
+      />
       </div>
 
       {/* ----------------- SHOPPING CART DRAWER ----------------- */}
@@ -1880,14 +1855,14 @@ export default function StorePreview({
                 !isElegant ? "bg-white border-r border-slate-200 text-slate-900 font-mono" : ""
               }`}
               style={{ 
-                backgroundColor: isElegant ? "#fdfbf7" : undefined,
-                color: isElegant ? "#1c1917" : undefined
+                backgroundColor: isElegant ? bgColor : undefined,
+                color: isElegant ? effectiveTextColor : undefined
               }}
             >
               {/* Drawer Header */}
               <div 
                 className="p-5 flex items-center justify-between border-b"
-                style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}
+                style={{ borderColor }}
               >
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-sky-600" />
@@ -1913,7 +1888,7 @@ export default function StorePreview({
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 border border-emerald-300 rounded-full flex items-center justify-center shadow-sm">
                       <Check className="w-8 h-8" />
                     </div>
-                    <h3 className="font-extrabold text-xl text-emerald-700">ORDER_TRANSMITTED // تم إرسال الطلب بنجاح! 🎉</h3>
+                    <h3 className="font-extrabold text-xl text-emerald-700">ORDER_TRANSMITTED // تم إرسال الطلب بنجاح!</h3>
                     <p className="text-slate-600 text-xs max-w-xs leading-relaxed">
                       شكراً لتجربتك لمتجرنا! لقد تم إرسال الطلب الوهمي وتفريغ السلة لمحاكاة الشراء الحقيقي لمتجرك الجديد بنجاح.
                     </p>
@@ -1926,20 +1901,22 @@ export default function StorePreview({
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {cart.map((item) => (
+                    {cart.map((item) => {
+                      const atStockLimit = item.quantity >= storefrontCartLineLimit(item.product);
+                      return (
                       <div 
                         key={item.product.id}
                         className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
                           !isElegant ? "bg-slate-50 border-slate-200" : ""
                         }`}
                         style={{ 
-                          backgroundColor: isElegant ? "#ffffff" : undefined,
-                          borderColor: isElegant ? "#f2eae1" : undefined
+                          backgroundColor: isElegant ? cardBgColor : undefined,
+                          borderColor: isElegant ? borderColor : undefined
                         }}
                       >
                         {/* Artwork */}
                         <div className="w-12 h-12 bg-white p-1 rounded-lg border shrink-0">
-                          <ProductArt keyword={item.product.imageKeyword} primaryColor={primaryColor} imageUrl={item.product.imageUrl} />
+                          <ProductArt keyword={item.product.imageKeyword} primaryColor={primaryColor} imageUrl={item.product.imageUrl} alt={item.product.name} sizes="48px" />
                         </div>
 
                         {/* Name and Price */}
@@ -1954,12 +1931,14 @@ export default function StorePreview({
 
                         {/* Quantity Stepper */}
                         <div className="flex items-center gap-2 border rounded-lg bg-white shrink-0"
-                             style={{ borderColor: isElegant ? "#f2eae1" : "#cbd5e1" }}>
+                             style={{ borderColor: isElegant ? borderColor : "#cbd5e1" }}>
                           <button 
                             type="button"
+                            disabled={atStockLimit}
                             onClick={() => updateQuantity(item.product.id, 1)}
                             aria-label={`زيادة كمية ${item.product.name}`}
-                            className="p-1 hover:text-sky-600"
+                            className="p-1 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            title={atStockLimit ? "وصلت إلى الكمية المتاحة" : undefined}
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -1974,7 +1953,8 @@ export default function StorePreview({
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1983,7 +1963,7 @@ export default function StorePreview({
               {!hasOrdered && cart.length > 0 && (
                 <div 
                   className="p-5 border-t space-y-4 [padding-bottom:max(1.25rem,env(safe-area-inset-bottom))]"
-                  style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}
+                  style={{ borderColor }}
                 >
                   <div className="flex items-center justify-between font-bold text-sm">
                     <span className="text-slate-600">المجموع الفرعي:</span>
@@ -2014,7 +1994,7 @@ export default function StorePreview({
                     }`}
                     style={{ backgroundColor: isElegant ? primaryColor : undefined, color: isElegant ? primaryForeground : undefined }}
                   >
-                    <span>{!isElegant ? "المتابعة لإتمام الطلب والدفع ➔" : "إتمام الطلب وتعبئة البيانات ➔"}</span>
+                    <span>{!isElegant ? "المتابعة لإتمام الطلب والدفع" : "إتمام الطلب وتعبئة البيانات"}</span>
                     <ArrowRight className="w-4 h-4 rotate-180" />
                   </button>
                 </div>

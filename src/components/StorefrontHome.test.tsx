@@ -52,12 +52,13 @@ describe("StorefrontHome", () => {
   it.each([
     { isElegant: true, label: "elegant" },
     { isElegant: false, label: "tech" },
-  ])("uses the image-layer switch as the only source of hero contrast in $label", ({ isElegant }) => {
+  ])("keeps the hero readable and applies its saved height in $label", ({ isElegant }) => {
     const heroConfig = {
       ...ELEGANT_PRESET,
       showHeroBanner: false,
       heroBannerImage: "https://cdn.example.test/hero.jpg",
       heroBannerTitle: "Readable hero",
+      heroBannerHeight: "large" as const,
     };
     const props = {
       config: heroConfig,
@@ -73,13 +74,16 @@ describe("StorefrontHome", () => {
     const view = render(<StorefrontHome {...props} />);
 
     expect(view.container.querySelector('img[src="https://cdn.example.test/hero.jpg"]')).toBeNull();
-    const subtitle = screen.getByText(heroConfig.heroBannerSubtitle || heroConfig.slogan);
-    expect(subtitle.className).toContain(isElegant ? "text-slate-600" : "text-white/85");
-    if (isElegant) expect(screen.getByRole("heading", { name: "Readable hero" }).style.color).not.toBe("");
+    expect(view.container.querySelector("[data-storefront-hero]")?.getAttribute("data-storefront-hero-height")).toBe("large");
+    expect(screen.getByRole("heading", { name: "Readable hero" }).style.color).not.toBe("");
 
-    view.rerender(<StorefrontHome {...props} config={{ ...heroConfig, showHeroBanner: true }} />);
-    expect(view.container.querySelector('img[src="https://cdn.example.test/hero.jpg"]')).not.toBeNull();
-    expect(screen.getByText(heroConfig.heroBannerSubtitle || heroConfig.slogan).className).toContain("text-white/85");
-    if (isElegant) expect(screen.getByRole("heading", { name: "Readable hero" }).style.color).toBe("");
+    view.rerender(<StorefrontHome {...props} config={{ ...heroConfig, showHeroBanner: true, heroBannerOverlayOpacity: 0 }} />);
+    const image = view.container.querySelector('img[src="https://cdn.example.test/hero.jpg"]');
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("loading")).toBe("eager");
+    expect(image?.getAttribute("decoding")).toBe("async");
+    expect(image?.getAttribute("fetchpriority")).toBe("high");
+    expect(screen.getByRole("heading", { name: "Readable hero" }).style.color).toBe("rgb(255, 255, 255)");
+    expect(screen.getByRole("heading", { name: "Readable hero" }).style.textShadow).not.toBe("");
   });
 });

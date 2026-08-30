@@ -88,7 +88,7 @@ describe("StorePreview truthful customer surfaces", () => {
     expect(await screen.findByText("Server About")).toBeTruthy();
     expect(screen.getByText("Server-authored merchant story.")).toBeTruthy();
     expect(screen.getByText("Server-authored vision.")).toBeTruthy();
-    expect(screen.getByText(/Server address/)).toBeTruthy();
+    expect(screen.getAllByText(/Server address/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/ضمان رسمي|تقييم مشتري|شحن فوري/)).toBeNull();
   });
 });

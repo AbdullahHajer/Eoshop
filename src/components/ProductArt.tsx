@@ -4,9 +4,12 @@ interface ProductArtProps {
   keyword: string;
   primaryColor: string;
   imageUrl?: string;
+  alt?: string;
+  sizes?: string;
+  loading?: "eager" | "lazy";
 }
 
-export default function ProductArt({ keyword, primaryColor, imageUrl }: ProductArtProps) {
+export default function ProductArt({ keyword, primaryColor, imageUrl, alt = "", sizes = "(min-width: 1024px) 25vw, 50vw", loading = "lazy" }: ProductArtProps) {
   const color = primaryColor || "#D4AF37";
 
   if (imageUrl && imageUrl.trim() !== "") {
@@ -14,7 +17,10 @@ export default function ProductArt({ keyword, primaryColor, imageUrl }: ProductA
       <div className="w-full h-full relative overflow-hidden flex items-center justify-center rounded-xl bg-slate-50">
         <img 
           src={imageUrl} 
-          alt="Product Graphic" 
+          alt={alt}
+          loading={loading}
+          decoding="async"
+          sizes={sizes}
           className="w-full h-full object-cover rounded-xl transition-transform duration-500 group-hover:scale-105"
           referrerPolicy="no-referrer"
         />

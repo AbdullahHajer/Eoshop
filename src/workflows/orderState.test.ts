@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "../types";
 import type { OrderReceipt } from "../adapters/uiAdapters";
-import { merchantOrderActions, reconcileCartWithStorefront } from "./orderState";
+import {
+  addProductToCart,
+  changeCartLineQuantity,
+  merchantOrderActions,
+  reconcileCartWithStorefront,
+  storefrontAvailableQuantity,
+} from "./orderState";
 
 const product = (id: string, price: number, available = 10): Product => ({
   id,
@@ -38,6 +44,47 @@ describe("reconcileCartWithStorefront", () => {
 
     expect(result.items).toEqual([]);
     expect(result.removed).toBe(2);
+  });
+});
+
+describe("storefront cart boundaries", () => {
+  it("rejects unpublished and sold-out products before checkout", () => {
+    const draft = { ...product("draft", 10), status: "draft" as const };
+    const soldOut = product("sold-out", 20, 0);
+
+    expect(addProductToCart([], draft)).toMatchObject({ items: [], acceptedQuantity: 0, reason: "not_sellable" });
+    expect(addProductToCart([], soldOut)).toMatchObject({ items: [], acceptedQuantity: 0, reason: "out_of_stock" });
+  });
+
+  it("caps additions and quantity changes to the public availability snapshot", () => {
+    const limited = product("limited", 12.5, 2);
+    const added = addProductToCart([], limited, 5);
+
+    expect(added.items).toEqual([{ product: limited, quantity: 2 }]);
+    expect(added).toMatchObject({ acceptedQuantity: 2, reason: "stock_limit" });
+    expect(changeCartLineQuantity(added.items, limited.id, 1)).toMatchObject({
+      items: added.items,
+      acceptedQuantity: 0,
+      reason: "stock_limit",
+    });
+  });
+
+  it("keeps untracked products orderable and removes a line at zero", () => {
+    const untracked = { ...product("untracked", 8), manageStock: false, availableQuantity: 0 };
+    const added = addProductToCart([], untracked, 120);
+
+    expect(storefrontAvailableQuantity(untracked)).toBeNull();
+    expect(added).toMatchObject({ acceptedQuantity: 99, reason: "stock_limit" });
+    expect(added.items[0].quantity).toBe(99);
+    expect(changeCartLineQuantity(added.items, untracked.id, -99).items).toEqual([]);
+  });
+
+  it("ignores non-finite quantity mutations", () => {
+    expect(addProductToCart([], product("finite", 5), Number.NaN)).toEqual({
+      items: [],
+      acceptedQuantity: 0,
+      reason: null,
+    });
   });
 });
 

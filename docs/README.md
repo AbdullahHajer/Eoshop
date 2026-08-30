@@ -32,6 +32,7 @@
 - [WP 5.5 — Server-owned draft, resubmission and merchant publication](work-packages/WP-5.5-store-draft-resubmission-publication.md)
 - [WP 5.22 — Merchant launch console](work-packages/WP-5.22-merchant-launch-console.md)
 - [WP 5.23 — Store application dossier, evidence and correction](work-packages/WP-5.23-store-application-dossier.md)
+- [WP 5.27.1 — Public storefront and premium baseline](work-packages/WP-5.27.1-public-storefront.md)
 
 ## Architecture decisions
 
