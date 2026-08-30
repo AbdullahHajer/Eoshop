@@ -489,3 +489,25 @@ Container integration:
 - `DEFERRED-QA-VISUAL-RESPONSIVE-NETWORK`: لقطات الهاتف وقياسات Network والمقارنة البصرية اليدوية ما زالت مؤجلة حسب الاعتماد ولا تمنع T4.
 - code splitting واسع، القالب الثاني، وإعادة بناء checkout أو `StorePreview` مؤجلة؛ لا توجد مشكلة API أو عزل أو dependency كبيرة ظهرت.
 - اكتملت T5، وفُتح PR #82 كمسودة، والعمل متوقف قبل الدمج بانتظار نتائج CI ومراجعة المالك.
+
+## 18. إغلاق ملاحظة تباين الهوية في PR #82
+
+أغلقت مراجعة T3 حالة النصوص ذات اللون الثابت فوق `cardBgColor` و`bgColor` اللذين يخصصهما التاجر. كانت الحالة المثبتة `#475569` فوق `#0F172A` بنسبة تباين `2.36:1` فقط. أصبح اختيار اللون يمر عبر `readableAccent` مع **لون السطح الفعلي**، مع فصل لون نص الصفحة عن لون نص البطاقة بدل إعادة استخدام لون محسوب لسطح مختلف.
+
+النطاق المصحح فقط:
+
+- `StorefrontFooter`: الوصف، روابط المتجر، معلومات التواصل، الحالات الفارغة، الحقوق وattribution فوق `cardBgColor`.
+- `StorefrontProductCard`: وصف المنتج فوق `cardBgColor`.
+- `StorefrontProductDetail`: وصف الصفحة فوق `bgColor`، وأزرار الرجوع والسعر والكمية ومعلومات الشحن والدفع فوق `cardBgColor`.
+- `StorefrontHome`: النصوص المساعدة للتصنيفات والمنتجات وحقائق الخدمة فوق `bgColor`، ونصوص الثقة والنبذة والحالات الفارغة فوق `cardBgColor`.
+
+أضيف `StorefrontDynamicContrast.test.tsx` بأربع حالات مركزة تستخدم `#020617` للصفحة و`#0F172A` للبطاقة مع اللون منخفض التباين `#475569`، وتحسب نسبة التباين الفعلية من اللون المعروض. جميع assertions تثبت نسبة **لا تقل عن `4.5:1`**. النتائج بعد الإصلاح:
+
+- الاختبارات المركزة: **4 ملفات / 12 اختبارًا ناجحًا**.
+- Frontend quality: TypeScript **PASS**، وVitest **67 ملفًا / 348 اختبارًا ناجحًا**، وVite production build **PASS**، وnpm audit **0 vulnerabilities**.
+- Build الحالي: JavaScript `993.26 kB` (gzip `262.01 kB`) وCSS `124.82 kB` محليًا (gzip `18.65 kB`)؛ تحذير chunk الأكبر من `500 kB` يبقى دين الأداء المؤجل نفسه.
+- Backend quality: Composer validate/audit **PASS**، وPint **295 ملفًا**، وLarastan **255/255**، وPHPUnit **3 اختبارات / 6 assertions**.
+- Container integration: **PASS**؛ اختبارات PostgreSQL **171 اختبارًا / 1,918 assertion**، مع migrations وHTTP وحدود tenants والطلبات والمخزون وworker/scheduler، ثم تنظيف الحاويات والشبكة والـvolumes.
+- Repository safety: **PASS**، و`git diff --check` **PASS**.
+
+لم يتغير التصميم أو Checkout أو API أو Backend أو قاعدة البيانات، ولم يبدأ القالب الثاني. يبقى [PR #82](https://github.com/sas-prog1/Eoshop/pull/82) بحالة Draft، ولا يحدث Ready أو Merge قبل نجاح CI ومراجعة المالك النهائية.

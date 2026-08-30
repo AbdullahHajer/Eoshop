@@ -35,6 +35,7 @@ export default function StorefrontProductCard({
   const outOfStock = available === 0;
   const priceColor = readableAccent(primaryColor, cardBackground);
   const headingColor = readableAccent(secondaryColor, cardBackground);
+  const bodyColor = readableAccent("#475569", cardBackground);
 
   return (
     <article data-storefront-product-card data-reduced-motion={reducedMotion ? "true" : undefined} className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none" style={{ backgroundColor: cardBackground, borderColor }}>
@@ -46,7 +47,7 @@ export default function StorefrontProductCard({
       <div className="flex flex-1 flex-col justify-between gap-3 p-3.5 text-right">
         <div className="space-y-1.5">
           <button type="button" onClick={() => onOpen(product)} className="line-clamp-2 w-full rounded text-right text-sm font-black leading-6 hover:underline" style={{ color: headingColor }}>{product.name}</button>
-          {showDescription && <p className="line-clamp-2 text-xs leading-6 text-slate-600">{product.description || "لم يضف المتجر وصفًا لهذا المنتج بعد."}</p>}
+          {showDescription && <p className="line-clamp-2 text-xs leading-6" style={{ color: bodyColor }}>{product.description || "لم يضف المتجر وصفًا لهذا المنتج بعد."}</p>}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="break-all text-sm font-black" style={{ color: priceColor }}>{product.price} {currency}</span>
