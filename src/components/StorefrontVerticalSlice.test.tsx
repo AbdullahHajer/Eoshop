@@ -67,14 +67,14 @@ const receipt: OrderReceipt = {
 
 afterEach(cleanup);
 
-function VerticalSlice({ submitOrder }: { submitOrder: (input: any) => Promise<OrderReceipt> }) {
+function VerticalSlice({ submitOrder, themeStyle }: { submitOrder: (input: any) => Promise<OrderReceipt>; themeStyle: StoreConfig["themeStyle"] }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("الكل");
 
   return (
     <StorePreview
-      config={config}
+      config={{ ...config, themeStyle }}
       cart={cart}
       addToCart={(selected, quantity = 1) => setCart((current) => addProductToCart(current, selected, quantity).items)}
       updateQuantity={(productId, amount) => setCart((current) => changeCartLineQuantity(current, productId, amount).items)}
@@ -92,10 +92,10 @@ function VerticalSlice({ submitOrder }: { submitOrder: (input: any) => Promise<O
 }
 
 describe("public storefront functional vertical slice", () => {
-  it("completes home to product to cart to a server-owned order receipt", async () => {
+  it.each(["elegant", "tech"] as const)("completes the %s storefront through a server-owned order receipt", async (themeStyle) => {
     const submitOrder = vi.fn().mockResolvedValue(receipt);
     const user = userEvent.setup();
-    render(<VerticalSlice submitOrder={submitOrder} />);
+    render(<VerticalSlice submitOrder={submitOrder} themeStyle={themeStyle} />);
 
     await user.click(screen.getByRole("button", { name: `فتح تفاصيل ${product.name}` }));
     expect(screen.getByRole("heading", { level: 1, name: product.name })).toBeTruthy();
@@ -103,8 +103,8 @@ describe("public storefront functional vertical slice", () => {
 
     await user.click(screen.getByRole("button", { name: "إضافة إلى السلة" }));
     await user.click(screen.getAllByRole("button", { name: /فتح سلة التسوق، 1 منتج/ })[0]);
-    expect(await screen.findByRole("dialog", { name: /سلة التسوق/ })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: /إتمام الطلب وتعبئة البيانات/ }));
+    expect(await screen.findByRole("dialog", { name: /سلة التسوق|سلة المشتريات/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /إتمام الطلب وتعبئة البيانات|المتابعة لإتمام الطلب والدفع/ }));
 
     await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "عميل T2");
     await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000009");

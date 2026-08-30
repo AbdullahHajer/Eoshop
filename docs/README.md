@@ -33,6 +33,7 @@
 - [WP 5.22 — Merchant launch console](work-packages/WP-5.22-merchant-launch-console.md)
 - [WP 5.23 — Store application dossier, evidence and correction](work-packages/WP-5.23-store-application-dossier.md)
 - [WP 5.27.1 — Public storefront and premium baseline](work-packages/WP-5.27.1-public-storefront.md)
+- [WP 5.27.2 — Elegant editorial and Tech Bento templates](work-packages/WP-5.27.2-elegant-tech-templates.md)
 
 ## Architecture decisions
 

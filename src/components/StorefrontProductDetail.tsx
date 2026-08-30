@@ -25,6 +25,7 @@ export default function StorefrontProductDetail({ product, config, primaryColor,
   const primaryCardAccent = readableAccent(primaryColor, cardBackground);
   const secondaryPageAccent = readableAccent(secondaryColor, pageBackground);
   const secondaryCardAccent = readableAccent(secondaryColor, cardBackground);
+  const isElegant = config.themeStyle === "elegant";
   const [imageIndex, setImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const images = Array.from(new Set([product.imageUrl, ...(product.imageUrls ?? [])].filter((url): url is string => Boolean(url?.trim()))));
@@ -50,16 +51,16 @@ export default function StorefrontProductDetail({ product, config, primaryColor,
   }, [remaining]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 text-right animate-fadeIn">
+    <div data-storefront-product-detail-template={isElegant ? "elegant-editorial" : "tech-bento"} className="mx-auto max-w-7xl space-y-6 px-4 py-8 text-right animate-fadeIn">
       <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-xs font-black" style={{ backgroundColor: cardBackground, borderColor, color: secondaryCardAccent }}><ArrowRight className="h-4 w-4" />العودة إلى المنتجات</button>
-      <div className="grid gap-8 md:grid-cols-2 md:items-start">
-        <div className="space-y-3">
-          <div className="aspect-square overflow-hidden rounded-3xl border p-5 shadow-sm" style={{ backgroundColor: cardBackground, borderColor }}>
+      <div className={`grid items-start ${isElegant ? "gap-10 md:grid-cols-[1.08fr_0.92fr]" : "gap-4 md:grid-cols-12"}`}>
+        <div className={`space-y-3 ${isElegant ? "" : "md:col-span-7"}`}>
+          <div className={`overflow-hidden border p-5 shadow-sm ${isElegant ? "aspect-[4/5] rounded-[2rem]" : "aspect-square rounded-3xl"}`} style={{ backgroundColor: cardBackground, borderColor }}>
             {images.length > 0 ? <img src={images[imageIndex] ?? images[0]} alt={product.name} loading="eager" decoding="async" sizes="(min-width: 768px) 50vw, 100vw" className="h-full w-full rounded-2xl object-cover" referrerPolicy="no-referrer" /> : <ProductArt keyword={product.imageKeyword} primaryColor={primaryColor} imageUrl={product.imageUrl} alt={product.name} loading="eager" sizes="(min-width: 768px) 50vw, 100vw" />}
           </div>
           {images.length > 1 && <div className="flex flex-wrap gap-2" role="group" aria-label={`صور ${product.name}`}>{images.map((image, index) => <button type="button" key={image} onClick={() => setImageIndex(index)} aria-label={`عرض الصورة ${index + 1} من ${images.length} للمنتج ${product.name}`} aria-pressed={index === imageIndex} className="h-14 w-14 overflow-hidden rounded-xl border-2" style={{ borderColor: index === imageIndex ? primaryColor : borderColor }}><img src={image} alt="" loading="lazy" decoding="async" sizes="56px" className="h-full w-full object-cover" referrerPolicy="no-referrer" /></button>)}</div>}
         </div>
-        <div className="space-y-5">
+        <div className={`space-y-5 ${isElegant ? "md:pt-8" : "md:col-span-5"}`}>
           <div><span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category || "غير مصنف"}</span><h1 className="mt-3 text-2xl font-black leading-tight md:text-3xl" style={{ color: secondaryPageAccent }}>{product.name}</h1></div>
           <p className="text-sm leading-8" style={{ color: pageBodyColor }}>{product.description || "لم يضف المتجر وصفًا لهذا المنتج بعد."}</p>
           <div className="rounded-2xl border p-5 shadow-sm" style={{ backgroundColor: cardBackground, borderColor }}><span className="text-xs" style={{ color: cardBodyColor }}>السعر</span><p className="mt-1 text-3xl font-black" style={{ color: primaryCardAccent }}>{product.price} {config.currency}</p><p className="mt-2 text-[11px]" style={{ color: cardBodyColor }}>يُثبت السعر النهائي والمخزون عند إرسال الطلب إلى الخادم.</p></div>

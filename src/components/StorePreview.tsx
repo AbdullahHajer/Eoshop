@@ -336,6 +336,7 @@ export default function StorePreview({
   return (
     <div 
       id="store-preview-scroll-container"
+      data-storefront-template={isElegant ? "elegant-editorial" : "tech-bento"}
       dir="rtl"
       className="w-full h-full flex flex-col relative overflow-y-auto pb-24 lg:pb-6"
       style={{ 
@@ -823,7 +824,7 @@ export default function StorePreview({
               </div>
             ) : (
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-                {displayedProducts.map((product) => <StorefrontProductCard key={product.id} product={product} currency={config.currency || "ر.س"} primaryColor={primaryColor} secondaryColor={secondaryColor} cardBackground={cardBgColor} borderColor={borderColor} onOpen={handleOpenProductProfile} onAdd={addToCart} showDescription reducedMotion={prefersReducedMotion} />)}
+                {displayedProducts.map((product) => <StorefrontProductCard key={product.id} product={product} currency={config.currency || "ر.س"} primaryColor={primaryColor} secondaryColor={secondaryColor} cardBackground={cardBgColor} borderColor={borderColor} themeStyle={config.themeStyle} onOpen={handleOpenProductProfile} onAdd={addToCart} showDescription reducedMotion={prefersReducedMotion} />)}
               </div>
             )}
           </div>
