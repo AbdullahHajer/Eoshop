@@ -129,7 +129,8 @@ docker run --rm eoshop/backend-quality:ci sh -lc "composer validate --strict --n
 
 ## 13. Commit / PR / CI / Merge
 
-- Commit وPush: ينتظران المراجعة النهائية لشجرة الملفات في هذه الجلسة.
+- Implementation commit: `f911609` (`feat(storefront): differentiate elegant and tech templates`).
+- Push: فرع المهمة في مستودع الموظف فقط؛ يتضمن التزام التنفيذ والتزام إغلاق هذه الوثيقة.
 - PR: لم يُفتح.
 - CI: لم يبدأ؛ actionlint وgitleaks ينتظران CI عند فتح PR.
 - Merge: غير مسموح ضمن هذه المرحلة.
