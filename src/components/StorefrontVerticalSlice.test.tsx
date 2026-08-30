@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React, { useState } from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrderReceipt } from "../adapters/uiAdapters";
@@ -118,7 +118,23 @@ describe("public storefront functional vertical slice", () => {
     });
     expect(await screen.findByText("EO-T2-001")).toBeTruthy();
     expect(screen.getByText("تم تثبيت الطلب من الخادم")).toBeTruthy();
-    expect(screen.getAllByText("12.5 YER")).toHaveLength(2);
+
+    const receiptProductHeading = screen.getByRole("heading", { level: 5, name: product.name });
+    const receiptProductRow = receiptProductHeading.parentElement?.parentElement?.parentElement;
+    expect(receiptProductRow).not.toBeNull();
+    const receiptProductTotal = receiptProductRow?.lastElementChild;
+    expect(receiptProductTotal).not.toBeNull();
+    expect(receiptProductTotal?.textContent?.trim()).toBe(`${(receipt.items[0].lineTotalMinor / 100).toLocaleString()} ${receipt.currencyCode}`);
+
+    const expectedReceiptTotal = `${receipt.totals.itemsSubtotalMinor / 100} ${receipt.currencyCode}`;
+
+    const subtotalRow = screen.getByText("المجموع الفرعي:").parentElement;
+    expect(subtotalRow).not.toBeNull();
+    expect(within(subtotalRow as HTMLElement).getByText(expectedReceiptTotal)).toBeTruthy();
+
+    const totalRow = screen.getByText("الإجمالي النهائي المستحق:").parentElement;
+    expect(totalRow).not.toBeNull();
+    expect(within(totalRow as HTMLElement).getByText(expectedReceiptTotal)).toBeTruthy();
   }, 30_000);
 
   it("shows a clear unavailable state when the selected product disappears", async () => {
