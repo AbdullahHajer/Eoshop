@@ -143,4 +143,88 @@ describe("StorefrontHome", () => {
     expect(discovery?.textContent).not.toMatch(/YER|ر\.س/);
     expect(discovery?.querySelector('button[aria-label*="إضافة"]')).toBeNull();
   });
+
+  it("renders the server-owned Tech Bento projection without consuming Elegant stories", () => {
+    const onOpenMarketingTarget = vi.fn();
+    const marketingBlocks = [
+      {
+        id: "00000000-0000-4000-8000-000000000101",
+        placement: "hero_bento" as const,
+        position: 1,
+        enabled: true,
+        contentType: "category" as const,
+        title: "إلكترونيات ذكية",
+        ctaLabel: "افتح القسم",
+        imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000201",
+        altText: "أجهزة إلكترونية",
+        targetType: "category" as const,
+        targetValue: "إلكترونيات",
+        disclosure: "none" as const,
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000102",
+        placement: "side_ad" as const,
+        position: 1,
+        enabled: true,
+        contentType: "campaign" as const,
+        title: "حملة الألعاب",
+        ctaLabel: "اكتشف العرض",
+        imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000202",
+        altText: "وحدة ألعاب",
+        targetType: "external" as const,
+        targetValue: "https://example.test/gaming",
+        disclosure: "ad" as const,
+        sponsorName: "بيت الألعاب",
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000103",
+        placement: "discovery" as const,
+        position: 1,
+        enabled: true,
+        contentType: "product" as const,
+        title: "سماعات",
+        ctaLabel: "افتح المختار",
+        imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000203",
+        altText: "سماعات تقنية",
+        targetType: "products" as const,
+        disclosure: "none" as const,
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000104",
+        placement: "editorial_story" as const,
+        position: 1,
+        enabled: true,
+        contentType: "category" as const,
+        title: "قصة Elegant فقط",
+        ctaLabel: "اقرأ القصة",
+        imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000204",
+        altText: "قصة تحريرية",
+        targetType: "products" as const,
+        disclosure: "none" as const,
+      },
+    ];
+
+    const view = render(
+      <StorefrontHome
+        config={{ ...ELEGANT_PRESET, themeStyle: "tech", marketingBlocks }}
+        isElegant={false}
+        primaryColor="#0969F0"
+        secondaryColor="#0F172A"
+        onOpenProducts={vi.fn()}
+        onOpenAbout={vi.fn()}
+        onSelectCategory={vi.fn()}
+        onOpenProduct={vi.fn()}
+        onAddProduct={vi.fn()}
+        onOpenMarketingTarget={onOpenMarketingTarget}
+      />,
+    );
+
+    expect(view.container.querySelector("[data-tech-bento-home]")).not.toBeNull();
+    expect(screen.getByText("إلكترونيات ذكية")).toBeTruthy();
+    expect(screen.getByText("إعلان · بيت الألعاب")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "فتح سماعات" })).toBeTruthy();
+    expect(screen.queryByText("قصة Elegant فقط")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "افتح القسم: إلكترونيات ذكية" }));
+    expect(onOpenMarketingTarget).toHaveBeenCalledWith("category", "إلكترونيات");
+  });
 });

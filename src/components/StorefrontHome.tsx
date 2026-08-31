@@ -4,10 +4,11 @@ import type { Product, StoreConfig, StorefrontSectionId } from "../types";
 import type { StorefrontMarketingTargetType } from "../contracts/storefrontMarketingBlocks";
 import { storefrontSectionsOrDefault } from "../contracts/storefrontSections";
 import { canonicalContactTarget } from "../contracts/checkoutPolicy";
-import { readableAccent } from "../utils/readableForeground";
+import { readableAccent, readableForeground } from "../utils/readableForeground";
 import StorefrontHero from "./StorefrontHero";
 import StorefrontProductCard from "./StorefrontProductCard";
 import { ElegantStoriesHome, elegantStoriesHomeModel } from "../features/storefront/elegant-stories";
+import { TechBentoHome, techBentoHomeModel } from "../features/storefront/tech-bento";
 
 interface Props {
   config: StoreConfig;
@@ -79,6 +80,8 @@ export default function StorefrontHome({
   ];
   const elegantModel = elegantStoriesHomeModel(config);
   const hasElegantEditorial = isElegant && (elegantModel.stories.length > 0 || elegantModel.discoveryItems.length > 0);
+  const techModel = techBentoHomeModel(config);
+  const usesImmersiveHome = hasElegantEditorial || !isElegant;
   const legacyCategories = (
     <section className="space-y-4">
       <div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>التصنيفات</h2><p className="mt-1 text-xs" style={{ color: pageBodyColor }}>التصنيفات المستخرجة من المنتجات المنشورة.</p></div>
@@ -101,6 +104,22 @@ export default function StorefrontHome({
         onOpenStory={(story) => onOpenMarketingTarget(story.targetType, story.targetValue)}
         onOpenDiscovery={(item) => onOpenMarketingTarget(item.targetType, item.targetValue)}
         onOpenDiscoveryAll={onOpenProducts}
+      />
+    ) : !isElegant ? (
+      <TechBentoHome
+        model={techModel}
+        tokens={{
+          background: pageBackground,
+          surface: cardBackground,
+          ink: secondaryPageAccent,
+          mutedInk: pageBodyColor,
+          border: borderColor,
+          accent: primaryPageAccent,
+          accentForeground: readableForeground(primaryColor),
+        }}
+        onOpenHero={(hero) => onOpenMarketingTarget(hero.targetType, hero.targetValue)}
+        onOpenMarketingItem={(item) => onOpenMarketingTarget(item.targetType, item.targetValue)}
+        onOpenProducts={onOpenProducts}
       />
     ) : <StorefrontHero config={config} isElegant={isElegant} primaryColor={primaryColor} secondaryColor={secondaryColor} onOpenProducts={onOpenProducts} />,
     trust: (
@@ -133,10 +152,10 @@ export default function StorefrontHome({
   };
 
   return (
-    <div className={`mx-auto flex w-full flex-col animate-fadeIn ${hasElegantEditorial ? "max-w-none gap-8 py-0" : "max-w-7xl gap-10 px-3 py-6 md:px-6 md:py-10"}`}>
+    <div className={`mx-auto flex w-full flex-col animate-fadeIn ${usesImmersiveHome ? "max-w-none gap-8 py-0" : "max-w-7xl gap-10 px-3 py-6 md:px-6 md:py-10"}`}>
       {storefrontSectionsOrDefault(config.homeSections).filter((section) => section.visible).map((section) => (
         sections[section.id] ? (
-          <div key={section.id} data-storefront-section={section.id} className={hasElegantEditorial && section.id !== "hero" ? "mx-auto w-full max-w-7xl px-3 md:px-6" : undefined}>{sections[section.id]}</div>
+          <div key={section.id} data-storefront-section={section.id} className={usesImmersiveHome && section.id !== "hero" ? "mx-auto w-full max-w-7xl px-3 md:px-6" : undefined}>{sections[section.id]}</div>
         ) : null
       ))}
     </div>
