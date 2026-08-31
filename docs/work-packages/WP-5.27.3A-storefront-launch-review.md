@@ -4,9 +4,12 @@
 |---|---|
 | المرحلة | Phase 5 — Storefront launch review |
 | الحزمة | WP 5.27.3A |
-| الحالة | مكتملة محليًا؛ البوابة الكاملة ناجحة؛ بانتظار PR والمراجعة |
+| الحالة | Draft PR #88 — البوابات المحلية وبوابات GitHub الأربع ناجحة؛ بانتظار المراجعة؛ لا Merge |
 | Base SHA | `2f48de0f090198f176efd909eb10f4bd38f9d2a9` |
+| Implementation SHA | `334861746304c3fa0a53289e802a1ffff43b53f6` |
 | الفرع | `codex/wp5-27-3-storefront-launch-review` |
+| PR | [sas-prog1/Eoshop#88](https://github.com/sas-prog1/Eoshop/pull/88) |
+| CI | [Run 33411409967](https://github.com/sas-prog1/Eoshop/actions/runs/33411409967) — ناجح |
 | الاعتماديات | WP 5.27.1 وWP 5.27.2B–E |
 
 ## الهدف
@@ -52,6 +55,8 @@
 - CSS: `175.10 kB`، gzip `26.62 kB`.
 - `git diff --check`: ناجح.
 - تحذير chunk الأكبر من `500 kB` ما زال دين أداء معروفًا ومؤجلًا لحزمة مستقلة.
+
+نجحت بوابات GitHub الأربع: Repository safety وFrontend quality وBackend quality وContainer integration. بقي [PR #88](https://github.com/sas-prog1/Eoshop/pull/88) في وضع Draft، ولم يُنفذ Merge.
 
 ## تنسيق العمل المتوازي
 
