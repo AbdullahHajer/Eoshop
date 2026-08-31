@@ -38,6 +38,7 @@
 - [WP 5.27.2C — Elegant catalog and product detail](work-packages/WP-5.27.2C-elegant-catalog-detail.md)
 - [WP 5.27.2D — Elegant cart and checkout journey](work-packages/WP-5.27.2D-elegant-checkout-journey.md)
 - [WP 5.27.2E — Elegant information pages and footer](work-packages/WP-5.27.2E-elegant-information-pages.md)
+- [WP 5.27.3A — Storefront navigation and checkout launch review](work-packages/WP-5.27.3A-storefront-launch-review.md)
 
 ## Architecture decisions
 

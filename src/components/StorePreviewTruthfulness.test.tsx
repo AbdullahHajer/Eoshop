@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Product, StoreConfig } from "../types";
 import { ELEGANT_PRESET, TECH_PRESET } from "../types";
@@ -112,5 +112,31 @@ describe("StorePreview truthful customer surfaces", () => {
     expect(container.querySelector('[data-elegant-about="true"]')).toBeNull();
     expect(container.querySelector('[data-elegant-footer="true"]')).toBeNull();
     expect(screen.getByRole("heading", { name: "Tech About" })).toBeTruthy();
+  });
+
+  it("returns the storefront scroll container to the top when desktop navigation changes pages", async () => {
+    const config: StoreConfig = {
+      ...ELEGANT_PRESET,
+      products: [published],
+      aboutTitle: "Elegant About",
+      aboutText: "Elegant story",
+    };
+    const { container } = render(<StorePreview {...props(config, "about")} />);
+    const scrollContainer = container.querySelector<HTMLElement>("#store-preview-scroll-container");
+    const scrollTo = vi.fn();
+    expect(scrollContainer).toBeTruthy();
+    if (!scrollContainer) return;
+    scrollContainer.scrollTo = scrollTo;
+    scrollContainer.scrollTop = 800;
+
+    const footer = container.querySelector<HTMLElement>("[data-elegant-footer='true']");
+    const productsButton = Array.from(footer?.querySelectorAll("button") ?? [])
+      .find((button) => button.textContent?.includes("المنتجات"));
+    expect(productsButton).toBeTruthy();
+    if (!productsButton) return;
+    fireEvent.click(productsButton);
+
+    expect(await screen.findByRole("heading", { name: "اكتشف ما يناسب أسلوبك" })).toBeTruthy();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
   });
 });

@@ -40,6 +40,8 @@ interface StorePreviewProps {
   submitOrder?: (input: Omit<CreateOrderInput, "workspaceRevision" | "catalogRevision">) => Promise<OrderReceipt>;
 }
 
+type StorePage = "home" | "products" | "about" | "contact" | "product" | "checkout";
+
 const getFontFamilyStyle = (fontName?: string) => {
   switch (fontName) {
     case "Tajawal": return "'Tajawal', sans-serif";
@@ -123,13 +125,26 @@ export default function StorePreview({
   const checkoutErrorRef = useRef<HTMLDivElement>(null);
   const checkoutFocusTargetRef = useRef<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Navigation Page State inside store
-  const [storePage, setStorePage] = useState<"home" | "products" | "about" | "contact" | "product" | "checkout">("home");
+  const [storePage, setStorePage] = useState<StorePage>("home");
+
+  const scrollStorefrontToTop = () => {
+    const container = scrollContainerRef.current;
+    if (container && typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
+    }
+  };
+
+  const navigateToStorePage = (page: StorePage) => {
+    setStorePage(page);
+    scrollStorefrontToTop();
+  };
 
   useEffect(() => {
     if (externalPage && ["home", "products", "about", "contact", "product", "checkout"].includes(externalPage)) {
-      setStorePage(externalPage as any);
+      navigateToStorePage(externalPage as StorePage);
       if (onResetExternalPage) onResetExternalPage();
     }
   }, [externalPage]);
@@ -276,11 +291,7 @@ export default function StorePreview({
     setSelectedProduct(product);
     setProductQty(1);
     setActiveImageIndex(0);
-    setStorePage("product");
-    const container = document.getElementById("store-preview-scroll-container");
-    if (container && typeof container.scrollTo === "function") {
-      container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
-    }
+    navigateToStorePage("product");
   };
 
   const handleAddToCartWithQty = (product: Product, qty: number) => {
@@ -329,18 +340,18 @@ export default function StorePreview({
   const openMarketingTarget = (targetType: StorefrontMarketingTargetType, targetValue?: string) => {
     if (targetType === "products") {
       setSelectedCategory("الكل");
-      setStorePage("products");
+      navigateToStorePage("products");
       return;
     }
     if (targetType === "category") {
       setSelectedCategory(targetValue?.trim() || "الكل");
-      setStorePage("products");
+      navigateToStorePage("products");
       return;
     }
     if (targetType === "product") {
       const product = publishedProducts.find((candidate) => candidate.id === targetValue);
       if (product) handleOpenProductProfile(product);
-      else setStorePage("products");
+      else navigateToStorePage("products");
       return;
     }
     if (!targetValue) return;
@@ -365,6 +376,7 @@ export default function StorePreview({
 
   return (
     <div 
+      ref={scrollContainerRef}
       id="store-preview-scroll-container"
       dir="rtl"
       className="w-full h-full flex flex-col relative overflow-y-auto pb-24 lg:pb-6"
@@ -438,7 +450,7 @@ export default function StorePreview({
             <div className="flex items-center justify-between w-full md:w-auto shrink-0">
               <button
                 type="button"
-                onClick={() => setStorePage("home")}
+                onClick={() => navigateToStorePage("home")}
                 className="flex items-center gap-3 cursor-pointer group text-right rounded-xl"
                 aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${config.storeName || "المتجر"}`}
               >
@@ -510,7 +522,7 @@ export default function StorePreview({
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     if (storePage !== "products" && storePage !== "home" && e.target.value.trim() !== "") {
-                      setStorePage("products");
+                      navigateToStorePage("products");
                     }
                   }}
                   placeholder="ابحث عن جهاز، سماعة، شاحن..."
@@ -542,7 +554,7 @@ export default function StorePreview({
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setStorePage(item.id as any)}
+                      onClick={() => navigateToStorePage(item.id as StorePage)}
                       aria-current={isActive ? "page" : undefined}
                       className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 font-extrabold ${
                         isActive
@@ -605,14 +617,14 @@ export default function StorePreview({
           currentRoute={storePage === "home" || storePage === "products" || storePage === "about" || storePage === "contact" ? storePage : undefined}
           tokens={{ surface: cardBgColor, ink: secondaryOnCard, mutedInk: effectiveTextColor, border: borderColor, accent: primaryOnWhite }}
           onSearchChange={setSearchQuery}
-          onSearchSubmit={() => setStorePage("products")}
-          onOpenHome={() => setStorePage("home")}
-          onOpenProducts={() => setStorePage("products")}
-          onOpenAbout={() => setStorePage("about")}
+          onSearchSubmit={() => navigateToStorePage("products")}
+          onOpenHome={() => navigateToStorePage("home")}
+          onOpenProducts={() => navigateToStorePage("products")}
+          onOpenAbout={() => navigateToStorePage("about")}
           onOpenCart={openCart}
           onSelectCategory={(category) => {
             setSelectedCategory(category);
-            setStorePage("products");
+            navigateToStorePage("products");
           }}
         />
       )}
@@ -629,11 +641,11 @@ export default function StorePreview({
             isElegant={isElegant}
             primaryColor={primaryColor}
             secondaryColor={secondaryColor}
-            onOpenProducts={() => setStorePage("products")}
-            onOpenAbout={() => setStorePage("about")}
+            onOpenProducts={() => navigateToStorePage("products")}
+            onOpenAbout={() => navigateToStorePage("about")}
             onSelectCategory={(category) => {
               setSelectedCategory(category);
-              setStorePage("products");
+              navigateToStorePage("products");
             }}
             onOpenProduct={handleOpenProductProfile}
             onAddProduct={addToCart}
@@ -756,8 +768,8 @@ export default function StorePreview({
             backgroundColor={bgColor}
             cardBackground={cardBgColor}
             borderColor={borderColor}
-            onOpenProducts={() => setStorePage("products")}
-            onOpenContact={() => setStorePage("contact")}
+            onOpenProducts={() => navigateToStorePage("products")}
+            onOpenContact={() => navigateToStorePage("contact")}
           />
         ) : (
           <div className="mx-auto max-w-6xl space-y-7 px-4 py-10 text-right animate-fadeIn">
@@ -824,7 +836,7 @@ export default function StorePreview({
             primaryColor={primaryColor}
             secondaryColor={secondaryColor}
             cartQuantity={cart.find((item) => item.product.id === detailProduct.id)?.quantity ?? 0}
-            onBack={() => setStorePage("products")}
+            onBack={() => navigateToStorePage("products")}
             onAdd={handleAddToCartWithQty}
           />
         )}
@@ -833,7 +845,7 @@ export default function StorePreview({
             <ShoppingBag className="mx-auto h-10 w-10 text-slate-400" />
             <h1 className="mt-4 text-lg font-black text-slate-900">المنتج غير متاح</h1>
             <p className="mt-2 text-sm leading-7 text-slate-600">قد يكون المنتج أُلغي نشره أو لم يعد موجودًا في هذا المتجر.</p>
-            <button type="button" onClick={() => setStorePage("products")} className="mt-5 min-h-11 rounded-xl px-5 py-3 text-xs font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>العودة إلى المنتجات</button>
+            <button type="button" onClick={() => navigateToStorePage("products")} className="mt-5 min-h-11 rounded-xl px-5 py-3 text-xs font-black" style={{ backgroundColor: primaryColor, color: primaryForeground }}>العودة إلى المنتجات</button>
           </section>
         )}
         {/* 6. CHECKOUT PAGE (صفحة إتمام الطلب وتعبئة البيانات والدفع) */}
@@ -904,7 +916,7 @@ export default function StorePreview({
             shippingFee: Number(config.shippingFee ?? 0),
             freeShippingThreshold: Number(config.freeShippingThreshold ?? 0),
             taxRate: Number(config.taxRate ?? 0),
-            paymentFee: paymentMethod === "cod" ? Number(config.cashOnDeliveryFee ?? 0) : 0,
+            paymentFee: effectivePaymentMethod === "cod" ? Number(config.cashOnDeliveryFee ?? 0) : 0,
             minimum: Number(config.minOrderAmount ?? 0),
           });
           const shippingCost = previewTotals.shipping;
@@ -932,11 +944,11 @@ export default function StorePreview({
               reportCheckoutError("لا توجد وسيلة دفع مفعلة لهذا المتجر حالياً.");
               return;
             }
-            if (paymentMethod === "wallet" && (!currentWallet || !transferRefNumber.trim())) {
+            if (effectivePaymentMethod === "wallet" && (!currentWallet || !transferRefNumber.trim())) {
               reportCheckoutError("أدخل رقم مرجع التحويل بعد تنفيذ العملية؛ سيبقى بانتظار تحقق المتجر.", "checkout-transfer-reference");
               return;
             }
-            if (paymentMethod === "cod" && !codAvailable) {
+            if (effectivePaymentMethod === "cod" && !codAvailable) {
               reportCheckoutError("الدفع عند الاستلام غير مفعّل لهذا المتجر. اختر وسيلة تحويل متاحة.", "checkout-payment-wallet");
               return;
             }
@@ -946,13 +958,13 @@ export default function StorePreview({
             }
             if (mode === "live") {
               if (!submitOrder || orderSubmitting) return;
-              if ((paymentMethod === "cod" && !codAvailable) || (paymentMethod === "wallet" && !currentWallet)) {
-                reportCheckoutError("وسيلة الدفع المحددة غير مفعلة لهذا المتجر. اختر وسيلة متاحة قبل إرسال الطلب.", paymentMethod === "cod" ? "checkout-payment-wallet" : "checkout-payment-cod");
+              if ((effectivePaymentMethod === "cod" && !codAvailable) || (effectivePaymentMethod === "wallet" && !currentWallet)) {
+                reportCheckoutError("وسيلة الدفع المحددة غير مفعلة لهذا المتجر. اختر وسيلة متاحة قبل إرسال الطلب.", effectivePaymentMethod === "cod" ? "checkout-payment-wallet" : "checkout-payment-cod");
                 return;
               }
               setOrderSubmitting(true);
               try {
-                const payment = paymentMethod === "cod"
+                const payment = effectivePaymentMethod === "cod"
                   ? { method: "cod" as const }
                   : currentWallet?.kind === "bank"
                     ? { method: "bank_transfer" as const, reference: transferRefNumber || undefined }
@@ -979,9 +991,9 @@ export default function StorePreview({
                   date: new Date(receipt.createdAt).toLocaleString("ar-SA"),
                   customer: { ...checkoutForm },
                   paymentMethod: receipt.paymentState === "due_on_delivery" ? "الدفع عند الاستلام" : "تحويل بانتظار التحقق",
-                  walletName: paymentMethod === "wallet" ? currentWallet?.name : null,
-                  walletAccount: paymentMethod === "wallet" ? currentWallet?.accountNumber : null,
-                  transferRefNumber: paymentMethod === "wallet" ? transferRefNumber : null,
+                  walletName: effectivePaymentMethod === "wallet" ? currentWallet?.name : null,
+                  walletAccount: effectivePaymentMethod === "wallet" ? currentWallet?.accountNumber : null,
+                  transferRefNumber: effectivePaymentMethod === "wallet" ? transferRefNumber : null,
                   items: (receipt.items || []).map((item) => ({
                     product: { name: item.name, price: minor(item.unitPriceMinor) },
                     quantity: item.quantity,
@@ -1012,12 +1024,12 @@ export default function StorePreview({
               orderNum,
               date: new Date().toLocaleString("ar-SA"),
               customer: { ...checkoutForm },
-              paymentMethod: paymentMethod === "cod" 
+              paymentMethod: effectivePaymentMethod === "cod"
                 ? `${isElegant ? "الدفع عند الاستلام / التوصيل" : "الدفع عند الاستلام / التوصيل 💵"} ${codFee > 0 ? `(+${codFee} ${config.currency} رسوم COD)` : ''}`
                 : `${currentWallet?.kind === "bank" ? "تحويل بنكي" : "محفظة إلكترونية"} (${currentWallet?.name})`,
-              walletName: paymentMethod === "wallet" ? currentWallet?.name : null,
-              walletAccount: paymentMethod === "wallet" ? currentWallet?.accountNumber : null,
-              transferRefNumber: paymentMethod === "wallet" ? transferRefNumber.trim() : null,
+              walletName: effectivePaymentMethod === "wallet" ? currentWallet?.name : null,
+              walletAccount: effectivePaymentMethod === "wallet" ? currentWallet?.accountNumber : null,
+              transferRefNumber: effectivePaymentMethod === "wallet" ? transferRefNumber.trim() : null,
               items: [...cart],
               subtotal: cartTotal,
               discount: couponDiscount,
@@ -1085,7 +1097,7 @@ export default function StorePreview({
               <div className={`flex items-center justify-between border-b pb-4 overflow-x-auto gap-2 ${isElegant ? "elegant-checkout__progress" : ""}`}
                    style={{ borderColor: isElegant ? "#f2eae1" : "#e2e8f0" }}>
                 <button
-                  onClick={() => setStorePage("products")}
+                  onClick={() => navigateToStorePage("products")}
                   className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition shadow-2xs hover:shadow-xs w-fit shrink-0 ${
                     !isElegant ? "bg-white border-slate-300 text-slate-800 hover:border-sky-400 font-mono" : "bg-white hover:bg-slate-50"
                   }`}
@@ -1286,7 +1298,7 @@ export default function StorePreview({
                         onClick={() => {
                           setOrderCompleted(false);
                           setPlacedOrderDetails(null);
-                          setStorePage("products");
+                          navigateToStorePage("products");
                         }}
                         className={`w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition ${isElegant ? "elegant-checkout__receipt-new" : ""}`}
                       >
@@ -1309,7 +1321,7 @@ export default function StorePreview({
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                     <button
                       type="button"
-                      onClick={() => setStorePage("products")}
+                      onClick={() => navigateToStorePage("products")}
                       className="py-3 px-5 rounded-xl text-white font-bold text-xs bg-slate-900 hover:bg-slate-800 shadow-md transition inline-flex items-center gap-2 w-full sm:w-auto justify-center cursor-pointer"
                     >
                       <span>{isElegant ? "استعراض معرض المنتجات" : "استعراض معرض المنتجات 🛍️"}</span>
@@ -1502,7 +1514,7 @@ export default function StorePreview({
                           onKeyDown={handleRadioArrowNavigation}
                           onClick={() => setPaymentMethod("cod")}
                           className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 text-right ${isElegant ? "elegant-checkout__payment-option" : ""} ${
-                            paymentMethod === "cod"
+                            effectivePaymentMethod === "cod"
                               ? "border-sky-500 bg-sky-50/50 ring-2 ring-sky-400/30"
                               : "border-slate-200 bg-white hover:border-slate-300"
                           }`}
@@ -1531,7 +1543,7 @@ export default function StorePreview({
                           onKeyDown={handleRadioArrowNavigation}
                           onClick={() => setPaymentMethod("wallet")}
                           className={`p-4 rounded-2xl border-2 cursor-pointer transition relative space-y-2 text-right ${isElegant ? "elegant-checkout__payment-option" : ""} ${
-                            paymentMethod === "wallet"
+                            effectivePaymentMethod === "wallet"
                               ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-400/30"
                               : "border-slate-200 bg-white hover:border-slate-300"
                           }`}
@@ -1556,7 +1568,7 @@ export default function StorePreview({
                       )}
 
                       {/* E-WALLET SELECTION SUB-PANEL */}
-                      {paymentMethod === "wallet" && transferAvailable && (
+                      {effectivePaymentMethod === "wallet" && transferAvailable && (
                         <div className={`p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 animate-fadeIn ${isElegant ? "elegant-checkout__transfer" : ""}`}>
                           <div className="space-y-1">
                             <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
@@ -1637,7 +1649,7 @@ export default function StorePreview({
                                     id="checkout-transfer-reference"
                                     name="transaction-reference"
                                     required
-                                    aria-invalid={Boolean(formValidationErr && paymentMethod === "wallet" && !transferRefNumber.trim())}
+                                    aria-invalid={Boolean(formValidationErr && effectivePaymentMethod === "wallet" && !transferRefNumber.trim())}
                                     aria-describedby={formValidationErr ? "checkout-error" : undefined}
                                     maxLength={200}
                                     placeholder="رقم مرجع التحويل أو الإيداع"
@@ -1747,7 +1759,7 @@ export default function StorePreview({
                           </span>
                         </div>
 
-                        {paymentMethod === "cod" && codFee > 0 && (
+                        {effectivePaymentMethod === "cod" && codFee > 0 && (
                           <div className="flex justify-between text-amber-700">
                             <span>رسوم الدفع عند الاستلام (COD):</span>
                             <span className="font-mono">+{codFee} {config.currency}</span>
@@ -1799,7 +1811,7 @@ export default function StorePreview({
         borderColor={borderColor}
         variant={isElegant ? "elegant" : "default"}
         attribution={platformSettings.storefrontAttributionEnabled ? platformSettings.storefrontAttributionText : null}
-        onNavigate={(page) => setStorePage(page)}
+        onNavigate={navigateToStorePage}
       />
       </div>
 
@@ -1826,12 +1838,8 @@ export default function StorePreview({
               onClose={() => closeCart()}
               onQuantityChange={updateQuantity}
               onCheckout={() => {
-                setStorePage("checkout");
+                navigateToStorePage("checkout");
                 closeCart("checkout");
-                const container = document.getElementById("store-preview-scroll-container");
-                if (container && typeof container.scrollTo === "function") {
-                  container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
-                }
               }}
             />
           ) : (
@@ -1980,12 +1988,8 @@ export default function StorePreview({
                   <button
                     type="button"
                     onClick={() => {
-                      setStorePage("checkout");
+                      navigateToStorePage("checkout");
                       closeCart("checkout");
-                      const container = document.getElementById("store-preview-scroll-container");
-                      if (container && typeof container.scrollTo === "function") {
-                        container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
-                      }
                     }}
                     className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] ${
                       !isElegant ? "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 font-mono shadow-sm" : "hover:opacity-90"
@@ -2026,11 +2030,7 @@ export default function StorePreview({
               key={item.id}
               type="button"
               onClick={() => {
-                setStorePage(item.id as any);
-                const container = document.getElementById("store-preview-scroll-container");
-                if (container) {
-                  container.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
-                }
+                navigateToStorePage(item.id as StorePage);
               }}
               aria-current={isActive ? "page" : undefined}
               className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 sm:px-3 py-1.5 min-h-[48px] rounded-xl transition text-[10px] font-extrabold cursor-pointer active:scale-90 ${
