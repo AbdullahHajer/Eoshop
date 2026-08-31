@@ -61,4 +61,36 @@ describe("StorefrontFooter", () => {
     expect(screen.getByText("لا توجد حسابات اجتماعية منشورة.")).toBeTruthy();
     expect(document.querySelector('a[href="#"]')).toBeNull();
   });
+
+  it("uses the editorial footer composition only when Elegant requests it", () => {
+    const { container, rerender } = render(
+      <StorefrontFooter
+        config={ELEGANT_PRESET}
+        primaryColor="#7c3f12"
+        secondaryColor="#1c1917"
+        cardBackground="#ffffff"
+        borderColor="#e7e5e4"
+        variant="elegant"
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('[data-elegant-footer="true"]')).toBeTruthy();
+    expect(screen.getByText("اكتشف القصة كاملة")).toBeTruthy();
+
+    rerender(
+      <StorefrontFooter
+        config={ELEGANT_PRESET}
+        primaryColor="#7c3f12"
+        secondaryColor="#1c1917"
+        cardBackground="#ffffff"
+        borderColor="#e7e5e4"
+        variant="default"
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('[data-elegant-footer="true"]')).toBeNull();
+    expect(screen.queryByText("اكتشف القصة كاملة")).toBeNull();
+  });
 });
