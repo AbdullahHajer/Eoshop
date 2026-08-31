@@ -4,11 +4,12 @@
 |---|---|
 | المرحلة | Phase 5 — Launch storefront differentiation |
 | الحزمة | WP 5.27.2E |
-| الحالة | Draft PR #87 — بانتظار CI والمراجعة النهائية؛ لا Merge |
+| الحالة | Draft PR #87 — البوابات الأربع ناجحة؛ بانتظار المراجعة النهائية؛ لا Merge |
 | Base SHA | `d00e86bb976a6c77affbf8721f16db30f61ea5c7` |
 | Implementation SHA | `e6e3cc6d923a1629ce6f5999e67d991465068309` |
 | الفرع | `codex/wp5-27-2e-elegant-content-pages` |
 | PR | [sas-prog1/Eoshop#87](https://github.com/sas-prog1/Eoshop/pull/87) |
+| CI | [Run 33396511291](https://github.com/sas-prog1/Eoshop/actions/runs/33396511291) — ناجح |
 | القالب | `themeStyle=elegant` فقط؛ قالب Tech دون تعديل |
 | الاعتماديات | WP 5.27.1، WP 5.27.2B، WP 5.27.2C، WP 5.27.2D |
 
@@ -78,4 +79,4 @@
 - `git diff --check`: ناجح.
 - تحذير JavaScript chunk الأكبر من `500 kB` ما زال دين أداء معروفًا خارج نطاق هذه الحزمة.
 
-رُفع الفرع المستقل وأُنشئ [Draft PR #87](https://github.com/sas-prog1/Eoshop/pull/87). لم يُنفذ Merge، والعمل متوقف عند بوابات CI والمراجعة النهائية.
+رُفع الفرع المستقل وأُنشئ [Draft PR #87](https://github.com/sas-prog1/Eoshop/pull/87). نجحت بوابات Repository safety وFrontend quality وBackend quality وContainer integration في [تشغيل CI رقم 33396511291](https://github.com/sas-prog1/Eoshop/actions/runs/33396511291). لم يُنفذ Merge، والعمل متوقف عند المراجعة النهائية والاعتماد.
