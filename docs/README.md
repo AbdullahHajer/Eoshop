@@ -37,6 +37,7 @@
 - [WP 5.27.2B — Elegant Stories storefront](work-packages/WP-5.27.2B-elegant-stories-storefront.md)
 - [WP 5.27.2C — Elegant catalog and product detail](work-packages/WP-5.27.2C-elegant-catalog-detail.md)
 - [WP 5.27.2D — Elegant cart and checkout journey](work-packages/WP-5.27.2D-elegant-checkout-journey.md)
+- [WP 5.27.2E — Elegant information pages and footer](work-packages/WP-5.27.2E-elegant-information-pages.md)
 
 ## Architecture decisions
 

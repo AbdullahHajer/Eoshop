@@ -91,4 +91,26 @@ describe("StorePreview truthful customer surfaces", () => {
     expect(screen.getAllByText(/Server address/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/ضمان رسمي|تقييم مشتري|شحن فوري/)).toBeNull();
   });
+
+  it("scopes the editorial information pages and footer to Elegant", () => {
+    const elegantConfig: StoreConfig = {
+      ...ELEGANT_PRESET,
+      products: [published],
+      aboutTitle: "Elegant About",
+      aboutText: "Elegant story",
+    };
+    const { container, rerender } = render(<StorePreview {...props(elegantConfig, "about")} />);
+
+    expect(container.querySelector('[data-elegant-about="true"]')).toBeTruthy();
+    expect(container.querySelector('[data-elegant-footer="true"]')).toBeTruthy();
+
+    rerender(<StorePreview {...props({ ...elegantConfig, phone: "+967700000001" }, "contact")} />);
+    expect(container.querySelector('[data-elegant-contact="true"]')).toBeTruthy();
+    expect(container.querySelector('[data-storefront-nav="home"]')?.getAttribute("aria-current")).toBeNull();
+
+    rerender(<StorePreview {...props({ ...TECH_PRESET, products: [published], aboutTitle: "Tech About" }, "about")} />);
+    expect(container.querySelector('[data-elegant-about="true"]')).toBeNull();
+    expect(container.querySelector('[data-elegant-footer="true"]')).toBeNull();
+    expect(screen.getByRole("heading", { name: "Tech About" })).toBeTruthy();
+  });
 });

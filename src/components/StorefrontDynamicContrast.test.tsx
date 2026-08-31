@@ -68,6 +68,47 @@ describe("storefront text contrast on merchant-defined dark surfaces", () => {
     expectReadableOn(screen.getByText("Built on Eoshop"), cardBackground);
   });
 
+  it("keeps the Elegant footer readable on its secondary-color surface", () => {
+    const elegantSurface = "#1C1917";
+    render(
+      <StorefrontFooter
+        config={{
+          ...ELEGANT_PRESET,
+          textColor: lowContrastText,
+          slogan: "وصف تذييل Elegant على سطح الهوية.",
+          phone: "",
+          whatsapp: "",
+          email: "",
+          address: "",
+          workingHours: "",
+          instagram: "",
+          twitter: "",
+          tiktok: "",
+          snapchat: "",
+        }}
+        primaryColor="#8A4B36"
+        secondaryColor={elegantSurface}
+        cardBackground={cardBackground}
+        borderColor="#57534E"
+        variant="elegant"
+        attribution="Built on Eoshop"
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    const footer = document.querySelector<HTMLElement>('[data-elegant-footer="true"]')!;
+    const footerMuted = footer.style.getPropertyValue("--elegant-footer-muted");
+    const footerInk = footer.style.getPropertyValue("--elegant-footer-ink");
+    const footerAccent = footer.style.getPropertyValue("--elegant-footer-accent");
+
+    expect(contrastRatio(footerMuted, elegantSurface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(footerInk, elegantSurface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(footerAccent, elegantSurface)).toBeGreaterThanOrEqual(4.5);
+    expect(screen.getByText("وصف تذييل Elegant على سطح الهوية.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "الرئيسية" })).toBeTruthy();
+    expect(screen.getByText("Built on Eoshop")).toBeTruthy();
+  });
+
   it("keeps product-card helper copy readable on cardBgColor", () => {
     render(
       <StorefrontProductCard

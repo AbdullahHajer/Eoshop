@@ -10,7 +10,7 @@ interface Props {
   categories: string[];
   cartCount: number;
   searchQuery: string;
-  currentRoute?: "home" | "products" | "about";
+  currentRoute?: "home" | "products" | "about" | "contact";
   tokens?: Partial<ElegantStoriesThemeTokens>;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;

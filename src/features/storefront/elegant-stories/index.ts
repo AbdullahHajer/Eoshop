@@ -8,5 +8,6 @@ export { default as ElegantCatalog } from "./ElegantCatalog";
 export { default as ElegantCatalogProductCard } from "./ElegantCatalogProductCard";
 export { default as ElegantProductDetail } from "./ElegantProductDetail";
 export { default as ElegantCartDrawer } from "./ElegantCartDrawer";
+export { ElegantAboutPage, ElegantContactPage } from "./ElegantInformationPages";
 export * from "./model";
 export * from "./storefrontModel";
