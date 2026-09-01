@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, Copy, Image, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Copy, Image, Loader2, Palette, Plus, Trash2, Upload } from "lucide-react";
 import type { StoreAssetUpload } from "../../adapters/uiAdapters";
 import type { StorefrontMarketingBlock, StorefrontMarketingPlacement } from "../../contracts/storefrontMarketingBlocks";
 import { uiErrorMessage } from "../../contracts/uiError";
 import type { StoreConfig } from "../../types";
 import { randomUuid } from "../../utils/randomUuid";
+import { contrastRatio, readableForeground } from "../../utils/readableForeground";
 
 interface Props {
   config: StoreConfig;
@@ -38,6 +39,61 @@ function statusLabel(block: StorefrontMarketingBlock, now = Date.now()): string 
   if (block.startsAt && Date.parse(block.startsAt) > now) return "مجدولة";
   if (block.endsAt && Date.parse(block.endsAt) <= now) return "منتهية";
   return "نشطة";
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+function validColor(value: string | undefined, fallback: string): string {
+  return value && HEX_COLOR.test(value) ? value.toUpperCase() : fallback;
+}
+
+function BlockAppearanceEditor({ block, onPatch }: {
+  block: StorefrontMarketingBlock;
+  onPatch: (patch: Partial<StorefrontMarketingBlock>) => void;
+}) {
+  const backgroundColor = validColor(block.backgroundColor, "#302724");
+  const textColor = validColor(block.textColor, "#FFFFFF");
+  const ratio = contrastRatio(textColor, backgroundColor);
+  const passes = ratio >= 4.5;
+  const overlayOpacity = Math.max(28, block.overlayOpacity ?? 44);
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3" aria-label={`ألوان ومعاينة ${block.title}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div><p className="inline-flex items-center gap-1 text-[11px] font-black text-slate-700"><Palette className="h-4 w-4" /> ألوان المساحة</p><p className="mt-1 text-[10px] leading-5 text-slate-500">تظهر المعاينة فورًا، ويحمي القالب النص بطبقة تعتيم فوق الصورة.</p></div>
+        <button type="button" onClick={() => onPatch({ textColor: readableForeground(backgroundColor) })} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-700">اختيار لون نص تلقائي</button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {([
+          { key: "backgroundColor", label: "لون الخلفية", value: backgroundColor },
+          { key: "textColor", label: "لون النص", value: textColor },
+        ] as const).map(({ key, label, value }) => {
+          const rawValue = block[key] ?? value;
+          const invalid = !HEX_COLOR.test(rawValue);
+          return (
+            <label key={key} className="space-y-1 rounded-xl border border-slate-200 bg-white p-2.5">
+              <span className="block text-[10px] font-bold text-slate-600">{label}</span>
+              <span className="flex items-center gap-2">
+                <input type="color" aria-label={`${label} ${block.title}`} value={value} onChange={(event) => onPatch({ [key]: event.target.value.toUpperCase() })} className="h-9 w-10 cursor-pointer rounded border-0 bg-transparent" />
+                <input dir="ltr" aria-label={`رمز ${label} ${block.title}`} aria-invalid={invalid} value={rawValue} maxLength={7} onChange={(event) => onPatch({ [key]: event.target.value.toUpperCase() })} className={`min-w-0 flex-1 rounded-lg border px-2 py-2 text-[11px] ${invalid ? "border-rose-300 text-rose-700" : "border-slate-200"}`} />
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <div data-testid={`marketing-appearance-preview-${block.id}`} className="relative min-h-36 overflow-hidden rounded-xl" style={{ backgroundColor, color: textColor }}>
+        {block.imageUrl.trim() ? <img src={block.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${block.focalPointX ?? 50}% ${block.focalPointY ?? 50}%` }} /> : null}
+        <span aria-hidden="true" className="absolute inset-0 bg-black" style={{ opacity: overlayOpacity / 100 }} />
+        <div className="relative z-10 flex min-h-36 flex-col justify-end gap-1 p-4">
+          {block.badge?.trim() ? <span className="w-fit rounded-full border border-current/30 px-2 py-1 text-[9px] font-black">{block.badge}</span> : null}
+          <strong className="text-base">{block.title}</strong>
+          {block.subtitle?.trim() ? <span className="text-[10px] opacity-90">{block.subtitle}</span> : null}
+          <span className="mt-1 w-fit rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-slate-950">{block.ctaLabel}</span>
+        </div>
+      </div>
+      <p className={`text-[10px] font-black ${passes ? "text-emerald-700" : "text-amber-700"}`}>تباين اللون الاحتياطي: {ratio.toFixed(2)}:1 — {passes ? "مناسب للنص العادي" : "يحتاج لونًا أوضح؛ استخدم الاختيار التلقائي"}</p>
+    </section>
+  );
 }
 
 export default function MerchantMarketingBlocksEditor({ config, activeTenantId, mediaOwnerKey, onChange, uploadAsset }: Props) {
@@ -184,6 +240,7 @@ export default function MerchantMarketingBlocksEditor({ config, activeTenantId, 
                     <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">اسم الراعي</span><input value={block.sponsorName ?? ""} maxLength={80} onChange={(event) => patchBlock(placement, block.id, { sponsorName: event.target.value || undefined })} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs" /></label>
                     <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">الشارة</span><input value={block.badge ?? ""} maxLength={40} onChange={(event) => patchBlock(placement, block.id, { badge: event.target.value || undefined })} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs" /></label>
                   </div>
+                  <BlockAppearanceEditor block={block} onPatch={(patch) => patchBlock(placement, block.id, patch)} />
                   <div className="grid gap-3 sm:grid-cols-3">
                     <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">التعتيم: {block.overlayOpacity ?? 44}%</span><input type="range" min="0" max="100" value={block.overlayOpacity ?? 44} onChange={(event) => patchBlock(placement, block.id, { overlayOpacity: Number(event.target.value) })} className="w-full" /></label>
                     <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">موضع أفقي: {block.focalPointX ?? 50}%</span><input type="range" min="0" max="100" value={block.focalPointX ?? 50} onChange={(event) => patchBlock(placement, block.id, { focalPointX: Number(event.target.value) })} className="w-full" /></label>
