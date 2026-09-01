@@ -63,7 +63,9 @@ describe("AuthRoutePage", () => {
     expect((await screen.findAllByLabelText("العودة إلى متاجر اليمن")).length).toBe(2);
     const identityImage = document.querySelector<HTMLImageElement>('section[aria-label="هوية المنصة"] img');
     expect(identityImage?.src).toBe("https://cdn.example.test/platform/auth.jpg");
-    expect(document.documentElement.style.getPropertyValue("--platform-brand-accent")).toBe("#C79A43");
-    expect(document.documentElement.style.getPropertyValue("--platform-brand-font")).toContain("IBM Plex Sans Arabic");
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue("--platform-brand-accent")).toBe("#C79A43");
+      expect(document.documentElement.style.getPropertyValue("--platform-brand-font")).toContain("IBM Plex Sans Arabic");
+    });
   });
 });

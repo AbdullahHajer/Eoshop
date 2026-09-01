@@ -170,6 +170,38 @@ describe("server-backed checkout interface", () => {
     expect(submitOrder.mock.calls[0][0].payment).toEqual({ method: "wallet", channelId: "bank-transfer", reference: "WALLET-REF" });
   }, 20_000);
 
+  it("submits the payment method that remains available after merchant settings change", async () => {
+    const submitOrder = vi.fn().mockResolvedValue({ ...receipt, paymentState: "due_on_delivery" });
+    const props = checkoutProps();
+    const user = userEvent.setup();
+    const { rerender } = render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
+
+    const walletOption = await screen.findByRole("radio", { name: /الدفع عبر المحافظ الإلكترونية/ });
+    await waitFor(() => expect(walletOption.getAttribute("aria-checked")).toBe("true"));
+
+    rerender(<StorePreview
+      {...props}
+      config={{
+        ...props.config,
+        enableCashOnDelivery: true,
+        enableBankTransfer: false,
+        enableEWallets: false,
+        customWallets: [],
+      }}
+      mode="live"
+      submitOrder={submitOrder}
+    />);
+
+    const codOption = await screen.findByRole("radio", { name: /الدفع عند الاستلام/ });
+    await waitFor(() => expect(codOption.getAttribute("aria-checked")).toBe("true"));
+
+    await fillRequiredCheckoutFields(user);
+    await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1));
+    expect(submitOrder.mock.calls[0][0].payment).toEqual({ method: "cod" });
+  }, 20_000);
+
   it("blocks preview completion below the saved post-discount minimum", async () => {
     const submitOrder = vi.fn();
     const props = checkoutProps();
