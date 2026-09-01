@@ -111,6 +111,8 @@ describe("StorePreview truthful customer surfaces", () => {
     rerender(<StorePreview {...props({ ...TECH_PRESET, products: [published], aboutTitle: "Tech About" }, "about")} />);
     expect(container.querySelector('[data-elegant-about="true"]')).toBeNull();
     expect(container.querySelector('[data-elegant-footer="true"]')).toBeNull();
+    expect(container.querySelector("[data-tech-storefront-header]")).not.toBeNull();
+    expect(container.querySelector("[data-elegant-editorial-header]")).toBeNull();
     expect(screen.getByRole("heading", { name: "Tech About" })).toBeTruthy();
   });
 
