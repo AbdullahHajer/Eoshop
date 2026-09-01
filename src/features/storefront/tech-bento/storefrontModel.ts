@@ -46,6 +46,12 @@ function tileFromBlock(block: StorefrontMarketingBlock): TechMarketingTileViewMo
 export function techBentoHomeModel(config: StoreConfig, now = new Date()): TechBentoHomeViewModel {
   const heroTargetType = config.heroBannerTargetType ?? "products";
   const heroTargetValue = heroTargetType === "products" ? undefined : config.heroBannerTargetValue?.trim() || undefined;
+  const categories = Array.from(new Set(
+    config.products
+      .filter((product) => product.status === "published")
+      .map((product) => product.category.trim())
+      .filter(Boolean),
+  ));
 
   return {
     hero: {
@@ -62,6 +68,7 @@ export function techBentoHomeModel(config: StoreConfig, now = new Date()): TechB
       targetType: heroTargetType,
       targetValue: heroTargetValue,
     },
+    categories,
     bentoItems: activeBlocks(config, "hero_bento", now).slice(0, 5).map(tileFromBlock),
     sideAds: activeBlocks(config, "side_ad", now).slice(0, 2).map(tileFromBlock),
     discoveryItems: activeBlocks(config, "discovery", now).slice(0, 10).map(tileFromBlock),

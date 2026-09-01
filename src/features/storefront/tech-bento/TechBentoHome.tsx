@@ -1,5 +1,6 @@
 import React from "react";
 import { LayoutGrid, Megaphone } from "lucide-react";
+import TechCategoryRail from "./TechCategoryRail";
 import TechDiscoveryRail from "./TechDiscoveryRail";
 import TechHeroLead from "./TechHeroLead";
 import TechMarketingCard from "./TechMarketingCard";
@@ -19,6 +20,7 @@ interface Props {
   onOpenHero: (hero: TechHeroViewModel) => void;
   onOpenMarketingItem: (item: TechMarketingTileViewModel) => void;
   onOpenProducts: () => void;
+  onSelectCategory: (category: string) => void;
 }
 
 type TechCssProperties = React.CSSProperties & {
@@ -46,6 +48,7 @@ export default function TechBentoHome({
   onOpenHero,
   onOpenMarketingItem,
   onOpenProducts,
+  onSelectCategory,
 }: Props) {
   const resolvedTokens = { ...DEFAULT_TECH_BENTO_TOKENS, ...tokens };
   const style: TechCssProperties = {
@@ -63,6 +66,8 @@ export default function TechBentoHome({
       {loading ? <LoadingState /> : (
         <>
           <div className="tech-bento-stage">
+            <TechCategoryRail categories={model.categories} onSelectCategory={onSelectCategory} />
+
             <div className="tech-bento-stage__showcase">
               <TechHeroLead hero={model.hero} onOpen={onOpenHero} />
               {model.bentoItems.length > 0 ? (

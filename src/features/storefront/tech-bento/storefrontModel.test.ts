@@ -89,11 +89,28 @@ describe("techBentoHomeModel", () => {
     expect(model.hero.mobileImageUrl).toContain("000000000902");
   });
 
+  it("derives unique categories from published products only", () => {
+    const baseProduct = TECH_PRESET.products[0];
+    const model = techBentoHomeModel({
+      ...TECH_PRESET,
+      products: [
+        { ...baseProduct, id: "published-1", status: "published", category: " إلكترونيات " },
+        { ...baseProduct, id: "published-2", status: "published", category: "إلكترونيات" },
+        { ...baseProduct, id: "published-3", status: "published", category: "المنزل" },
+        { ...baseProduct, id: "draft-1", status: "draft", category: "مسودة" },
+        { ...baseProduct, id: "archived-1", status: "archived", category: "مؤرشف" },
+      ],
+    });
+
+    expect(model.categories).toEqual(["إلكترونيات", "المنزل"]);
+  });
+
   it("keeps legacy stores truthful with empty marketing collections", () => {
     const model = techBentoHomeModel({ ...TECH_PRESET, marketingBlocks: undefined, showHeroBanner: false });
     expect(model.bentoItems).toEqual([]);
     expect(model.sideAds).toEqual([]);
     expect(model.discoveryItems).toEqual([]);
+    expect(model.categories).toEqual([]);
     expect(model.hero.imageUrl).toBeUndefined();
   });
 });

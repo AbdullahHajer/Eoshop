@@ -45,7 +45,7 @@ describe("StorefrontHome", () => {
   it("shows truthful empty states without inventing catalog or service claims", () => {
     render(<StorefrontHome config={{ ...ELEGANT_PRESET, products: [], phone: "", whatsapp: "", email: "", workingHours: "", enableCashOnDelivery: false, enableBankTransfer: false, enableEWallets: false, shippingFee: undefined, freeShippingThreshold: undefined }} isElegant={false} primaryColor="#112233" secondaryColor="#334455" onOpenProducts={vi.fn()} onOpenAbout={vi.fn()} onSelectCategory={vi.fn()} onOpenProduct={vi.fn()} onAddProduct={vi.fn()} onOpenMarketingTarget={vi.fn()} />);
     expect(screen.getByText("لم يضف المتجر معلومات الخدمة بعد")).toBeTruthy();
-    expect(screen.getByText("لا توجد تصنيفات منشورة بعد.")).toBeTruthy();
+    expect(screen.getByText("لا توجد تصنيفات منشورة حاليًا.")).toBeTruthy();
     expect(screen.getByText("لم ينشر المتجر منتجات بعد.")).toBeTruthy();
   });
 
@@ -146,6 +146,7 @@ describe("StorefrontHome", () => {
 
   it("renders the server-owned Tech Bento projection without consuming Elegant stories", () => {
     const onOpenMarketingTarget = vi.fn();
+    const onSelectCategory = vi.fn();
     const marketingBlocks = [
       {
         id: "00000000-0000-4000-8000-000000000101",
@@ -206,13 +207,21 @@ describe("StorefrontHome", () => {
 
     const view = render(
       <StorefrontHome
-        config={{ ...ELEGANT_PRESET, themeStyle: "tech", marketingBlocks }}
+        config={{
+          ...ELEGANT_PRESET,
+          themeStyle: "tech",
+          marketingBlocks,
+          products: [
+            { ...ELEGANT_PRESET.products[0], status: "published", category: "إلكترونيات" },
+            { ...ELEGANT_PRESET.products[1], status: "draft", category: "مسودة مخفية" },
+          ],
+        }}
         isElegant={false}
         primaryColor="#0969F0"
         secondaryColor="#0F172A"
         onOpenProducts={vi.fn()}
         onOpenAbout={vi.fn()}
-        onSelectCategory={vi.fn()}
+        onSelectCategory={onSelectCategory}
         onOpenProduct={vi.fn()}
         onAddProduct={vi.fn()}
         onOpenMarketingTarget={onOpenMarketingTarget}
@@ -224,6 +233,10 @@ describe("StorefrontHome", () => {
     expect(screen.getByText("إعلان · بيت الألعاب")).toBeTruthy();
     expect(screen.getByRole("button", { name: "فتح سماعات" })).toBeTruthy();
     expect(screen.queryByText("قصة Elegant فقط")).toBeNull();
+    expect(screen.queryByText("مسودة مخفية")).toBeNull();
+    expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "إلكترونيات" }));
+    expect(onSelectCategory).toHaveBeenCalledWith("إلكترونيات");
     fireEvent.click(screen.getByRole("button", { name: "افتح القسم: إلكترونيات ذكية" }));
     expect(onOpenMarketingTarget).toHaveBeenCalledWith("category", "إلكترونيات");
   });

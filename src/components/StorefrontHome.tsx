@@ -120,6 +120,7 @@ export default function StorefrontHome({
         onOpenHero={(hero) => onOpenMarketingTarget(hero.targetType, hero.targetValue)}
         onOpenMarketingItem={(item) => onOpenMarketingTarget(item.targetType, item.targetValue)}
         onOpenProducts={onOpenProducts}
+        onSelectCategory={onSelectCategory}
       />
     ) : <StorefrontHero config={config} isElegant={isElegant} primaryColor={primaryColor} secondaryColor={secondaryColor} onOpenProducts={onOpenProducts} />,
     trust: (
@@ -132,7 +133,7 @@ export default function StorefrontHome({
         ) : <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-bold" style={{ borderColor, color: cardBodyColor }}>لم يضف المتجر معلومات الخدمة بعد</div>}
       </section>
     ),
-    categories: hasElegantEditorial ? null : legacyCategories,
+    categories: hasElegantEditorial || !isElegant ? null : legacyCategories,
     featured_products: (
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-3"><div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>المنتجات المنشورة</h2><p className="mt-1 text-xs" style={{ color: pageBodyColor }}>منتجات من كتالوج المتجر الحالي.</p></div>{products.length > 0 && <button type="button" onClick={onOpenProducts} className="text-xs font-black" style={{ color: primaryPageAccent }}>عرض الكل</button>}</div>

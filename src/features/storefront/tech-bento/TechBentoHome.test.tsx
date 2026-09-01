@@ -43,6 +43,7 @@ function model(overrides: Partial<TechBentoHomeViewModel> = {}): TechBentoHomeVi
       focalPointY: 42,
       targetType: "products",
     },
+    categories: ["إلكترونيات", "المنزل"],
     bentoItems: Array.from({ length: 5 }, (_, index) => item(index + 1)),
     sideAds: [
       item(6, { disclosure: "ad", sponsorName: "بيت الألعاب" }),
@@ -56,10 +57,12 @@ function model(overrides: Partial<TechBentoHomeViewModel> = {}): TechBentoHomeVi
 describe("TechBentoHome isolated presentation", () => {
   it("renders the hero, five Bento tiles, two ads and ten discovery items", () => {
     const view = render(
-      <TechBentoHome model={model()} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} />,
+      <TechBentoHome model={model()} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />,
     );
 
     expect(screen.getByRole("heading", { name: "اكتشف التقنية بأسلوب جديد" })).toBeTruthy();
+    expect(view.container.querySelector("[data-tech-bento-home]")?.getAttribute("dir")).toBe("rtl");
+    expect(view.container.querySelectorAll(".tech-category-rail__item")).toHaveLength(2);
     expect(view.container.querySelector("[data-storefront-hero]")?.getAttribute("data-storefront-hero-height")).toBe("medium");
     expect(view.container.querySelectorAll('[data-tech-marketing-placement="hero_bento"]')).toHaveLength(5);
     expect(view.container.querySelectorAll('[data-tech-marketing-placement="side_ad"]')).toHaveLength(2);
@@ -73,9 +76,10 @@ describe("TechBentoHome isolated presentation", () => {
     const onOpenHero = vi.fn();
     const onOpenMarketingItem = vi.fn();
     const onOpenProducts = vi.fn();
+    const onSelectCategory = vi.fn();
     const currentModel = model();
     const view = render(
-      <TechBentoHome model={currentModel} onOpenHero={onOpenHero} onOpenMarketingItem={onOpenMarketingItem} onOpenProducts={onOpenProducts} />,
+      <TechBentoHome model={currentModel} onOpenHero={onOpenHero} onOpenMarketingItem={onOpenMarketingItem} onOpenProducts={onOpenProducts} onSelectCategory={onSelectCategory} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "ابدأ الاكتشاف" }));
@@ -89,25 +93,28 @@ describe("TechBentoHome isolated presentation", () => {
     expect(onOpenMarketingItem).toHaveBeenCalledWith(currentModel.discoveryItems[0]);
     fireEvent.click(screen.getByRole("button", { name: "كل المنتجات" }));
     expect(onOpenProducts).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "المنزل" }));
+    expect(onSelectCategory).toHaveBeenCalledWith("المنزل");
   });
 
   it("shows bounded loading and truthful empty states", () => {
-    const emptyModel = model({ bentoItems: [], sideAds: [], discoveryItems: [] });
+    const emptyModel = model({ categories: [], bentoItems: [], sideAds: [], discoveryItems: [] });
     const view = render(
-      <TechBentoHome model={emptyModel} loading onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} />,
+      <TechBentoHome model={emptyModel} loading onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />,
     );
     expect(view.container.querySelector("[data-tech-bento-loading]")?.getAttribute("aria-busy")).toBe("true");
     expect(screen.queryByRole("heading", { name: emptyModel.hero.title })).toBeNull();
 
-    view.rerender(<TechBentoHome model={emptyModel} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} />);
+    view.rerender(<TechBentoHome model={emptyModel} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />);
     expect(screen.getByText("لم تُنشر مربعات Bento بعد.")).toBeTruthy();
     expect(screen.getByText("لا توجد إعلانات منشورة حاليًا.")).toBeTruthy();
     expect(screen.getByText("ستظهر عناصر الاكتشاف هنا عند نشرها.")).toBeTruthy();
+    expect(screen.getByText("لا توجد تصنيفات منشورة حاليًا.")).toBeTruthy();
   });
 
   it("replaces a failed managed image with an accessible missing-image state", () => {
     const view = render(
-      <TechBentoHome model={model({ bentoItems: [item(1)], sideAds: [], discoveryItems: [] })} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} />,
+      <TechBentoHome model={model({ bentoItems: [item(1)], sideAds: [], discoveryItems: [] })} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />,
     );
     fireEvent.error(screen.getByAltText("صورة مساحة 1"));
     const card = view.container.querySelector('[data-tech-marketing-id="tile-1"]');
@@ -117,7 +124,7 @@ describe("TechBentoHome isolated presentation", () => {
 
   it("keeps the hero readable even when the saved overlay is too transparent", () => {
     const view = render(
-      <TechBentoHome model={model()} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} />,
+      <TechBentoHome model={model()} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />,
     );
     expect(view.container.querySelector(".tech-bento-hero__overlay")?.getAttribute("style")).toContain("opacity: 0.58");
     expect(screen.getByRole("heading", { name: "اكتشف التقنية بأسلوب جديد" }).closest("[data-tech-hero-has-image]")?.getAttribute("data-tech-hero-has-image")).toBe("true");
@@ -133,6 +140,7 @@ describe("TechBentoHome isolated presentation", () => {
         onOpenHero={vi.fn()}
         onOpenMarketingItem={vi.fn()}
         onOpenProducts={vi.fn()}
+        onSelectCategory={vi.fn()}
       />,
     );
     const card = view.container.querySelector('[data-tech-marketing-id="tile-1"]') as HTMLElement;

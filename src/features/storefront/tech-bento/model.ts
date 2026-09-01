@@ -42,6 +42,7 @@ export interface TechMarketingTileViewModel extends TechMarketingTarget {
 
 export interface TechBentoHomeViewModel {
   hero: TechHeroViewModel;
+  categories: string[];
   bentoItems: TechMarketingTileViewModel[];
   sideAds: TechMarketingTileViewModel[];
   discoveryItems: TechMarketingTileViewModel[];
