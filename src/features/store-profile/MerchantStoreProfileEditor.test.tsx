@@ -160,4 +160,17 @@ describe("MerchantStoreProfileEditor", () => {
     }} />);
     expect(screen.getByRole("button", { name: "إخفاء واجهة الترحيب" })).toHaveProperty("disabled", true);
   });
+
+  it("dispatches the campaign editor that belongs to the selected storefront theme", () => {
+    const view = renderEditor({
+      config: { ...ELEGANT_PRESET, themeStyle: "tech" },
+      initialSection: "campaigns",
+    });
+    expect(screen.getByRole("heading", { name: "مساحات Tech Bento" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "القصص والمختارات" })).toBeNull();
+
+    view.rerender(<MerchantStoreProfileEditor {...view.props} config={{ ...ELEGANT_PRESET, themeStyle: "elegant" }} />);
+    expect(screen.getByRole("heading", { name: "القصص والمختارات" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "مساحات Tech Bento" })).toBeNull();
+  });
 });
