@@ -18,7 +18,7 @@ import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import { readableAccent, readableForeground } from "../utils/readableForeground";
 import { storefrontAvailableQuantity, storefrontCartLineLimit } from "../workflows/orderState";
 import type { StorefrontMarketingTargetType } from "../contracts/storefrontMarketingBlocks";
-import { ElegantCartDrawer, ElegantCatalog, ElegantEditorialHeader } from "../features/storefront/elegant-stories";
+import { ElegantAboutPage, ElegantCartDrawer, ElegantCatalog, ElegantContactPage, ElegantEditorialHeader } from "../features/storefront/elegant-stories";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -602,7 +602,7 @@ export default function StorePreview({
           categories={categories.filter((category) => category !== "الكل")}
           cartCount={totalItems}
           searchQuery={searchQuery}
-          currentRoute={storePage === "home" || storePage === "products" || storePage === "about" ? storePage : undefined}
+          currentRoute={storePage === "home" || storePage === "products" || storePage === "about" || storePage === "contact" ? storePage : undefined}
           tokens={{ surface: cardBgColor, ink: secondaryOnCard, mutedInk: effectiveTextColor, border: borderColor, accent: primaryOnWhite }}
           onSearchChange={setSearchQuery}
           onSearchSubmit={() => setStorePage("products")}
@@ -747,7 +747,19 @@ export default function StorePreview({
         )}
 
         {/* 3. ABOUT US PAGE (من نحن) */}
-        {storePage === "about" && (
+        {storePage === "about" && (isElegant ? (
+          <ElegantAboutPage
+            config={config}
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            textColor={textColor}
+            backgroundColor={bgColor}
+            cardBackground={cardBgColor}
+            borderColor={borderColor}
+            onOpenProducts={() => setStorePage("products")}
+            onOpenContact={() => setStorePage("contact")}
+          />
+        ) : (
           <div className="mx-auto max-w-6xl space-y-7 px-4 py-10 text-right animate-fadeIn">
             <header className="space-y-2 border-b pb-6 text-center" style={{ borderColor }}>
               <span className="inline-flex rounded-full border px-3 py-1 text-xs font-black" style={{ backgroundColor: cardBgColor, borderColor, color: readableAccent(primaryColor, cardBgColor) }}>من نحن</span>
@@ -762,9 +774,19 @@ export default function StorePreview({
               </div>
             </div>
           </div>
-        )}
+        ))}
         {/* 4. CONTACT US PAGE (تواصل معنا) */}
-        {storePage === "contact" && (() => {
+        {storePage === "contact" && (isElegant ? (
+          <ElegantContactPage
+            config={config}
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            textColor={textColor}
+            backgroundColor={bgColor}
+            cardBackground={cardBgColor}
+            borderColor={borderColor}
+          />
+        ) : (() => {
           const phone = canonicalContactTarget(config.phone);
           const whatsapp = canonicalContactTarget(config.whatsapp);
           const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.email?.trim() ?? "") ? config.email?.trim() : null;
@@ -792,7 +814,7 @@ export default function StorePreview({
               {(config.instagram || config.twitter || config.tiktok || config.snapchat) && <div className="flex flex-wrap justify-center gap-2">{([["Instagram", config.instagram], ["X", config.twitter], ["TikTok", config.tiktok], ["Snapchat", config.snapchat]] as const).filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => <span key={label} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold">{label}: @{value}</span>)}</div>}
             </div>
           );
-        })()}
+        })())}
 
         {/* 5. PRODUCT PROFILE PAGE (بروفايل المنتج) */}
         {storePage === "product" && detailProduct && (
@@ -1775,6 +1797,7 @@ export default function StorePreview({
         secondaryColor={secondaryColor}
         cardBackground={cardBgColor}
         borderColor={borderColor}
+        variant={isElegant ? "elegant" : "default"}
         attribution={platformSettings.storefrontAttributionEnabled ? platformSettings.storefrontAttributionText : null}
         onNavigate={(page) => setStorePage(page)}
       />
