@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutGrid, Megaphone } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import TechCategoryRail from "./TechCategoryRail";
 import TechDiscoveryRail from "./TechDiscoveryRail";
 import TechHeroLead from "./TechHeroLead";
@@ -65,7 +65,7 @@ export default function TechBentoHome({
     <div className="tech-bento-home" data-tech-bento-home dir="rtl" style={style}>
       {loading ? <LoadingState /> : (
         <>
-          <div className="tech-bento-stage">
+          <div className={`tech-bento-stage ${model.sideAds.length === 0 ? "tech-bento-stage--no-ads" : ""}`}>
             <TechCategoryRail categories={model.categories} onSelectCategory={onSelectCategory} />
 
             <div className="tech-bento-stage__showcase">
@@ -87,16 +87,13 @@ export default function TechBentoHome({
               )}
             </div>
 
-            <aside className="tech-ad-rail" aria-label="إعلانات المتجر" data-tech-ad-count={model.sideAds.length}>
-              {model.sideAds.length > 0 ? model.sideAds.slice(0, 2).map((item, index) => (
-                <TechMarketingCard key={item.id} item={item} variant="ad" index={index} onOpen={onOpenMarketingItem} />
-              )) : (
-                <div className="tech-bento-empty tech-bento-empty--ads" data-tech-ad-empty>
-                  <Megaphone aria-hidden="true" />
-                  <p>لا توجد إعلانات منشورة حاليًا.</p>
-                </div>
-              )}
-            </aside>
+            {model.sideAds.length > 0 ? (
+              <aside className="tech-ad-rail" aria-label="إعلانات المتجر" data-tech-ad-count={model.sideAds.length}>
+                {model.sideAds.slice(0, 2).map((item, index) => (
+                  <TechMarketingCard key={item.id} item={item} variant="ad" index={index} onOpen={onOpenMarketingItem} />
+                ))}
+              </aside>
+            ) : null}
           </div>
 
           <TechDiscoveryRail items={model.discoveryItems} onOpen={onOpenMarketingItem} onOpenAll={onOpenProducts} />

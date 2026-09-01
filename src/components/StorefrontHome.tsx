@@ -8,7 +8,7 @@ import { readableAccent, readableForeground } from "../utils/readableForeground"
 import StorefrontHero from "./StorefrontHero";
 import StorefrontProductCard from "./StorefrontProductCard";
 import { ElegantStoriesHome, elegantStoriesHomeModel } from "../features/storefront/elegant-stories";
-import { TechBentoHome, techBentoHomeModel } from "../features/storefront/tech-bento";
+import { TechBentoHome, TechTrustTicker, techBentoHomeModel } from "../features/storefront/tech-bento";
 
 interface Props {
   config: StoreConfig;
@@ -123,7 +123,12 @@ export default function StorefrontHome({
         onSelectCategory={onSelectCategory}
       />
     ) : <StorefrontHero config={config} isElegant={isElegant} primaryColor={primaryColor} secondaryColor={secondaryColor} onOpenProducts={onOpenProducts} />,
-    trust: (
+    trust: !isElegant ? (
+      <TechTrustTicker
+        items={facts.map(({ key, label }) => ({ key, label }))}
+        tokens={{ surface: cardBackground, ink: secondaryCardAccent, mutedInk: cardBodyColor, border: borderColor, accent: primaryCardAccent }}
+      />
+    ) : (
       <section className="rounded-3xl border p-5 shadow-sm" style={{ backgroundColor: cardBackground, borderColor }}>
         <div className="mb-4"><h2 className="text-lg font-black" style={{ color: secondaryCardAccent }}>معلومات المتجر والخدمة</h2><p className="mt-1 text-xs" style={{ color: cardBodyColor }}>بيانات منشورة من إعدادات المتجر الحالية.</p></div>
         {facts.length > 0 ? (

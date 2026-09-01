@@ -52,6 +52,31 @@ export function techBentoHomeModel(config: StoreConfig, now = new Date()): TechB
       .map((product) => product.category.trim())
       .filter(Boolean),
   ));
+  const configuredBentoItems = activeBlocks(config, "hero_bento", now).slice(0, 5).map(tileFromBlock);
+  const configuredCategoryTargets = new Set(
+    configuredBentoItems
+      .filter((item) => item.targetType === "category")
+      .map((item) => item.targetValue?.trim())
+      .filter((category): category is string => Boolean(category)),
+  );
+  const categoryFallbacks: TechMarketingTileViewModel[] = categories
+    .filter((category) => !configuredCategoryTargets.has(category))
+    .slice(0, Math.max(0, 5 - configuredBentoItems.length))
+    .map((category) => ({
+      id: `derived-category:${category}`,
+      title: category,
+      subtitle: `منتجات منشورة ضمن تصنيف ${category}.`,
+      ctaLabel: "استكشف التصنيف",
+      imageUrl: "",
+      altText: `تصنيف ${category}`,
+      overlayOpacity: 0,
+      focalPointX: 50,
+      focalPointY: 50,
+      disclosure: "none",
+      targetType: "category",
+      targetValue: category,
+      derivedFromCategory: true,
+    }));
 
   return {
     hero: {
@@ -69,7 +94,7 @@ export function techBentoHomeModel(config: StoreConfig, now = new Date()): TechB
       targetValue: heroTargetValue,
     },
     categories,
-    bentoItems: activeBlocks(config, "hero_bento", now).slice(0, 5).map(tileFromBlock),
+    bentoItems: [...configuredBentoItems, ...categoryFallbacks],
     sideAds: activeBlocks(config, "side_ad", now).slice(0, 2).map(tileFromBlock),
     discoveryItems: activeBlocks(config, "discovery", now).slice(0, 10).map(tileFromBlock),
   };

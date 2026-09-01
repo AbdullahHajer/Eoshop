@@ -38,6 +38,7 @@ export interface TechMarketingTileViewModel extends TechMarketingTarget {
   focalPointY: number;
   disclosure: StorefrontMarketingDisclosure;
   sponsorName?: string;
+  derivedFromCategory?: boolean;
 }
 
 export interface TechBentoHomeViewModel {

@@ -2,8 +2,8 @@
 
 | الحقل | القيمة |
 |---|---|
-| المرحلة الحالية | T2A.1 — سكة تصنيفات Tech Bento |
-| الحالة | T2A.1 مكتملة ومختبرة؛ متوقفة قبل تعديل `StorePreview.tsx` أو محرر التخصيص أو بدء T2B |
+| المرحلة الحالية | T2B — إغلاق Composition والـrenderer المشترك |
+| الحالة | T2B مكتملة ومختبرة؛ متوقفة قبل محرر التخصيص وT3 |
 | Base SHA الحالي | `2f48de0f090198f176efd909eb10f4bd38f9d2a9` |
 | الفرع | `codex/wp5-27-2a-tech-bento-storefront-v2` |
 | التاريخ | 2026-09-01 |
@@ -209,6 +209,42 @@ StorefrontMarketingBlock
 - البناء المحلي: JavaScript ‏`1,058.17 kB` / gzip `277.06 kB`، وCSS ‏`190.74 kB` / gzip `29.25 kB`.
 - بناء صورة الويب Linux داخل Docker: JavaScript ‏`1,058.17 kB` / gzip `277.06 kB`، وCSS ‏`190.58 kB` / gzip `29.21 kB`، وHero ‏`819.42 kB`.
 - بقي تحذير chunk الأكبر من 500 kB دينًا سابقًا، ولم تنفذ T2A.1 تقسيمًا واسعًا أو تغييرًا في التصميم خارج سكة التصنيفات.
+
+### تنفيذ T2B
+
+بدأت T2B من الرأس المعتمد `4f370e5248f05bce5fd544303bf7fc1148d15bae` وأغلقت Composition دون إنشاء renderer أو عقد بيانات موازٍ:
+
+- استخرج Header الخاص بـTech من `StorePreview.tsx` إلى `TechStorefrontHeader`، وأضاف `StorefrontHeaderDispatcher` لاختيار Header القالب مع إبقاء route/search/cart state وجميع handlers داخل `StorePreview` نفسه.
+- بقي `ElegantEditorialHeader` هو مسار Elegant نفسه دون تعديل أي ملف داخل `elegant-stories`، وتغطيه characterization test عند الـdispatcher.
+- أضيف `TechTrustTicker` داخل قسم `trust` الموجود، ويعرض فقط حقائق مشتقة من إعدادات المتجر المنشورة مثل عدد المنتجات والتصنيفات ووسائل الدفع والشحن والتواصل؛ لا يعرض شعبية أو خصمًا أو ضمانًا غير موثق.
+- عند نقص مربعات Bento، تُشتق عناصر عرض مؤقتة من تصنيفات المنتجات ذات `status === "published"` فقط. لا تُحفظ هذه العناصر في `marketingBlocks`، ولا تنشئ صورة أو منتجًا أو API أو عقدًا بديلًا، ولا تكرر تصنيفًا يستهدفه block منشور أصلًا.
+- البحث والتنقل والتصنيفات وأهداف `products/category/product/external` تستخدم handlers المشتركة الحالية، والسلة والمنتج والـcheckout والإيصال بقيت داخل renderer التجاري الواحد.
+- لم تُعدل API أو قاعدة البيانات أو Backend أو محرر الحملات أو `MerchantStoreProfileEditor`، ولم تبدأ T3.
+
+الحالة المرئية المثبتة:
+
+- سطح المكتب: Header Tech، سكة التصنيفات يسارًا، Hero وBento في الوسط، الإعلانان يمينًا، ثم Discovery وشريط معلومات الطلب.
+- الشاشات الأصغر: Header متعدد الصفوف دون page overflow، حقل بحث واضح، سكة التصنيفات وBento والإعلانات وDiscovery أفقية قابلة للتمرير وفق حدود CSS الحالية.
+- الحالات الناقصة: ينهار عمود الإعلانات كاملًا عند غيابها، مع Empty states للتصنيفات وBento وDiscovery ومعلومات الخدمة، وبديل رسومي صادق للتصنيف المشتق بدل ادعاء صورة مفقودة.
+- تعذر التقاط صور 1440px و390px لأن جلسة Codex لم تعرض أي متصفح متصل. شُغل Vite محليًا وتحقق من جاهزيته، ثم أُوقف؛ التصوير مؤجل وغير مانع حسب اعتماد المالك.
+
+نتائج T2B على الشجرة النهائية قبل Commit:
+
+| البوابة | النتيجة |
+|---|---|
+| الاختبارات المركزة | **PASS** — 7 ملفات / 29 اختبارًا |
+| Repository safety | **PASS** |
+| Frontend quality + audit | **PASS** — 80 ملفًا / 420 اختبارًا، TypeScript وVite ناجحان، و0 ثغرات |
+| Backend quality | **PASS** — Composer validate/audit، Pint ‏296 ملفًا، Larastan ‏256/256، وPHPUnit ‏3 اختبارات / 6 assertions |
+| Container integration | **PASS** — PostgreSQL ‏174 اختبارًا / 1,960 assertion، والترحيلات وHTTP وworker وscheduler ناجحة |
+| `git diff --check` | **PASS** |
+
+بناء T2B:
+
+- البناء المحلي: JavaScript ‏`1,060.80 kB` / gzip `278.07 kB`، وCSS ‏`192.33 kB` / gzip `29.47 kB`.
+- بناء صورة الويب Linux داخل Docker: JavaScript ‏`1,060.80 kB` / gzip `278.07 kB`، وCSS ‏`192.17 kB` / gzip `29.42 kB`، وHero ‏`819.42 kB`.
+- مقارنة بـT2A.1: زيادة JavaScript ‏`2.63 kB` وgzip ‏`1.01 kB`، وزيادة CSS محلية ‏`1.59 kB` وgzip ‏`0.22 kB` تقريبًا.
+- بقي تحذير chunk الأكبر من 500 kB دينًا سابقًا؛ لم تنفذ T2B إعادة تقسيم أو إعادة تصميم واسعة.
 
 ## 9. المخاطر والتراجع
 

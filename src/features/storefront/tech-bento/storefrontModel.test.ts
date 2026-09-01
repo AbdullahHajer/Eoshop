@@ -105,6 +105,31 @@ describe("techBentoHomeModel", () => {
     expect(model.categories).toEqual(["إلكترونيات", "المنزل"]);
   });
 
+  it("fills unused Bento slots from real published categories without persisting parallel blocks", () => {
+    const baseProduct = TECH_PRESET.products[0];
+    const configured = block(1, { targetType: "category", targetValue: "إلكترونيات" });
+    const model = techBentoHomeModel({
+      ...TECH_PRESET,
+      marketingBlocks: [configured],
+      products: [
+        { ...baseProduct, id: "published-1", status: "published", category: "إلكترونيات" },
+        { ...baseProduct, id: "published-2", status: "published", category: "المنزل" },
+        { ...baseProduct, id: "draft-1", status: "draft", category: "مسودة" },
+      ],
+    });
+
+    expect(model.bentoItems).toHaveLength(2);
+    expect(model.bentoItems[0].id).toBe(configured.id);
+    expect(model.bentoItems[1]).toMatchObject({
+      title: "المنزل",
+      targetType: "category",
+      targetValue: "المنزل",
+      derivedFromCategory: true,
+    });
+    expect(model.bentoItems.some((item) => item.title === "مسودة")).toBe(false);
+    expect(configured).not.toHaveProperty("derivedFromCategory");
+  });
+
   it("keeps legacy stores truthful with empty marketing collections", () => {
     const model = techBentoHomeModel({ ...TECH_PRESET, marketingBlocks: undefined, showHeroBanner: false });
     expect(model.bentoItems).toEqual([]);

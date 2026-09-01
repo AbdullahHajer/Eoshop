@@ -44,7 +44,7 @@ describe("StorefrontHome", () => {
 
   it("shows truthful empty states without inventing catalog or service claims", () => {
     render(<StorefrontHome config={{ ...ELEGANT_PRESET, products: [], phone: "", whatsapp: "", email: "", workingHours: "", enableCashOnDelivery: false, enableBankTransfer: false, enableEWallets: false, shippingFee: undefined, freeShippingThreshold: undefined }} isElegant={false} primaryColor="#112233" secondaryColor="#334455" onOpenProducts={vi.fn()} onOpenAbout={vi.fn()} onSelectCategory={vi.fn()} onOpenProduct={vi.fn()} onAddProduct={vi.fn()} onOpenMarketingTarget={vi.fn()} />);
-    expect(screen.getByText("لم يضف المتجر معلومات الخدمة بعد")).toBeTruthy();
+    expect(screen.getByText("لم ينشر المتجر معلومات خدمة بعد.")).toBeTruthy();
     expect(screen.getByText("لا توجد تصنيفات منشورة حاليًا.")).toBeTruthy();
     expect(screen.getByText("لم ينشر المتجر منتجات بعد.")).toBeTruthy();
   });
@@ -235,6 +235,8 @@ describe("StorefrontHome", () => {
     expect(screen.queryByText("قصة Elegant فقط")).toBeNull();
     expect(screen.queryByText("مسودة مخفية")).toBeNull();
     expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    expect(view.container.querySelector("[data-tech-trust-ticker]")).not.toBeNull();
+    expect(screen.getByText("معلومات الطلب")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "إلكترونيات" }));
     expect(onSelectCategory).toHaveBeenCalledWith("إلكترونيات");
     fireEvent.click(screen.getByRole("button", { name: "افتح القسم: إلكترونيات ذكية" }));

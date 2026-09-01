@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   ShoppingBag, Phone, ChevronLeft, ChevronRight, Search, Plus, Minus, X, Check, ArrowRight,
   Mail, MapPin, Clock, MessageSquare, Send, Sparkles, Heart, Truck, CreditCard,
-  Instagram, Twitter, Video, Camera, Share2, Cpu, Zap, Box,
+  Instagram, Twitter, Video, Camera, Share2, Cpu,
   Home, Info, Wallet, Copy, FileText, Printer, CheckCircle2, Building, QrCode, Tag, ExternalLink, Lock,
 } from "lucide-react";
 import { StoreConfig, Product } from "../types";
@@ -13,12 +13,13 @@ import StorefrontHome from "./StorefrontHome";
 import StorefrontProductDetail from "./StorefrontProductDetail";
 import StorefrontProductCard from "./StorefrontProductCard";
 import StorefrontFooter from "./StorefrontFooter";
+import StorefrontHeaderDispatcher from "../features/storefront/StorefrontHeaderDispatcher";
 import { buildPrintableInvoiceHtml, calculatePreviewCheckout, canonicalContactTarget, preferredContactTarget, previewPercentageDiscount } from "../contracts/checkoutPolicy";
 import { usePlatformSettings } from "../adapters/PlatformSettingsContext";
 import { readableAccent, readableForeground } from "../utils/readableForeground";
 import { storefrontAvailableQuantity, storefrontCartLineLimit } from "../workflows/orderState";
 import type { StorefrontMarketingTargetType } from "../contracts/storefrontMarketingBlocks";
-import { ElegantAboutPage, ElegantCartDrawer, ElegantCatalog, ElegantContactPage, ElegantEditorialHeader } from "../features/storefront/elegant-stories";
+import { ElegantAboutPage, ElegantCartDrawer, ElegantCatalog, ElegantContactPage } from "../features/storefront/elegant-stories";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -427,195 +428,28 @@ export default function StorePreview({
       )}
 
       {/* Main Header */}
-      {!isElegant ? (
-        /* TECH TEMPLATE UNIQUE HEADER DESIGN */
-        <header 
-          className="sticky top-0 z-20 backdrop-blur-xl border-b shadow-sm transition-all duration-300"
-          style={{ backgroundColor: cardBgColor, borderColor: borderColor }}
-        >
-          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
-            {/* Top Row: Brand & Mobile Cart */}
-            <div className="flex items-center justify-between w-full md:w-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setStorePage("home")}
-                className="flex items-center gap-3 cursor-pointer group text-right rounded-xl"
-                aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${config.storeName || "المتجر"}`}
-              >
-                <div className="relative flex items-center">
-                  {config.logoUrl ? (
-                    <img 
-                      src={config.logoUrl} 
-                      alt={config.storeName} 
-                      style={{ height: `${config.logoSize || 44}px` }} 
-                      className="w-auto max-w-[150px] sm:max-w-[220px] object-contain group-hover:scale-105 transition duration-300 shrink-0 filter drop-shadow-xs"
-                      referrerPolicy="no-referrer" 
-                    />
-                  ) : (
-                    <span 
-                      style={{ 
-                        width: `${config.logoSize || 44}px`, 
-                        height: `${config.logoSize || 44}px`,
-                        fontSize: `${Math.max(16, (config.logoSize || 44) * 0.5)}px`
-                      }} 
-                      className="rounded-2xl bg-gradient-to-tr from-sky-600 via-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-600/20 group-hover:scale-105 transition duration-300 shrink-0"
-                    >
-                      {config.logoIcon || "⚡"}
-                    </span>
-                  )}
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-base font-black group-hover:text-sky-700 transition tracking-tight" style={{ color: secondaryOnCard }}>
-                      {config.storeName || "متجر الأجهزة الذكية"}
-                    </h1>
-                    <span className="bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">
-                      TECH
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-extrabold truncate max-w-[180px] md:max-w-xs">
-                    {config.slogan || `مرحباً بكم في ${config.storeName}`}
-                  </p>
-                </div>
-              </button>
-
-              {/* Mobile Shopping Cart Trigger */}
-              <div className="flex lg:hidden items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(event) => openCart(event.currentTarget)}
-                  aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
-                  className="p-2.5 rounded-xl bg-slate-900 text-white shadow-md relative flex items-center justify-center"
-                >
-                  <ShoppingBag className="w-4 h-4 text-sky-400" />
-                  {totalItems > 0 && (
-                    <span className="absolute -top-1.5 -left-1.5 bg-sky-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                      {totalItems}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Middle Section: Integrated Header Live Search & Desktop Nav */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-              {/* Header Live Search Input */}
-              <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 right-3 pointer-events-none" />
-                <input
-                  type="text"
-                  aria-label="البحث في منتجات المتجر"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (storePage !== "products" && storePage !== "home" && e.target.value.trim() !== "") {
-                      setStorePage("products");
-                    }
-                  }}
-                  placeholder="ابحث عن جهاز، سماعة، شاحن..."
-                  className="w-full bg-slate-100/90 border border-slate-200/90 hover:border-sky-300 focus:border-sky-500 focus:bg-white rounded-xl py-2 pr-9 pl-7 text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-hidden transition shadow-2xs"
-                />
-                {searchQuery && (
-                  <button 
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    aria-label="مسح البحث"
-                    className="absolute top-1/2 -translate-y-1/2 left-2.5 text-slate-400 hover:text-slate-700"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Segmented Floating Pill Nav (Desktop Only) */}
-              <nav aria-label="التنقل الرئيسي في المتجر" className="hidden lg:flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/90 text-xs font-bold">
-                {[
-                  { id: "home", label: "الرئيسية", icon: Zap },
-                  { id: "products", label: "الأجهزة", icon: Box },
-                  { id: "about", label: "عن المتجر", icon: Info },
-                  { id: "contact", label: "الدعم", icon: MessageSquare }
-                ].map((item) => {
-                  const isActive = storePage === item.id;
-                  const IconComp = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setStorePage(item.id as any)}
-                      aria-current={isActive ? "page" : undefined}
-                      className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 font-extrabold ${
-                        isActive
-                          ? "bg-slate-900 text-white shadow-sm"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
-                      }`}
-                    >
-                      <IconComp className={`w-3.5 h-3.5 ${isActive ? "text-sky-400" : "text-slate-500"}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-
-            {/* Desktop Actions Section: Contact hotline & Cart Trigger Pill */}
-            <div className="hidden lg:flex items-center gap-2.5">
-              {canonicalPhone && (
-                <a 
-                  href={`tel:${canonicalPhone}`}
-                  className="p-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200/80 transition flex items-center gap-1.5 text-xs font-extrabold"
-                  title="تواصل هاتفياً"
-                >
-                  <Phone className="w-3.5 h-3.5 text-sky-600" />
-                  <span className="hidden lg:inline">{canonicalPhone}</span>
-                </a>
-              )}
-
-              <button
-                type="button"
-                onClick={(event) => openCart(event.currentTarget)}
-                aria-label={`فتح سلة التسوق، ${totalItems} منتج`}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-extrabold text-xs transition shadow-md hover:shadow-lg flex items-center gap-2.5 border border-slate-800 group"
-              >
-                <div className="relative">
-                  <ShoppingBag className="w-4 h-4 text-sky-400 group-hover:scale-110 transition" />
-                  {totalItems > 0 && (
-                    <span className="absolute -top-2 -left-2 bg-sky-500 text-white font-black text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border border-slate-900 shadow-2xs">
-                      {totalItems}
-                    </span>
-                  )}
-                </div>
-                <span>سلة التسوق</span>
-                {cartTotal > 0 && (
-                  <span className="bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-md text-[11px] font-mono border border-sky-500/30">
-                    {cartTotal} {config.currency || "ر.س"}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </header>
-      ) : (
-        <ElegantEditorialHeader
-          storeName={config.storeName || "متجر جديد"}
-          logoUrl={config.logoUrl}
-          categories={categories.filter((category) => category !== "الكل")}
-          cartCount={totalItems}
-          searchQuery={searchQuery}
-          currentRoute={storePage === "home" || storePage === "products" || storePage === "about" || storePage === "contact" ? storePage : undefined}
-          tokens={{ surface: cardBgColor, ink: secondaryOnCard, mutedInk: effectiveTextColor, border: borderColor, accent: primaryOnWhite }}
-          onSearchChange={setSearchQuery}
-          onSearchSubmit={() => setStorePage("products")}
-          onOpenHome={() => setStorePage("home")}
-          onOpenProducts={() => setStorePage("products")}
-          onOpenAbout={() => setStorePage("about")}
-          onOpenCart={openCart}
-          onSelectCategory={(category) => {
-            setSelectedCategory(category);
-            setStorePage("products");
-          }}
-        />
-      )}
+      <StorefrontHeaderDispatcher
+        config={config}
+        isElegant={isElegant}
+        categories={categories}
+        cartCount={totalItems}
+        cartTotal={cartTotal}
+        searchQuery={searchQuery}
+        currentRoute={storePage}
+        phone={canonicalPhone}
+        tokens={{ surface: cardBgColor, ink: secondaryOnCard, mutedInk: readableAccent(textColor, cardBgColor), border: borderColor, accent: isElegant ? primaryOnWhite : primaryColor }}
+        onSearchChange={(value) => {
+          setSearchQuery(value);
+          if (storePage !== "products" && storePage !== "home" && value.trim()) setStorePage("products");
+        }}
+        onSearchSubmit={() => setStorePage("products")}
+        onOpenHome={() => setStorePage("home")}
+        onOpenProducts={() => setStorePage("products")}
+        onOpenAbout={() => setStorePage("about")}
+        onOpenContact={() => setStorePage("contact")}
+        onOpenCart={openCart}
+        onSelectCategory={(category) => { setSelectedCategory(category); setStorePage("products"); }}
+      />
 
 
       {/* ------------------- PAGE CONTENTS RENDER ------------------- */}

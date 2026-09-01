@@ -107,7 +107,8 @@ describe("TechBentoHome isolated presentation", () => {
 
     view.rerender(<TechBentoHome model={emptyModel} onOpenHero={vi.fn()} onOpenMarketingItem={vi.fn()} onOpenProducts={vi.fn()} onSelectCategory={vi.fn()} />);
     expect(screen.getByText("لم تُنشر مربعات Bento بعد.")).toBeTruthy();
-    expect(screen.getByText("لا توجد إعلانات منشورة حاليًا.")).toBeTruthy();
+    expect(view.container.querySelector(".tech-ad-rail")).toBeNull();
+    expect(view.container.querySelector(".tech-bento-stage--no-ads")).not.toBeNull();
     expect(screen.getByText("ستظهر عناصر الاكتشاف هنا عند نشرها.")).toBeTruthy();
     expect(screen.getByText("لا توجد تصنيفات منشورة حاليًا.")).toBeTruthy();
   });
