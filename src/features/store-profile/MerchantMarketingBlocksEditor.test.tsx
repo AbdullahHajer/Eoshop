@@ -100,6 +100,27 @@ describe("MerchantMarketingBlocksEditor", () => {
     ]));
   });
 
+  it("edits independent story colors and previews unsafe fallback contrast", () => {
+    const onChange = vi.fn();
+    const coloredStory = { ...storyBlock, backgroundColor: "#FFFFFF", textColor: "#FFFFFF" };
+    renderEditor({ config: { ...ELEGANT_PRESET, marketingBlocks: [coloredStory] }, onChange });
+
+    const preview = screen.getByTestId(`marketing-appearance-preview-${coloredStory.id}`);
+    expect(preview.getAttribute("style")).toContain("background-color: rgb(255, 255, 255)");
+    expect(screen.getByText(/تباين اللون الاحتياطي: 1.00:1/)).toBeTruthy();
+    expect(screen.getByText(/يحتاج لونًا أوضح/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("لون الخلفية قصة الموسم"), { target: { value: "#112233" } });
+    expect(onChange).toHaveBeenCalledWith("marketingBlocks", [
+      expect.objectContaining({ id: coloredStory.id, backgroundColor: "#112233" }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "اختيار لون نص تلقائي" }));
+    expect(onChange).toHaveBeenLastCalledWith("marketingBlocks", [
+      expect.objectContaining({ id: coloredStory.id, textColor: "#000000" }),
+    ]);
+  });
+
   it("retains Elegant content while the Tech theme is selected", () => {
     renderEditor({ config: { ...ELEGANT_PRESET, themeStyle: "tech", marketingBlocks: [storyBlock] } });
     expect(screen.getByText(/محتوى Elegant محفوظ ولن يُحذف/)).toBeTruthy();
