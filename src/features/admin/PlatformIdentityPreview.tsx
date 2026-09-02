@@ -3,6 +3,7 @@ import { LockKeyhole, Store } from "lucide-react";
 import type { PlatformSettings } from "../../adapters/uiAdapters";
 import defaultIdentityImage from "../../assets/images/hero_banner_perfume_1785918166890.jpg";
 import { isSafePlatformLogoUrl } from "../../utils/platformLogoUrl";
+import { isSafePlatformIdentityImageUrl } from "../../utils/platformIdentityImageUrl";
 import { readableForeground } from "../../utils/readableForeground";
 
 export type PlatformIdentityPreviewMode = "landing" | "auth";
@@ -18,8 +19,8 @@ export default function PlatformIdentityPreview({ settings, mode }: PlatformIden
   const primary = colorPattern.test(settings.brandPrimaryColor) ? settings.brandPrimaryColor : "#081725";
   const accent = colorPattern.test(settings.brandAccentColor) ? settings.brandAccentColor : "#B18A46";
   const surface = colorPattern.test(settings.brandSurfaceColor) ? settings.brandSurfaceColor : "#F8F6F1";
-  const landingImage = isSafePlatformLogoUrl(settings.landingHeroImageUrl) && settings.landingHeroImageUrl ? settings.landingHeroImageUrl : defaultIdentityImage;
-  const authImage = isSafePlatformLogoUrl(settings.authImageUrl) && settings.authImageUrl ? settings.authImageUrl : landingImage;
+  const landingImage = isSafePlatformIdentityImageUrl(settings.landingHeroImageUrl) && settings.landingHeroImageUrl ? settings.landingHeroImageUrl : defaultIdentityImage;
+  const authImage = isSafePlatformIdentityImageUrl(settings.authImageUrl) && settings.authImageUrl ? settings.authImageUrl : landingImage;
   const fontFamily = `"${settings.brandFontFamily}", "Cairo", sans-serif`;
 
   if (mode === "auth") {

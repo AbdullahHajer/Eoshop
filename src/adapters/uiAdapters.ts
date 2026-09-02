@@ -21,6 +21,8 @@ export type {
   PaginationMeta,
   PlatformAttentionQueue,
   PlatformOverview,
+  PlatformAssetPurpose,
+  PlatformAssetUpload,
   PlatformRole,
   PlatformStore,
   PlatformStoreDetail,
