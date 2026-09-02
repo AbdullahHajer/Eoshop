@@ -5,6 +5,7 @@ import { uiErrorMessage } from "../../contracts/uiError";
 import type { StoreConfig } from "../../types";
 import { STOREFRONT_SECTION_LABELS, storefrontSectionsOrDefault } from "../../contracts/storefrontSections";
 import MerchantMarketingBlocksEditor from "./MerchantMarketingBlocksEditor";
+import MerchantTechBentoBlocksEditor from "./MerchantTechBentoBlocksEditor";
 
 type ProfileSection = "identity" | "appearance" | "hero" | "campaigns" | "layout";
 type AssetField = "logoUrl" | "heroBannerImage";
@@ -235,13 +236,23 @@ export default function MerchantStoreProfileEditor({
       )}
 
       {section === "campaigns" && (
-        <MerchantMarketingBlocksEditor
-          config={config}
-          activeTenantId={activeTenantId}
-          mediaOwnerKey={mediaOwnerKey}
-          onChange={onChange}
-          uploadAsset={uploadAsset}
-        />
+        config.themeStyle === "tech" ? (
+          <MerchantTechBentoBlocksEditor
+            config={config}
+            activeTenantId={activeTenantId}
+            mediaOwnerKey={mediaOwnerKey}
+            onChange={onChange}
+            uploadAsset={uploadAsset}
+          />
+        ) : (
+          <MerchantMarketingBlocksEditor
+            config={config}
+            activeTenantId={activeTenantId}
+            mediaOwnerKey={mediaOwnerKey}
+            onChange={onChange}
+            uploadAsset={uploadAsset}
+          />
+        )
       )}
 
       {section === "layout" && (
