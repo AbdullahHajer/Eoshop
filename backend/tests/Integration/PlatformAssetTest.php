@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
+use RuntimeException;
 use Tests\TestCase;
 
 #[Group('database')]
@@ -143,6 +144,89 @@ class PlatformAssetTest extends TestCase
         $payload['landingHeroImageUrl'] = $url;
         $this->actingAs($manager)->putJson('/api/admin/platform-settings', $payload)
             ->assertConflict()->assertJsonPath('code', 'platform_asset_unavailable');
+    }
+
+    public function test_storage_failure_removes_staging_and_the_same_idempotency_key_can_retry(): void
+    {
+        $manager = $this->operator('asset-storage-failure@example.test', SystemRole::PlatformSuperAdmin);
+        $source = UploadedFile::fake()->image('retry.png', 640, 360);
+        $content = file_get_contents((string) $source->getRealPath());
+        $this->assertIsString($content);
+        $key = (string) Str::uuid();
+        $service = new class extends PlatformAssetService
+        {
+            private int $attempts = 0;
+
+            /** @param resource $contents */
+            protected function put(string $disk, string $path, $contents): bool
+            {
+                $this->attempts++;
+
+                return $this->attempts === 1 ? false : parent::put($disk, $path, $contents);
+            }
+        };
+
+        $failed = false;
+        try {
+            $service->upload($manager, UploadedFile::fake()->createWithContent('retry.png', $content), 'landing_hero', $key);
+        } catch (RuntimeException) {
+            $failed = true;
+        }
+        $this->assertTrue($failed);
+        $this->assertDatabaseMissing('platform_assets', ['uploaded_by_user_id' => $manager->id, 'upload_idempotency_key' => $key]);
+
+        $result = $service->upload($manager, UploadedFile::fake()->createWithContent('retry.png', $content), 'landing_hero', $key);
+        $this->assertDatabaseHas('platform_assets', [
+            'id' => $result['id'], 'state' => 'ready', 'uploaded_by_user_id' => $manager->id, 'upload_idempotency_key' => $key,
+        ]);
+    }
+
+    public function test_failed_and_interrupted_moves_are_recoverable_and_purging_is_resumable(): void
+    {
+        $manager = $this->operator('asset-lifecycle-failure@example.test', SystemRole::PlatformSuperAdmin);
+        $result = app(PlatformAssetService::class)->upload(
+            $manager,
+            UploadedFile::fake()->image('lifecycle.png', 640, 360),
+            'landing_hero',
+            (string) Str::uuid(),
+        );
+        $assetId = $result['id'];
+        DB::table('platform_assets')->where('id', $assetId)->update(['orphaned_at' => now()->utc()->subHours(25)]);
+        $row = DB::table('platform_assets')->where('id', $assetId)->firstOrFail();
+        $quarantinePath = 'platform-assets-recovery/'.substr($assetId, 0, 2).'/'.basename((string) $row->path);
+
+        $moveFailure = new class extends PlatformAssetService
+        {
+            protected function move(string $disk, string $from, string $to): bool
+            {
+                return false;
+            }
+        };
+        $this->assertSame(['quarantined' => 0, 'deleted' => 0], $moveFailure->prune());
+        $this->assertDatabaseHas('platform_assets', ['id' => $assetId, 'state' => 'ready']);
+        Storage::disk('local')->assertExists((string) $row->path);
+
+        $this->assertTrue(Storage::disk('local')->move((string) $row->path, $quarantinePath));
+        $this->assertSame(1, app(PlatformAssetService::class)->prune()['quarantined']);
+        $this->assertDatabaseHas('platform_assets', ['id' => $assetId, 'state' => 'quarantined']);
+        $this->assertTrue(app(PlatformAssetService::class)->restore($assetId));
+        Storage::disk('local')->assertExists((string) $row->path);
+
+        DB::table('platform_assets')->where('id', $assetId)->update(['orphaned_at' => now()->utc()->subHours(25)]);
+        $this->assertSame(1, app(PlatformAssetService::class)->prune()['quarantined']);
+        DB::table('platform_assets')->where('id', $assetId)->update(['recoverable_until' => now()->utc()->subSecond()]);
+        $deleteFailure = new class extends PlatformAssetService
+        {
+            protected function delete(string $disk, string $path): bool
+            {
+                return false;
+            }
+        };
+        $this->assertSame(0, $deleteFailure->prune()['deleted']);
+        $this->assertDatabaseHas('platform_assets', ['id' => $assetId, 'state' => 'purging']);
+        $this->assertFalse($deleteFailure->restore($assetId));
+        $this->assertSame(1, app(PlatformAssetService::class)->prune()['deleted']);
+        $this->assertDatabaseMissing('platform_assets', ['id' => $assetId]);
     }
 
     /** @return array<string, mixed> */

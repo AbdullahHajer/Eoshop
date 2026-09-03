@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Eye, Palette, RefreshCw, RotateCcw, Save, Type } from "lucide-react";
 import {
   isUiError,
@@ -68,6 +68,9 @@ export default function PlatformSettingsPanel({
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<PlatformIdentityPreviewMode>("landing");
+  const [identityPreviewUrls, setIdentityPreviewUrls] = useState<{ landing: string | null; auth: string | null }>({ landing: null, auth: null });
+  const setLandingPreview = useCallback((value: string | null) => setIdentityPreviewUrls((current) => ({ ...current, landing: value })), []);
+  const setAuthPreview = useCallback((value: string | null) => setIdentityPreviewUrls((current) => ({ ...current, auth: value })), []);
   const dirty = useMemo(() => server !== null && draft !== null && !same(editable(server), draft), [draft, server]);
   const protectedDirty = dirty || conflictDraft !== null;
 
@@ -91,6 +94,7 @@ export default function PlatformSettingsPanel({
     setLoading(false);
     setSaving(false);
     setError(null);
+    setIdentityPreviewUrls({ landing: null, auth: null });
     setForbidden(true);
     onForbiddenChange(true);
     onDirtyChange(false);
@@ -112,6 +116,7 @@ export default function PlatformSettingsPanel({
       if (!mounted.current || current !== sequence.current) return;
       setServer(next);
       setDraft(editable(next));
+      setIdentityPreviewUrls({ landing: null, auth: null });
       setForbidden(false);
       onForbiddenChange(false);
     } catch (caught) {
@@ -189,6 +194,7 @@ export default function PlatformSettingsPanel({
       if (!mounted.current || current !== sequence.current) return;
       setServer(saved);
       setDraft(editable(saved));
+      setIdentityPreviewUrls({ landing: null, auth: null });
       setConflictDraft(null);
       onSaved(editable(saved));
       onToast("تم حفظ إعدادات المنصة وتطبيق الهوية العامة.", "success");
@@ -262,8 +268,8 @@ export default function PlatformSettingsPanel({
             </div>
             <label className="block text-xs font-bold"><span className="flex items-center gap-2"><Type className="h-4 w-4" /> خط المنصة</span><select aria-label="خط المنصة" className={`${input} mt-2`} value={draft.brandFontFamily} onChange={(event) => change("brandFontFamily", event.target.value as PlatformSettings["brandFontFamily"])}>{brandFonts.map((font) => <option key={font} value={font}>{font}</option>)}</select></label>
             <div className="grid gap-4 lg:grid-cols-2">
-              <PlatformIdentityAssetField administration={administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={draft.landingHeroImageUrl} placeholder="https://cdn.example.com/landing.jpg" disabled={editorDisabled} invalid={landingImageInvalid} onChange={(value) => change("landingHeroImageUrl", value)} />
-              <PlatformIdentityAssetField administration={administration} purpose="authentication" label="صورة نافذة الدخول" value={draft.authImageUrl} placeholder="اختياري — ترث صورة الرئيسية" disabled={editorDisabled} invalid={authImageInvalid} onChange={(value) => change("authImageUrl", value)} />
+              <PlatformIdentityAssetField administration={administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={draft.landingHeroImageUrl} committedValue={server.landingHeroImageUrl} placeholder="https://cdn.example.com/landing.jpg" disabled={editorDisabled} invalid={landingImageInvalid} onChange={(value) => change("landingHeroImageUrl", value)} onPreviewChange={setLandingPreview} />
+              <PlatformIdentityAssetField administration={administration} purpose="authentication" label="صورة نافذة الدخول" value={draft.authImageUrl} committedValue={server.authImageUrl} placeholder="اختياري — ترث صورة الرئيسية" disabled={editorDisabled} invalid={authImageInvalid} onChange={(value) => change("authImageUrl", value)} onPreviewChange={setAuthPreview} />
             </div>
             {!landingImageInvalid && !authImageInvalid && <p className="text-[11px] leading-5 text-slate-500">ترك صورة الدخول فارغة يجعلها تستخدم صورة الرئيسية، وترك الصورتين فارغتين يبقي الصورة الافتراضية المعتمدة.</p>}
           </fieldset>
@@ -296,13 +302,13 @@ export default function PlatformSettingsPanel({
         <aside className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-4">
           <p className="flex items-center gap-2 text-sm font-black"><Eye className="h-4 w-4" /> معاينة الهوية</p>
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="group" aria-label="نوع معاينة الهوية"><button type="button" aria-pressed={previewMode === "landing"} onClick={() => setPreviewMode("landing")} className={`min-h-10 rounded-lg px-3 text-xs font-black ${previewMode === "landing" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>الصفحة الرئيسية</button><button type="button" aria-pressed={previewMode === "auth"} onClick={() => setPreviewMode("auth")} className={`min-h-10 rounded-lg px-3 text-xs font-black ${previewMode === "auth" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>تسجيل الدخول</button></div>
-          <PlatformIdentityPreview settings={{ ...draft, logoUrl: safeLogoUrl }} mode={previewMode} />
+          <PlatformIdentityPreview settings={{ ...draft, logoUrl: safeLogoUrl }} mode={previewMode} landingImageOverride={identityPreviewUrls.landing} authImageOverride={identityPreviewUrls.auth} />
           <p className="text-[11px] leading-5 text-slate-500">معاينة مباشرة قبل الحفظ. لا تقبل اللوحة HTML أو CSS أو خطوطًا وروابط حرة.</p>
           <p className="text-[11px] text-slate-400">Revision {server.revision} · {server.updatedAt ? new Date(server.updatedAt).toLocaleString("ar-YE") : "الإعدادات الافتراضية"}</p>
         </aside>
       </div>
 
-      <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur"><p className={`text-xs font-bold ${identityError ? "text-rose-700" : protectedDirty ? "text-amber-700" : "text-emerald-700"}`}>{identityError ?? (conflictDraft ? "مسودة تعارض محفوظة وتحتاج قرارًا قبل المغادرة." : dirty ? "لديك تعديلات غير محفوظة." : "الإعدادات مطابقة لنسخة الخادم.")}</p><div className="flex gap-2"><button type="button" disabled={disabled || !protectedDirty} onClick={() => { setDraft(editable(server)); setConflictDraft(null); setError(null); }} className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-40"><RotateCcw className="h-4 w-4" /> تجاهل</button><button type="button" disabled={disabled || !dirty || identityError !== null} onClick={() => void save()} style={{ backgroundColor: draft.primaryColor }} className="flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> {saving ? "جارٍ الحفظ..." : "حفظ الإعدادات"}</button><button type="button" disabled={disabled || protectedDirty} onClick={() => void load(true)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold disabled:opacity-40"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> تحديث</button></div></div>
+      <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur"><p className={`text-xs font-bold ${identityError ? "text-rose-700" : protectedDirty ? "text-amber-700" : "text-emerald-700"}`}>{identityError ?? (conflictDraft ? "مسودة تعارض محفوظة وتحتاج قرارًا قبل المغادرة." : dirty ? "لديك تعديلات غير محفوظة." : "الإعدادات مطابقة لنسخة الخادم.")}</p><div className="flex gap-2"><button type="button" disabled={disabled || !protectedDirty} onClick={() => { setDraft(editable(server)); setConflictDraft(null); setError(null); setIdentityPreviewUrls({ landing: null, auth: null }); }} className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold disabled:opacity-40"><RotateCcw className="h-4 w-4" /> تجاهل</button><button type="button" disabled={disabled || !dirty || identityError !== null} onClick={() => void save()} style={{ backgroundColor: draft.primaryColor }} className="flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-black text-white disabled:opacity-40"><Save className="h-4 w-4" /> {saving ? "جارٍ الحفظ..." : "حفظ الإعدادات"}</button><button type="button" disabled={disabled || protectedDirty} onClick={() => void load(true)} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold disabled:opacity-40"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> تحديث</button></div></div>
     </section>
   );
 }

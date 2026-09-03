@@ -149,10 +149,11 @@ describe("PlatformSettingsPanel", () => {
     const user = userEvent.setup();
 
     await user.upload(await screen.findByLabelText("رفع صورة الصفحة الرئيسية من الجهاز"), new File(["image"], "hero.png", { type: "image/png" }));
-    expect(screen.getByAltText("معاينة صورة الصفحة الرئيسية قبل الرفع")).toBeTruthy();
+    expect(screen.getByAltText("معاينة صورة الصفحة الرئيسية قبل الحفظ")).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "رفع واستخدام الأصل" }));
     await waitFor(() => expect((screen.getByLabelText("رابط صورة الصفحة الرئيسية") as HTMLInputElement).value).toBe(managed));
+    expect(document.querySelector('[data-testid="platform-landing-preview"] img[src="blob:panel-preview"]')).toBeTruthy();
     expect(onSaved).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "حفظ الإعدادات" }));
     await waitFor(() => expect(update).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 1, landingHeroImageUrl: managed })));

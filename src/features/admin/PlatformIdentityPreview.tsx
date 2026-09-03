@@ -11,16 +11,18 @@ export type PlatformIdentityPreviewMode = "landing" | "auth";
 interface PlatformIdentityPreviewProps {
   settings: PlatformSettings;
   mode: PlatformIdentityPreviewMode;
+  landingImageOverride?: string | null;
+  authImageOverride?: string | null;
 }
 
 const colorPattern = /^#[0-9A-F]{6}$/;
 
-export default function PlatformIdentityPreview({ settings, mode }: PlatformIdentityPreviewProps) {
+export default function PlatformIdentityPreview({ settings, mode, landingImageOverride, authImageOverride }: PlatformIdentityPreviewProps) {
   const primary = colorPattern.test(settings.brandPrimaryColor) ? settings.brandPrimaryColor : "#081725";
   const accent = colorPattern.test(settings.brandAccentColor) ? settings.brandAccentColor : "#B18A46";
   const surface = colorPattern.test(settings.brandSurfaceColor) ? settings.brandSurfaceColor : "#F8F6F1";
-  const landingImage = isSafePlatformIdentityImageUrl(settings.landingHeroImageUrl) && settings.landingHeroImageUrl ? settings.landingHeroImageUrl : defaultIdentityImage;
-  const authImage = isSafePlatformIdentityImageUrl(settings.authImageUrl) && settings.authImageUrl ? settings.authImageUrl : landingImage;
+  const landingImage = landingImageOverride ?? (isSafePlatformIdentityImageUrl(settings.landingHeroImageUrl) && settings.landingHeroImageUrl ? settings.landingHeroImageUrl : defaultIdentityImage);
+  const authImage = authImageOverride ?? (isSafePlatformIdentityImageUrl(settings.authImageUrl) && settings.authImageUrl ? settings.authImageUrl : landingImage);
   const fontFamily = `"${settings.brandFontFamily}", "Cairo", sans-serif`;
 
   if (mode === "auth") {

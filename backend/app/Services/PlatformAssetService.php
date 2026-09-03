@@ -16,85 +16,97 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class PlatformAssetService
 {
+    private const QUOTA_LOCK_KEY = 52750002;
+
     /** @return array{id: string, url: string, purpose: string, mimeType: string, byteSize: int, width: int, height: int} */
     public function upload(User $actor, UploadedFile $file, string $purpose, string $idempotencyKey): array
     {
         [$realPath, $byteSize, $width, $height, $mime, $extension, $checksum] = $this->inspect($file);
+        $pending = null;
 
-        $row = DB::connection((string) config('tenancy.database.central_connection'))->transaction(
-            function () use ($actor, $byteSize, $width, $height, $mime, $extension, $checksum, $purpose, $idempotencyKey): object {
-                $lockedActor = User::withTrashed()->whereKey($actor->getKey())->lockForUpdate()->first();
-                if (! $lockedActor instanceof User || $lockedActor->trashed()
-                    || $lockedActor->getAttribute('status') !== UserStatus::Active
-                    || ! $lockedActor->hasPlatformPermission(PermissionKey::PlatformSettingsManage)) {
-                    throw new AuthorizationException('Active platform-settings permission is required.');
-                }
-
-                $existing = DB::table('platform_assets')->where('uploaded_by_user_id', $lockedActor->getKey())
-                    ->where('upload_idempotency_key', $idempotencyKey)->lockForUpdate()->first();
-                if ($existing !== null) {
-                    if (! hash_equals((string) $existing->checksum_sha256, $checksum) || $existing->purpose !== $purpose) {
-                        throw new PlatformAssetConflict('The platform asset idempotency key was reused for different content.', 'platform_asset_idempotency_conflict');
-                    }
-                    if (! in_array($existing->state, ['staging', 'ready'], true) || ! $this->safeRow($existing)) {
-                        throw new PlatformAssetConflict('The platform asset is unavailable.', 'platform_asset_unavailable');
+        try {
+            $row = DB::connection((string) config('tenancy.database.central_connection'))->transaction(
+                function () use ($actor, $realPath, $byteSize, $width, $height, $mime, $extension, $checksum, $purpose, $idempotencyKey, &$pending): object {
+                    $this->lockQuota();
+                    $lockedActor = User::withTrashed()->whereKey($actor->getKey())->lockForUpdate()->first();
+                    if (! $lockedActor instanceof User || $lockedActor->trashed()
+                        || $lockedActor->getAttribute('status') !== UserStatus::Active
+                        || ! $lockedActor->hasPlatformPermission(PermissionKey::PlatformSettingsManage)) {
+                        throw new AuthorizationException('Active platform-settings permission is required.');
                     }
 
-                    return $existing;
-                }
+                    $existing = DB::table('platform_assets')->where('uploaded_by_user_id', $lockedActor->getKey())
+                        ->where('upload_idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                    if ($existing !== null) {
+                        if (! hash_equals((string) $existing->checksum_sha256, $checksum) || $existing->purpose !== $purpose) {
+                            throw new PlatformAssetConflict('The platform asset idempotency key was reused for different content.', 'platform_asset_idempotency_conflict');
+                        }
+                        if (! in_array($existing->state, ['staging', 'ready'], true) || ! $this->safeRow($existing)) {
+                            throw new PlatformAssetConflict('The platform asset is unavailable.', 'platform_asset_unavailable');
+                        }
+                        if ($existing->state === 'ready') {
+                            return $existing;
+                        }
 
-                $count = DB::table('platform_assets')->whereIn('state', ['staging', 'ready'])->count();
-                $bytes = (int) DB::table('platform_assets')->whereIn('state', ['staging', 'ready'])->sum('byte_size');
-                if ($count >= (int) config('platform_assets.max_assets') || $bytes + $byteSize > (int) config('platform_assets.max_total_bytes')) {
-                    throw new PlatformAssetConflict('The managed platform asset quota has been reached.', 'platform_asset_quota_exceeded');
-                }
+                        $row = $existing;
+                    } else {
+                        $count = DB::table('platform_assets')->whereIn('state', ['staging', 'ready'])->count();
+                        $bytes = (int) DB::table('platform_assets')->whereIn('state', ['staging', 'ready'])->sum('byte_size');
+                        if ($count >= (int) config('platform_assets.max_assets') || $bytes + $byteSize > (int) config('platform_assets.max_total_bytes')) {
+                            throw new PlatformAssetConflict('The managed platform asset quota has been reached.', 'platform_asset_quota_exceeded');
+                        }
 
-                $id = (string) Str::uuid();
-                $now = $this->now();
-                $values = [
-                    'id' => $id, 'purpose' => $purpose, 'state' => 'staging',
-                    'disk' => (string) config('platform_assets.disk'), 'path' => $this->managedPath($id, $extension),
-                    'quarantine_path' => null, 'mime_type' => $mime, 'byte_size' => $byteSize,
-                    'width' => $width, 'height' => $height, 'checksum_sha256' => $checksum,
-                    'uploaded_by_user_id' => $lockedActor->getKey(), 'upload_idempotency_key' => $idempotencyKey,
-                    'orphaned_at' => $now, 'quarantined_at' => null, 'recoverable_until' => null,
-                    'created_at' => $now, 'updated_at' => $now,
-                ];
-                DB::table('platform_assets')->insert($values);
+                        $id = (string) Str::uuid();
+                        $now = $this->now();
+                        $values = [
+                            'id' => $id, 'purpose' => $purpose, 'state' => 'staging',
+                            'disk' => (string) config('platform_assets.disk'), 'path' => $this->managedPath($id, $extension),
+                            'quarantine_path' => null, 'mime_type' => $mime, 'byte_size' => $byteSize,
+                            'width' => $width, 'height' => $height, 'checksum_sha256' => $checksum,
+                            'uploaded_by_user_id' => $lockedActor->getKey(), 'upload_idempotency_key' => $idempotencyKey,
+                            'orphaned_at' => $now, 'quarantined_at' => null, 'recoverable_until' => null,
+                            'created_at' => $now, 'updated_at' => $now,
+                        ];
+                        DB::table('platform_assets')->insert($values);
+                        $row = (object) $values;
+                    }
 
-                return (object) $values;
-            },
-        );
+                    $pending = $row;
+                    $stream = fopen($realPath, 'rb');
+                    if ($stream === false) {
+                        throw new RuntimeException('The uploaded platform image could not be opened.');
+                    }
+                    try {
+                        $stored = $this->put((string) $row->disk, (string) $row->path, $stream);
+                    } finally {
+                        fclose($stream);
+                    }
+                    if (! $stored) {
+                        throw new RuntimeException('The uploaded platform image could not be stored.');
+                    }
 
-        if ($row->state !== 'ready') {
-            $stream = fopen($realPath, 'rb');
-            if ($stream === false) {
-                throw new RuntimeException('The uploaded platform image could not be opened.');
+                    DB::table('platform_assets')->where('id', $row->id)->where('state', 'staging')->update([
+                        'state' => 'ready', 'updated_at' => $this->now(),
+                    ]);
+                    $row->state = 'ready';
+
+                    return $row;
+                },
+            );
+        } catch (Throwable $exception) {
+            if (is_object($pending) && $this->safeRow($pending)) {
+                DB::connection((string) config('tenancy.database.central_connection'))->transaction(function () use ($pending): void {
+                    $this->lockQuota();
+                    DB::table('platform_assets')->where('id', $pending->id)->where('state', 'staging')->delete();
+                });
+                $this->deleteIfOwned((string) $pending->disk, (string) $pending->path);
             }
-            try {
-                $stored = Storage::disk((string) $row->disk)->put((string) $row->path, $stream);
-            } finally {
-                fclose($stream);
-            }
-            if (! $stored) {
-                throw new RuntimeException('The uploaded platform image could not be stored.');
-            }
 
-            $row = DB::transaction(function () use ($row): object {
-                $locked = DB::table('platform_assets')->where('id', $row->id)->lockForUpdate()->first();
-                if ($locked === null || ! in_array($locked->state, ['staging', 'ready'], true)) {
-                    throw new PlatformAssetConflict('The platform asset is unavailable.', 'platform_asset_unavailable');
-                }
-                if ($locked->state === 'staging') {
-                    DB::table('platform_assets')->where('id', $locked->id)->update(['state' => 'ready', 'updated_at' => $this->now()]);
-                    $locked->state = 'ready';
-                }
-
-                return $locked;
-            });
+            throw $exception;
         }
 
         return $this->resource($row);
@@ -119,7 +131,8 @@ class PlatformAssetService
         $rows = DB::table('platform_assets')->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
         foreach ($nextByPurpose as $purpose => $id) {
             $row = $rows->get($id);
-            if ($row === null || $row->state !== 'ready' || $row->purpose !== $purpose || ! $this->safeRow($row)) {
+            if ($row === null || $row->state !== 'ready' || $row->purpose !== $purpose || ! $this->safeRow($row)
+                || ! $this->exists((string) $row->disk, (string) $row->path)) {
                 throw new PlatformAssetConflict('A referenced managed platform asset is unavailable.', 'platform_asset_unavailable');
             }
         }
@@ -169,61 +182,87 @@ class PlatformAssetService
         $cutoff = $this->now()->subHours((int) config('platform_assets.orphan_retention_hours'));
         $quarantined = 0;
         $deleted = 0;
-        $ids = DB::table('platform_assets')->where('state', 'ready')->whereNotNull('orphaned_at')
-            ->where('orphaned_at', '<=', $cutoff)->orderBy('id')->pluck('id');
+        $ids = DB::table('platform_assets')->where(function ($query) use ($cutoff): void {
+            $query->where(function ($ready) use ($cutoff): void {
+                $ready->where('state', 'ready')->whereNotNull('orphaned_at')->where('orphaned_at', '<=', $cutoff);
+            })->orWhere(function ($staging) use ($cutoff): void {
+                $staging->where('state', 'staging')->where('created_at', '<=', $cutoff);
+            });
+        })->orderBy('id')->pluck('id');
         foreach ($ids as $id) {
-            $claimed = DB::transaction(function () use ($id, $cutoff): ?object {
+            $quarantined += DB::transaction(function () use ($id, $cutoff): int {
                 $setting = PlatformSetting::query()->whereKey(PlatformSetting::SINGLETON_ID)->lockForUpdate()->firstOrFail();
                 $row = DB::table('platform_assets')->where('id', $id)->lockForUpdate()->first();
-                if ($row === null || $row->state !== 'ready' || $row->orphaned_at === null
-                    || Carbon::parse((string) $row->orphaned_at)->isAfter($cutoff) || $this->isReferenced($setting, (string) $id)
-                    || ! $this->safeRow($row)) {
-                    return null;
+                if ($row === null || ! in_array($row->state, ['staging', 'ready'], true) || ! $this->safeRow($row)
+                    || $this->isReferenced($setting, (string) $id)) {
+                    return 0;
                 }
+                $expired = $row->state === 'staging'
+                    ? Carbon::parse((string) $row->created_at)->isBefore($cutoff) || Carbon::parse((string) $row->created_at)->equalTo($cutoff)
+                    : $row->orphaned_at !== null && ! Carbon::parse((string) $row->orphaned_at)->isAfter($cutoff);
+                if (! $expired) {
+                    return 0;
+                }
+
                 $quarantinePath = $this->quarantinePath($row);
+                $sourceExists = $this->exists((string) $row->disk, (string) $row->path);
+                $quarantineExists = $this->exists((string) $row->disk, $quarantinePath);
+                if ($sourceExists && $quarantineExists) {
+                    return 0;
+                }
+                if (! $sourceExists && ! $quarantineExists) {
+                    if ($row->state === 'staging') {
+                        DB::table('platform_assets')->where('id', $id)->where('state', 'staging')->delete();
+                    }
+
+                    return 0;
+                }
+                if ($sourceExists && ! $this->move((string) $row->disk, (string) $row->path, $quarantinePath)) {
+                    return 0;
+                }
+
                 $now = $this->now();
                 DB::table('platform_assets')->where('id', $id)->update([
                     'state' => 'quarantined', 'quarantine_path' => $quarantinePath,
                     'quarantined_at' => $now, 'recoverable_until' => $now->copy()->addDays((int) config('platform_assets.recovery_days')),
                     'updated_at' => $now,
                 ]);
-                $row->state = 'quarantined';
-                $row->quarantine_path = $quarantinePath;
 
-                return $row;
+                return 1;
             });
-            if ($claimed !== null) {
-                if (Storage::disk((string) $claimed->disk)->move((string) $claimed->path, (string) $claimed->quarantine_path)) {
-                    $quarantined++;
-                } else {
-                    DB::table('platform_assets')->where('id', $claimed->id)->where('state', 'quarantined')->update([
-                        'state' => 'ready', 'quarantine_path' => null, 'quarantined_at' => null,
-                        'recoverable_until' => null, 'updated_at' => $this->now(),
-                    ]);
-                }
-            }
         }
 
-        $expired = DB::table('platform_assets')->where('state', 'quarantined')->where('recoverable_until', '<=', $this->now())->orderBy('id')->pluck('id');
+        $expired = DB::table('platform_assets')->whereIn('state', ['quarantined', 'purging'])
+            ->where('recoverable_until', '<=', $this->now())->orderBy('id')->pluck('id');
         foreach ($expired as $id) {
-            $row = DB::table('platform_assets')->where('id', $id)->first();
-            if ($row === null || ! $this->safeRow($row, true)) {
+            $claimed = DB::transaction(function () use ($id): bool {
+                $setting = PlatformSetting::query()->whereKey(PlatformSetting::SINGLETON_ID)->lockForUpdate()->firstOrFail();
+                $row = DB::table('platform_assets')->where('id', $id)->lockForUpdate()->first();
+                if ($row === null || ! in_array($row->state, ['quarantined', 'purging'], true)
+                    || $this->isReferenced($setting, (string) $id) || ! $this->safeRow($row, true)
+                    || Carbon::parse((string) $row->recoverable_until)->isFuture()) {
+                    return false;
+                }
+                if ($row->state === 'quarantined') {
+                    DB::table('platform_assets')->where('id', $id)->update(['state' => 'purging', 'updated_at' => $this->now()]);
+                }
+
+                return true;
+            });
+            if (! $claimed) {
                 continue;
             }
-            $disk = Storage::disk((string) $row->disk);
-            if (($disk->exists((string) $row->path) && ! $disk->delete((string) $row->path))
-                || ($disk->exists((string) $row->quarantine_path) && ! $disk->delete((string) $row->quarantine_path))) {
-                continue;
-            }
+
             $deleted += DB::transaction(function () use ($id): int {
                 $setting = PlatformSetting::query()->whereKey(PlatformSetting::SINGLETON_ID)->lockForUpdate()->firstOrFail();
                 $row = DB::table('platform_assets')->where('id', $id)->lockForUpdate()->first();
-                if ($row === null || $row->state !== 'quarantined' || $this->isReferenced($setting, (string) $id)
-                    || Carbon::parse((string) $row->recoverable_until)->isFuture()) {
+                if ($row === null || $row->state !== 'purging' || $this->isReferenced($setting, (string) $id)
+                    || ! $this->safeRow($row, true) || Carbon::parse((string) $row->recoverable_until)->isFuture()
+                    || ! $this->deleteOwnedFiles($row)) {
                     return 0;
                 }
 
-                return DB::table('platform_assets')->where('id', $id)->delete();
+                return DB::table('platform_assets')->where('id', $id)->where('state', 'purging')->delete();
             });
         }
 
@@ -235,14 +274,30 @@ class PlatformAssetService
         return DB::transaction(function () use ($assetId): bool {
             $setting = PlatformSetting::query()->whereKey(PlatformSetting::SINGLETON_ID)->lockForUpdate()->firstOrFail();
             $row = DB::table('platform_assets')->where('id', $assetId)->lockForUpdate()->first();
-            if ($row === null || $row->state !== 'quarantined' || $this->isReferenced($setting, $assetId)
-                || ! $this->safeRow($row, true) || Carbon::parse((string) $row->recoverable_until)->isPast()) {
+            if ($row === null || ! in_array($row->state, ['ready', 'quarantined'], true) || ! $this->safeRow($row)) {
                 return false;
             }
-            $disk = Storage::disk((string) $row->disk);
-            if (! $disk->exists((string) $row->quarantine_path) || ! $disk->move((string) $row->quarantine_path, (string) $row->path)) {
+
+            $quarantinePath = $row->state === 'quarantined' ? (string) $row->quarantine_path : $this->quarantinePath($row);
+            if ($row->state === 'quarantined' && ($this->isReferenced($setting, $assetId)
+                || ! $this->safeRow($row, true) || Carbon::parse((string) $row->recoverable_until)->isPast())) {
                 return false;
             }
+            $sourceExists = $this->exists((string) $row->disk, (string) $row->path);
+            $quarantineExists = $this->exists((string) $row->disk, $quarantinePath);
+            if ($sourceExists && $quarantineExists) {
+                return false;
+            }
+            if ($row->state === 'ready' && $sourceExists) {
+                return false;
+            }
+            if (! $sourceExists && (! $quarantineExists || ! $this->move((string) $row->disk, $quarantinePath, (string) $row->path))) {
+                return false;
+            }
+            if ($row->state === 'ready') {
+                return true;
+            }
+
             $now = $this->now();
 
             return DB::table('platform_assets')->where('id', $assetId)->where('state', 'quarantined')->update([
@@ -315,6 +370,51 @@ class PlatformAssetService
     private function isReferenced(PlatformSetting $setting, string $id): bool
     {
         return in_array($id, [PlatformIdentityImageUrl::managedAssetId($setting->landing_hero_image_url), PlatformIdentityImageUrl::managedAssetId($setting->auth_image_url)], true);
+    }
+
+    private function lockQuota(): void
+    {
+        DB::connection((string) config('tenancy.database.central_connection'))
+            ->select('SELECT pg_advisory_xact_lock(?)', [self::QUOTA_LOCK_KEY]);
+    }
+
+    /** @param resource $contents */
+    protected function put(string $disk, string $path, $contents): bool
+    {
+        return Storage::disk($disk)->put($path, $contents);
+    }
+
+    protected function exists(string $disk, string $path): bool
+    {
+        return Storage::disk($disk)->exists($path);
+    }
+
+    protected function move(string $disk, string $from, string $to): bool
+    {
+        return Storage::disk($disk)->move($from, $to);
+    }
+
+    protected function delete(string $disk, string $path): bool
+    {
+        return Storage::disk($disk)->delete($path);
+    }
+
+    private function deleteIfOwned(string $disk, string $path): void
+    {
+        if ($this->exists($disk, $path)) {
+            $this->delete($disk, $path);
+        }
+    }
+
+    private function deleteOwnedFiles(object $row): bool
+    {
+        foreach (array_unique([(string) $row->path, (string) $row->quarantine_path]) as $path) {
+            if ($this->exists((string) $row->disk, $path) && ! $this->delete((string) $row->disk, $path)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function now(): Carbon

@@ -23,6 +23,7 @@ export type {
   PlatformOverview,
   PlatformAssetPurpose,
   PlatformAssetUpload,
+  PlatformAssetUploadOptions,
   PlatformRole,
   PlatformStore,
   PlatformStoreDetail,

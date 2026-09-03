@@ -2,7 +2,7 @@
 
 ## الحالة
 
-اكتملت T1–T4 محليًا على `codex/wp5-27-5b-platform-identity-assets` من Base `0b55a8b1a38db70688b4ca3ca516e9ea81351a2e`. لم يُفتح PR ولم يحدث Merge.
+اكتملت T1–T4 وإصلاحات الإغلاق الأربع محليًا على `codex/wp5-27-5b-platform-identity-assets` من Base `0b55a8b1a38db70688b4ca3ca516e9ea81351a2e`. لم يُفتح PR ولم يحدث Merge.
 
 ## الهدف والنطاق
 
@@ -22,7 +22,7 @@
 - Settings remain `string|null`: safe HTTPS أو managed URL exact.
 - Purpose allowlist: `landing_hero`, `authentication`.
 - Limits: JPEG/PNG/WebP، 5 MiB، 320×180..6000×6000، ≤25MP، 32 أصلًا و100MiB.
-- Cleanup: 24h orphan grace ثم 30-day recoverable quarantine.
+- Cleanup: 24h orphan grace ثم 30-day recoverable quarantine، مع حالة `purging` داخلية قابلة للاستئناف للحذف النهائي.
 
 ## مراحل التنفيذ
 
@@ -36,17 +36,24 @@
 - Backend: `PlatformAssetService`، طلب ووحدات تحكم الرفع/العرض، `PlatformAsset`، Migration 16، إعدادات quota، وأوامر prune/restore.
 - Settings: التحقق من مسار الأصل، الإسقاط العام، والربط داخل معاملة revision والتدقيق القائمة.
 - Frontend: `PlatformIdentityAssetField`، عميل multipart idempotent، URL mapper مغلق، وربط حقلي الصفحة الرئيسية والمصادقة بلوحة إعدادات المنصة.
-- Quality: `PlatformAssetTest` واختبارات React/API/mapper، وتحديث ترتيب ترحيلات 15 و16 في بوابة التكامل.
+- Quality: `PlatformAssetTest` و`PlatformAssetConcurrencyTest` واختبارات React/API/mapper، وتحديث ترتيب ترحيلات 15 و16 في بوابة التكامل.
+
+## إغلاق ملاحظات المراجعة
+
+- فشل التخزين يعوّض سجل `staging` والملف المملوك داخل مسار الرفع نفسه، وإعادة المحاولة تستخدم `Idempotency-Key` الثابت نفسه بدل إنشاء عملية جديدة.
+- فحص الحصة وتسجيل `staging` متسلسلان بقفل PostgreSQL مركزي؛ اختُبر رفع مديرين متزامنين عند حد أصل واحد ولم يتجاوز أي منهما الحصة.
+- `prune` و`restore` يستخدمان ترتيب القفل نفسه لإعدادات المنصة ثم سجل الأصل. النقل إلى quarantine قابل للاستكمال بعد تعطل بين نقل الملف وتثبيت الحالة، والحذف النهائي يمر عبر `purging` قابلة للاستئناف ولا تقبل الاستعادة بعد بدء الحذف.
+- تبقى معاينة Blob المحلية ظاهرة بعد نجاح الرفع وحتى نجاح حفظ Revision الذي يربط الرابط المُدار؛ عند الحفظ أو التراجع تُحرر المعاينة المحلية بأمان.
 
 ## نتائج T4
 
 - Repository safety: ناجحة، بما فيها `docker compose config`.
 - Frontend quality: `83` ملف اختبار و`436` اختبارًا ناجحًا؛ TypeScript وVite build ناجحان.
 - Frontend audit: `0` ثغرات.
-- Backend quality: Composer validate/audit، Pint (`308` ملفات)، Larastan (`266` ملفًا)، ووحدات PHPUnit (`3` اختبارات) ناجحة.
-- اختبار PostgreSQL المركز: `PlatformAssetTest` — `3` اختبارات و`62` assertion ناجحة.
-- Container integration: `177` اختبارًا و`2022` assertion، migrations 1–16، route cache، HTTP، worker وscheduler ناجحة.
-- Docker web build: JavaScript `1,087.11 kB` / `282.04 kB gzip`، وCSS `192.50 kB` / `29.46 kB gzip`، وصورة Hero الحالية `819.42 kB`.
+- Backend quality: Composer validate/audit، Pint (`309` ملفات)، Larastan (`266` ملفًا)، ووحدات PHPUnit (`3` اختبارات و`6` assertions) ناجحة.
+- اختبار PostgreSQL المركز: `PlatformAssetTest` و`PlatformAssetConcurrencyTest` — `7` اختبارات و`94` assertion ناجحة.
+- Container integration: `181` اختبارًا و`2055` assertion، migrations 1–16، route cache، HTTP، worker وscheduler ناجحة.
+- Docker web build: JavaScript `1,087.95 kB` / `282.36 kB gzip`، وCSS `192.50 kB` / `29.46 kB gzip`، وصورة Hero الحالية `819.42 kB`.
 - `git diff --check`: ناجح.
 
 ## الأمان ودورة الحفظ

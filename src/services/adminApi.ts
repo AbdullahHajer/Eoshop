@@ -32,6 +32,11 @@ export interface PlatformAssetUpload {
   height: number;
 }
 
+export interface PlatformAssetUploadOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
 function mapPlatformAssetUpload(value: unknown): PlatformAssetUpload {
   const envelope = record(value, "رفع أصل هوية المنصة");
   const dto = record(envelope.data, "أصل هوية المنصة");
@@ -558,8 +563,8 @@ export const adminApi = {
     return mapAdminPlatformSettings(payload.data);
   },
 
-  async uploadPlatformAsset(purpose: PlatformAssetPurpose, file: File, signal?: AbortSignal): Promise<PlatformAssetUpload> {
-    const idempotencyKey = randomUuid();
+  async uploadPlatformAsset(purpose: PlatformAssetPurpose, file: File, options: PlatformAssetUploadOptions = {}): Promise<PlatformAssetUpload> {
+    const idempotencyKey = options.idempotencyKey ?? randomUuid();
     const body = new FormData();
     body.append("purpose", purpose);
     body.append("image", file);
@@ -569,7 +574,7 @@ export const adminApi = {
       body,
       headers: { "Idempotency-Key": idempotencyKey },
       retrySafety: "idempotent",
-      signal,
+      signal: options.signal,
     }));
   },
 

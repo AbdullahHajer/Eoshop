@@ -45,13 +45,16 @@ describe("PlatformIdentityAssetField", () => {
     const administration = createFakeUiAdapters({ administration: { uploadPlatformAsset } }).administration;
     const user = userEvent.setup();
 
-    render(<PlatformIdentityAssetField administration={administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={null} placeholder="https://..." disabled={false} invalid={false} onChange={onChange} />);
+    const onPreviewChange = vi.fn();
+    render(<PlatformIdentityAssetField administration={administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={null} committedValue={null} placeholder="https://..." disabled={false} invalid={false} onChange={onChange} onPreviewChange={onPreviewChange} />);
     await user.upload(screen.getByLabelText("رفع صورة الصفحة الرئيسية من الجهاز"), new File(["image"], "hero.png", { type: "image/png" }));
-    expect((await screen.findByAltText("معاينة صورة الصفحة الرئيسية قبل الرفع")).getAttribute("src")).toBe("blob:platform-preview");
+    expect((await screen.findByAltText("معاينة صورة الصفحة الرئيسية قبل الحفظ")).getAttribute("src")).toBe("blob:platform-preview");
+    expect(onPreviewChange).toHaveBeenLastCalledWith("blob:platform-preview");
     expect(onChange).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "رفع واستخدام الأصل" }));
-    await waitFor(() => expect(uploadPlatformAsset).toHaveBeenCalledWith("landing_hero", expect.any(File)));
+    await waitFor(() => expect(uploadPlatformAsset).toHaveBeenCalledWith("landing_hero", expect.any(File), expect.objectContaining({ idempotencyKey: expect.any(String) })));
     expect(onChange).toHaveBeenCalledWith(url);
+    expect(screen.getByAltText("معاينة صورة الصفحة الرئيسية قبل الحفظ").getAttribute("src")).toBe("blob:platform-preview");
   });
 
   it("keeps the chosen file available for a retry after an upload failure", async () => {
@@ -60,13 +63,16 @@ describe("PlatformIdentityAssetField", () => {
     class MockImage { naturalWidth = 640; naturalHeight = 360; onload: null | (() => void) = null; set src(_value: string) { queueMicrotask(() => this.onload?.()); } }
     vi.stubGlobal("URL", MockURL);
     vi.stubGlobal("Image", MockImage);
+    vi.stubGlobal("crypto", { randomUUID: () => "22222222-2222-4222-8222-222222222222" });
     const uploadPlatformAsset = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ url: "/api/platform-assets/11111111-1111-4111-8111-111111111111" });
     const user = userEvent.setup();
-    render(<PlatformIdentityAssetField administration={createFakeUiAdapters({ administration: { uploadPlatformAsset } }).administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={null} placeholder="" disabled={false} invalid={false} onChange={vi.fn()} />);
+    render(<PlatformIdentityAssetField administration={createFakeUiAdapters({ administration: { uploadPlatformAsset } }).administration} purpose="landing_hero" label="صورة الصفحة الرئيسية" value={null} committedValue={null} placeholder="" disabled={false} invalid={false} onChange={vi.fn()} onPreviewChange={vi.fn()} />);
     await user.upload(screen.getByLabelText("رفع صورة الصفحة الرئيسية من الجهاز"), new File(["image"], "hero.png", { type: "image/png" }));
     await user.click(await screen.findByRole("button", { name: "رفع واستخدام الأصل" }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/إعادة المحاولة/);
     await user.click(screen.getByRole("button", { name: "إعادة محاولة الرفع" }));
     await waitFor(() => expect(uploadPlatformAsset).toHaveBeenCalledTimes(2));
+    expect(uploadPlatformAsset.mock.calls[0][2]).toEqual({ idempotencyKey: "22222222-2222-4222-8222-222222222222" });
+    expect(uploadPlatformAsset.mock.calls[1][2]).toEqual({ idempotencyKey: "22222222-2222-4222-8222-222222222222" });
   });
 });
