@@ -1,5 +1,27 @@
 import type { StoreConfig } from "../types";
 
+export const STORE_ONBOARDING_APPEARANCE_KEYS = [
+  "slogan",
+  "logoIcon",
+  "primaryColor",
+  "secondaryColor",
+  "textColor",
+  "bgColor",
+  "cardBgColor",
+  "borderColor",
+  "fontFamily",
+  "bannerText",
+  "showHeroBanner",
+  "heroBannerTitle",
+  "heroBannerSubtitle",
+  "heroBannerBadge",
+  "heroBannerButtonText",
+  "heroBannerHeight",
+  "heroBannerOverlayOpacity",
+] as const satisfies readonly (keyof StoreOnboardingAppearance)[];
+
+export type StoreOnboardingAppearanceKey = typeof STORE_ONBOARDING_APPEARANCE_KEYS[number];
+
 export interface StoreOnboardingAppearance {
   slogan: string;
   logoIcon: string;

@@ -20,7 +20,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\CanonicalDomain;
 use App\Support\CanonicalPayload;
-use App\Support\StorefrontSectionLayout;
+use App\Support\StoreProvisioningConfig;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -89,9 +89,17 @@ class StoreSubmissionService
                 }
                 $this->applications->assertReady($draft);
                 $this->subscriptions->assertStoreQuota($actor);
-                $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
-                $centralDraftConfig = StorefrontSectionLayout::withoutLayout((array) $input['config']);
-                $provisioningConfig = StorefrontSectionLayout::forProvisioning($centralDraftConfig);
+                $plan = Plan::query()->whereKey($draft->getAttribute('plan_key'))->where('is_active', true)->lockForUpdate()->firstOrFail();
+                $centralDraftConfig = StoreProvisioningConfig::forCentralDraft(
+                    (array) $draft->getAttribute('config'),
+                    (string) $draft->getAttribute('store_name'),
+                    (string) $draft->getAttribute('theme_style'),
+                );
+                $provisioningConfig = StoreProvisioningConfig::fromCentralDraft(
+                    $centralDraftConfig,
+                    (string) $draft->getAttribute('store_name'),
+                    (string) $draft->getAttribute('theme_style'),
+                );
                 $workspaceValidator = StoreWorkspaceContract::validator(
                     $provisioningConfig,
                     $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
@@ -101,19 +109,19 @@ class StoreSubmissionService
                 }
                 $tenant = Tenant::query()->create([
                     'id' => strtolower((string) Str::ulid()),
-                    'store_name' => trim((string) $input['storeName']),
+                    'store_name' => trim((string) $draft->getAttribute('store_name')),
                     'owner_name' => (string) $actor->getAttribute('name'),
                     'owner_email' => (string) $actor->getAttribute('email'),
                     'owner_phone' => $actor->getAttribute('phone'),
-                    'business_type' => trim((string) $input['businessType']),
+                    'business_type' => trim((string) $draft->getAttribute('business_type')),
                     'verification_status' => TenantVerificationStatus::Pending->value,
                     'provisioning_status' => ProvisioningState::NotStarted->value,
-                    'theme_style' => $input['themeStyle'],
+                    'theme_style' => $draft->getAttribute('theme_style'),
                 ]);
                 $baseDomain = CanonicalDomain::normalize((string) config('tenancy.tenant_base_domain'));
                 $domain = CanonicalDomain::normalize('store-'.$tenant->getKey().'.'.$baseDomain);
                 $tenant->domains()->create(['domain' => $domain, 'kind' => DomainKind::Internal]);
-                $reservation = $this->domainReservations->reserve($tenant, (string) $input['handle'], $actor);
+                $reservation = $this->domainReservations->reserve($tenant, (string) $draft->getAttribute('handle'), $actor);
                 $subscription = $this->subscriptions->createForSubmission($tenant, $plan, $actor);
                 $publication = $this->publications->createRequest($tenant, $reservation, $subscription, $actor);
 
@@ -121,7 +129,7 @@ class StoreSubmissionService
                     'tenant_id' => $tenant->getKey(),
                     'status' => StoreDraftStatus::Submitted,
                     'onboarding_stage' => StoreOnboardingStage::Review,
-                    'config' => StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config')),
+                    'config' => $centralDraftConfig,
                     'revision' => ((int) $draft->getAttribute('revision')) + 1,
                     'saved_at' => now(),
                     'submitted_at' => now(),

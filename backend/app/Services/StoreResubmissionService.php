@@ -21,7 +21,7 @@ use App\Models\Tenant;
 use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Support\CanonicalPayload;
-use App\Support\StorefrontSectionLayout;
+use App\Support\StoreProvisioningConfig;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -99,8 +99,16 @@ class StoreResubmissionService
                 $this->applications->assertCorrectionAddressed($draft);
                 $this->applications->assertReady($draft);
 
-                $centralDraftConfig = StorefrontSectionLayout::withoutLayout((array) $draft->getAttribute('config'));
-                $provisioningConfig = StorefrontSectionLayout::forProvisioning($centralDraftConfig);
+                $centralDraftConfig = StoreProvisioningConfig::forCentralDraft(
+                    (array) $draft->getAttribute('config'),
+                    (string) $draft->getAttribute('store_name'),
+                    (string) $draft->getAttribute('theme_style'),
+                );
+                $provisioningConfig = StoreProvisioningConfig::fromCentralDraft(
+                    $centralDraftConfig,
+                    (string) $draft->getAttribute('store_name'),
+                    (string) $draft->getAttribute('theme_style'),
+                );
                 $workspace = StoreWorkspaceContract::validator(
                     $provisioningConfig,
                     $plan->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
