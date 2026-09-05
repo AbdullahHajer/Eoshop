@@ -122,10 +122,60 @@ describe("StorefrontHeaderDispatcher", () => {
     expect(Array.from(homeItems).every((item) => item.getAttribute("aria-current") === null)).toBe(true);
   });
 
+  it.each(["tech", "elegant"] as const)("marks products current in the %s product-detail route", (theme) => {
+    const { container } = renderHeader(theme, {}, "product");
+    const productItems = container.querySelectorAll('[data-storefront-nav="products"]');
+    const currentProducts = Array.from(productItems).filter((item) => item.getAttribute("aria-current") === "page");
+    expect(currentProducts.length).toBe(theme === "elegant" ? 2 : 1);
+  });
+
   it("uses category-neutral Tech navigation and fallback identity", () => {
     renderHeader("tech", { storeName: "" });
     expect(screen.getByRole("button", { name: "المنتجات" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "العودة إلى الصفحة الرئيسية لمتجر متجر إلكتروني" })).toBeTruthy();
     expect(screen.queryByText("الأجهزة")).toBeNull();
+  });
+
+  it("honors the configured Tech logo type and clamps its size", () => {
+    const { container, rerender } = renderHeader("tech", {
+      logoType: "icon",
+      logoIcon: "◈",
+      logoUrl: "https://cdn.example.test/unused-tech-logo.webp",
+      logoSize: 999,
+    });
+
+    const icon = container.querySelector<HTMLElement>('[data-storefront-brand-logo="icon"]');
+    expect(icon?.textContent).toBe("◈");
+    expect(icon?.style.width).toBe("120px");
+    expect(icon?.style.height).toBe("120px");
+    expect(container.querySelector('[data-storefront-brand-logo="image"]')).toBeNull();
+
+    rerender(
+      <StorefrontHeaderDispatcher
+        config={{ ...TECH_PRESET, logoType: "image", logoUrl: "https://cdn.example.test/tech-logo.webp", logoSize: 1 }}
+        isElegant={false}
+        categories={["الكل", "إلكترونيات"]}
+        cartCount={2}
+        cartTotal={2500}
+        searchQuery=""
+        currentRoute="home"
+        phone="+967700000001"
+        tokens={tokens}
+        onSearchChange={vi.fn()}
+        onSearchSubmit={vi.fn()}
+        onOpenHome={vi.fn()}
+        onOpenProducts={vi.fn()}
+        onOpenAbout={vi.fn()}
+        onOpenContact={vi.fn()}
+        onOpenCart={vi.fn()}
+        onSelectCategory={vi.fn()}
+      />,
+    );
+
+    const image = container.querySelector<HTMLImageElement>('[data-storefront-brand-logo="image"]');
+    expect(image?.getAttribute("src")).toBe("https://cdn.example.test/tech-logo.webp");
+    expect(image?.style.height).toBe("24px");
+    expect(image?.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(container.querySelector('[data-storefront-brand-logo="icon"]')).toBeNull();
   });
 });

@@ -287,6 +287,14 @@ export default function StorePreview({
   }, [config.enableCashOnDelivery]);
 
   useEffect(() => {
+    if (config.enableCoupons === true) return;
+    setCouponCode("");
+    setCouponDiscount(0);
+    setCouponApplied(false);
+    setCouponMessage("");
+  }, [config.enableCoupons]);
+
+  useEffect(() => {
     setActiveImageIndex(0);
   }, [selectedProduct]);
 
@@ -860,7 +868,7 @@ export default function StorePreview({
                     name: checkoutForm.fullName.trim(),
                     phone: checkoutForm.phone.trim(),
                     email: checkoutForm.email.trim() || undefined,
-                    notes: checkoutForm.notes.trim() || undefined,
+                    notes: config.enableCustomerNotes !== false ? checkoutForm.notes.trim() || undefined : undefined,
                   },
                   address: {
                     city: checkoutForm.city.trim(),
@@ -872,7 +880,10 @@ export default function StorePreview({
                 const orderObj = {
                   orderNum: receipt.number,
                   date: new Date(receipt.createdAt).toLocaleString("ar-SA"),
-                  customer: { ...checkoutForm },
+                  customer: {
+                    ...checkoutForm,
+                    notes: config.enableCustomerNotes !== false ? checkoutForm.notes : "",
+                  },
                   paymentMethod: receipt.paymentState === "due_on_delivery" ? "الدفع عند الاستلام" : "تحويل بانتظار التحقق",
                   walletName: effectivePaymentMethod === "wallet" ? currentWallet?.name : null,
                   transferKind: effectivePaymentMethod === "wallet" ? currentWallet?.kind : null,
@@ -907,7 +918,10 @@ export default function StorePreview({
             const orderObj = {
               orderNum,
               date: new Date().toLocaleString("ar-SA"),
-              customer: { ...checkoutForm },
+              customer: {
+                ...checkoutForm,
+                notes: config.enableCustomerNotes !== false ? checkoutForm.notes : "",
+              },
               paymentMethod: effectivePaymentMethod === "cod"
                 ? `${isElegant ? "الدفع عند الاستلام / التوصيل" : "الدفع عند الاستلام / التوصيل 💵"} ${codFee > 0 ? `(+${codFee} ${config.currency} رسوم COD)` : ''}`
                 : `${currentWallet?.kind === "bank" ? "تحويل بنكي" : "محفظة إلكترونية"} (${currentWallet?.name})`,
@@ -946,7 +960,11 @@ export default function StorePreview({
             const invoiceWindow = window.open("", "_blank", "width=800,height=900");
             if (!invoiceWindow) return;
             invoiceWindow.document.open();
-            invoiceWindow.document.write(buildPrintableInvoiceHtml(order, config.storeName || "المتجر"));
+            const storeName = config.storeName || "المتجر";
+            invoiceWindow.document.write(buildPrintableInvoiceHtml(
+              order,
+              mode === "preview" ? `نموذج معاينة غير مرسل — ${storeName}` : storeName,
+            ));
             invoiceWindow.document.close();
           };
 
@@ -1026,22 +1044,28 @@ export default function StorePreview({
                 >
                   {/* Top Success Banner */}
                   <div className={`p-6 md:p-8 rounded-3xl bg-emerald-900/90 text-white text-center space-y-3 shadow-xl border border-emerald-500/30 ${isElegant ? "elegant-checkout__success" : ""}`}>
-                    {isElegant ? (
-                      <span className="elegant-checkout__success-eyebrow">
-                        {mode === "preview" ? "معاينة الإيصال" : "اكتمل إرسال الطلب"}
+                    {mode === "preview" ? (
+                      <span className={isElegant ? "elegant-checkout__success-eyebrow" : "inline-flex rounded-full border border-emerald-300/50 bg-emerald-950/70 px-3 py-1 text-[11px] font-black text-emerald-100"}>
+                        معاينة الإيصال — لم يُرسل طلب
                       </span>
+                    ) : isElegant ? (
+                      <span className="elegant-checkout__success-eyebrow">اكتمل إرسال الطلب</span>
                     ) : null}
                     <div className={`w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce ${isElegant ? "elegant-checkout__success-icon" : ""}`}>
                       <Check className="w-10 h-10 stroke-[3]" />
                     </div>
-                    <h2 className="text-xl md:text-2xl font-black">{placedOrderDetails.presentation.title}</h2>
-                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">{placedOrderDetails.presentation.message}</p>
+                    <h2 className="text-xl md:text-2xl font-black">
+                      {mode === "preview" ? `معاينة — ${placedOrderDetails.presentation.title}` : placedOrderDetails.presentation.title}
+                    </h2>
+                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">
+                      {mode === "preview" ? `النص المحفوظ بعد نجاح الطلب: ${placedOrderDetails.presentation.message}` : placedOrderDetails.presentation.message}
+                    </p>
                     <div className={`inline-flex items-center gap-2 bg-emerald-950/80 px-4 py-2 rounded-xl text-xs font-mono text-emerald-300 border border-emerald-600/40 ${isElegant ? "elegant-checkout__reference" : ""}`}>
-                      <span>رقم المرجعية المعتمد:</span>
+                      <span>{mode === "preview" ? "رقم مرجعي للمعاينة:" : "رقم المرجعية المعتمد:"}</span>
                       <strong className="text-white font-bold text-sm">{placedOrderDetails.orderNum}</strong>
                     </div>
-                    {isElegant && mode === "preview" ? (
-                      <p className="elegant-checkout__preview-note">هذه معاينة تصميمية ولا تنشئ طلبًا فعليًا.</p>
+                    {mode === "preview" ? (
+                      <p className={isElegant ? "elegant-checkout__preview-note" : "text-xs font-black text-emerald-100"}>هذه معاينة تصميمية ولا تنشئ طلبًا فعليًا.</p>
                     ) : null}
                   </div>
 
@@ -1053,7 +1077,7 @@ export default function StorePreview({
                     <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-slate-200 ${isElegant ? "elegant-checkout__invoice-header" : ""}`}>
                       <div className="space-y-1">
                         <span className={`text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-0.5 rounded-md font-mono ${isElegant ? "elegant-checkout__invoice-label" : ""}`}>
-                          {isElegant ? "فاتورة طلب إلكترونية" : "فاتورة طلب إلكترونية 🧾"}
+                          {mode === "preview" ? "نموذج إيصال للمعاينة" : isElegant ? "فاتورة طلب إلكترونية" : "فاتورة طلب إلكترونية 🧾"}
                         </span>
                         <h3 className="text-lg font-black text-slate-900">{config.storeName}</h3>
                         <p className="text-xs text-slate-500">{placedOrderDetails.date}</p>
@@ -1062,7 +1086,7 @@ export default function StorePreview({
                       <div className="text-right sm:text-left space-y-1">
                         <span className="text-xs text-slate-500 block">حالة الطلب:</span>
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 ${isElegant ? "elegant-checkout__status" : ""}`}>
-                          {isElegant ? "قيد التجهيز والتوصيل" : "قيد التجهيز والتوصيل ⏳"}
+                          {mode === "preview" ? "معاينة غير مرسلة" : isElegant ? "قيد التجهيز والتوصيل" : "قيد التجهيز والتوصيل ⏳"}
                         </span>
                       </div>
                     </div>
@@ -1155,14 +1179,14 @@ export default function StorePreview({
                         </div>
                       )}
                       <div className="flex justify-between text-sm font-extrabold text-white pt-2 border-t border-slate-700">
-                        <span>الإجمالي النهائي المستحق:</span>
+                        <span>{mode === "preview" ? "إجمالي نموذج المعاينة:" : "الإجمالي النهائي المستحق:"}</span>
                         <span className="text-sky-400 text-base">{placedOrderDetails.total} {placedOrderDetails.currency}</span>
                       </div>
                     </div>
 
                     {/* Action Buttons Row */}
                     <div className={`flex flex-col sm:flex-row items-center gap-3 pt-2 ${isElegant ? "elegant-checkout__receipt-actions" : ""}`}>
-                      {getWhatsAppInvoiceUrl(placedOrderDetails) && <a
+                      {mode === "live" && getWhatsAppInvoiceUrl(placedOrderDetails) && <a
                         href={getWhatsAppInvoiceUrl(placedOrderDetails)!}
                         target="_blank"
                         rel="noreferrer"
@@ -1177,7 +1201,7 @@ export default function StorePreview({
                         className={`w-full sm:w-auto py-3 px-4 min-h-[44px] rounded-xl border border-slate-300 hover:bg-slate-100 active:scale-95 text-slate-800 font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer touch-manipulation shadow-2xs ${isElegant ? "elegant-checkout__receipt-print" : ""}`}
                       >
                         <Printer className="w-4 h-4 text-sky-600" />
-                        <span>طباعة الفاتورة</span>
+                        <span>{mode === "preview" ? "طباعة نموذج المعاينة" : "طباعة الفاتورة"}</span>
                       </button>
 
                       <button
@@ -1189,7 +1213,7 @@ export default function StorePreview({
                         className={`w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition ${isElegant ? "elegant-checkout__receipt-new" : ""}`}
                       >
                         <ShoppingBag className="w-4 h-4" />
-                        <span>طلب جديد</span>
+                        <span>{mode === "preview" ? "معاينة جديدة" : "طلب جديد"}</span>
                       </button>
                     </div>
                   </div>
@@ -1299,6 +1323,7 @@ export default function StorePreview({
                               aria-invalid={Boolean(formValidationErr && !checkoutForm.city.trim())}
                               aria-describedby={formValidationErr ? "checkout-error" : undefined}
                               placeholder="مثال: صنعاء"
+                              maxLength={100}
                               value={checkoutForm.city}
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, city: e.target.value })}
                               className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
@@ -1347,6 +1372,7 @@ export default function StorePreview({
                             aria-invalid={Boolean(formValidationErr && !checkoutForm.area.trim())}
                             aria-describedby={formValidationErr ? "checkout-error" : undefined}
                             placeholder="مثال: حي حدة"
+                            maxLength={100}
                             value={checkoutForm.area}
                             onChange={(e) => setCheckoutForm({ ...checkoutForm, area: e.target.value })}
                             className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
@@ -1617,7 +1643,12 @@ export default function StorePreview({
                             type="text"
                             placeholder="أدخل كود الخصم"
                             value={couponCode}
-                            onChange={(e) => setCouponCode(e.target.value)}
+                            onChange={(e) => {
+                              setCouponCode(e.target.value);
+                              setCouponDiscount(0);
+                              setCouponApplied(false);
+                              setCouponMessage("");
+                            }}
                             className="flex-1 border rounded-xl px-3 py-1.5 text-xs uppercase font-mono font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
                           />
                           <button
@@ -1655,7 +1686,7 @@ export default function StorePreview({
                           </div>
                         )}
 
-                        {couponDiscount > 0 && (
+                        {couponsEnabled && couponDiscount > 0 && (
                           <div className="flex justify-between text-emerald-600">
                             <span>خصم الكوبون:</span>
                             <span className="font-mono">- {couponDiscount} {config.currency}</span>
@@ -1743,6 +1774,7 @@ export default function StorePreview({
               mutedInkColor={effectiveTextColor}
               prefersReducedMotion={prefersReducedMotion}
               hasOrdered={hasOrdered}
+              mode={mode}
               dialogRef={cartDialogRef}
               closeButtonRef={cartCloseButtonRef}
               onClose={() => closeCart()}
@@ -1937,7 +1969,7 @@ export default function StorePreview({
           { id: "about", label: "عن المتجر", icon: Info },
           { id: "contact", label: "الدعم", icon: Phone }
         ].map((item) => {
-          const isActive = storePage === item.id;
+          const isActive = storePage === item.id || (item.id === "products" && storePage === "product");
           const IconComp = item.icon;
           return (
             <button

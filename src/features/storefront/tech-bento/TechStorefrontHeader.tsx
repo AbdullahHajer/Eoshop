@@ -17,6 +17,7 @@ interface Props {
   slogan?: string;
   logoUrl?: string;
   logoIcon?: string;
+  logoType?: "icon" | "image";
   logoSize?: number;
   currency: string;
   phone?: string | null;
@@ -46,6 +47,7 @@ export default function TechStorefrontHeader({
   slogan,
   logoUrl,
   logoIcon,
+  logoType,
   logoSize = 44,
   currency,
   phone,
@@ -71,6 +73,9 @@ export default function TechStorefrontHeader({
   };
   const inkForeground = readableForeground(tokens.ink);
   const accentForeground = readableForeground(tokens.accent);
+  const safeLogoSize = Number.isFinite(logoSize) ? Math.min(120, Math.max(24, Math.round(logoSize))) : 44;
+  const trimmedLogoUrl = logoUrl?.trim() ?? "";
+  const useImageLogo = logoType === "image" || (logoType === undefined && trimmedLogoUrl !== "");
 
   return (
     <header
@@ -87,11 +92,12 @@ export default function TechStorefrontHeader({
             aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${safeStoreName}`}
           >
             <span className="relative flex items-center">
-              {logoUrl?.trim() ? (
+              {useImageLogo && trimmedLogoUrl ? (
                 <img
-                  src={logoUrl}
+                  data-storefront-brand-logo="image"
+                  src={trimmedLogoUrl}
                   alt=""
-                  style={{ height: `${logoSize}px` }}
+                  style={{ height: `${safeLogoSize}px` }}
                   className="w-auto max-w-[150px] shrink-0 object-contain transition duration-300 group-hover:scale-105 motion-reduce:transform-none sm:max-w-[220px]"
                   loading="eager"
                   decoding="async"
@@ -99,8 +105,9 @@ export default function TechStorefrontHeader({
                 />
               ) : (
                 <span
+                  data-storefront-brand-logo="icon"
                   aria-hidden="true"
-                  style={{ width: `${logoSize}px`, height: `${logoSize}px`, fontSize: `${Math.max(16, logoSize * 0.5)}px`, backgroundColor: tokens.accent, color: accentForeground }}
+                  style={{ width: `${safeLogoSize}px`, height: `${safeLogoSize}px`, fontSize: `${Math.max(16, Math.round(safeLogoSize * 0.5))}px`, backgroundColor: tokens.accent, color: accentForeground }}
                   className="flex shrink-0 items-center justify-center rounded-2xl shadow-md transition duration-300 group-hover:scale-105 motion-reduce:transform-none"
                 >
                   {logoIcon || "⚡"}
@@ -160,11 +167,12 @@ export default function TechStorefrontHeader({
 
           <nav aria-label="التنقل الرئيسي في المتجر" className="hidden items-center gap-1 rounded-2xl border p-1 text-xs font-bold lg:flex" style={{ borderColor: tokens.border }}>
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-              const active = currentRoute === id;
+              const active = currentRoute === id || (id === "products" && currentRoute === "product");
               return (
                 <button
                   key={id}
                   type="button"
+                  data-storefront-nav={id}
                   onClick={navHandlers[id]}
                   aria-current={active ? "page" : undefined}
                   className="flex min-h-9 items-center gap-1.5 rounded-xl px-3 py-1.5 font-extrabold"

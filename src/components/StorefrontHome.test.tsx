@@ -280,6 +280,9 @@ describe("StorefrontHome", () => {
     expect(screen.queryByText("مسودة مخفية")).toBeNull();
     const heroSection = view.container.querySelector('[data-storefront-section="hero"]');
     const categoriesSection = view.container.querySelector('[data-storefront-section="categories"]');
+    const composition = view.container.querySelector("[data-tech-home-composition]");
+    expect(composition).not.toBeNull();
+    expect(Array.from(composition?.children ?? []).map((node) => node.getAttribute("data-storefront-section"))).toEqual(["hero", "categories"]);
     expect(categoriesSection).not.toBeNull();
     expect(heroSection?.querySelector("[data-tech-category-rail]")).toBeNull();
     expect(heroSection?.querySelector("[data-tech-discovery]")).toBeNull();
@@ -350,6 +353,8 @@ describe("StorefrontHome", () => {
 
     const sections = Array.from(view.container.querySelectorAll("[data-storefront-section]"));
     expect(sections.map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
+    const composition = view.container.querySelector("[data-tech-home-composition]");
+    expect(Array.from(composition?.children ?? []).map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
     expect(sections[0].querySelector("[data-tech-category-rail]")).not.toBeNull();
     expect(sections[0].querySelector("[data-tech-discovery]")).not.toBeNull();
     expect(sections[0].querySelector("[data-storefront-hero]")).toBeNull();
@@ -363,6 +368,7 @@ describe("StorefrontHome", () => {
       homeSections: config.homeSections.map((section) => section.id === "categories" ? { ...section, visible: false } : section),
     }} />);
     expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    expect(view.container.querySelector("[data-tech-home-composition]")).toBeNull();
     expect(view.container.querySelector("[data-tech-category-rail]")).toBeNull();
     expect(view.container.querySelector("[data-tech-discovery]")).toBeNull();
     expect(view.container.querySelector('[data-storefront-section="hero"] [data-storefront-hero]')).not.toBeNull();
@@ -408,6 +414,8 @@ describe("StorefrontHome", () => {
     };
     const view = render(<StorefrontHome {...props} />);
 
+    expect(view.container.firstElementChild?.classList.contains("max-w-7xl")).toBe(true);
+    expect(view.container.firstElementChild?.classList.contains("max-w-none")).toBe(false);
     const sections = Array.from(view.container.querySelectorAll("[data-storefront-section]"));
     expect(sections.map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
     expect(sections[0].querySelector("[data-elegant-discovery]")).not.toBeNull();

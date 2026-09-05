@@ -100,6 +100,7 @@ describe("public storefront functional vertical slice", () => {
     await user.click(screen.getByRole("button", { name: `فتح تفاصيل ${product.name}` }));
     expect(screen.getByRole("heading", { level: 1, name: product.name })).toBeTruthy();
     expect(screen.getByText("المتاح للإضافة: 2")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "المنتجات" }).some((item) => item.getAttribute("aria-current") === "page")).toBe(true);
 
     await user.click(screen.getByRole("button", { name: "إضافة إلى السلة" }));
     await user.click(screen.getAllByRole("button", { name: /فتح سلة التسوق، 1 منتج/ })[0]);

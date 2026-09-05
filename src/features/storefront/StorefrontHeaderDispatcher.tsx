@@ -73,6 +73,7 @@ export default function StorefrontHeaderDispatcher({
       slogan={config.slogan}
       logoUrl={config.logoUrl}
       logoIcon={config.logoIcon}
+      logoType={config.logoType}
       logoSize={config.logoSize}
       currency={config.currency || "ر.س"}
       phone={phone}

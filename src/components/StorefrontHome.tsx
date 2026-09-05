@@ -82,7 +82,7 @@ export default function StorefrontHome({
   const hasElegantStories = isElegant && elegantModel.stories.length > 0;
   const hasElegantDiscovery = isElegant && elegantModel.discoveryItems.length > 0;
   const techModel = techBentoHomeModel(config);
-  const usesImmersiveHome = hasElegantStories || hasElegantDiscovery || !isElegant;
+  const usesImmersiveHome = hasElegantStories || !isElegant;
   const legacyCategories = (
     <section className="space-y-4">
       <div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>التصنيفات</h2><p className="mt-1 text-xs" style={{ color: pageBodyColor }}>التصنيفات المستخرجة من المنتجات المنشورة.</p></div>
@@ -201,13 +201,38 @@ export default function StorefrontHome({
     ),
   };
 
+  const visibleSections = storefrontSectionsOrDefault(config.homeSections).filter((section) => section.visible);
+  const techCompositionSections = !isElegant
+    && visibleSections.some((section) => section.id === "hero")
+    && visibleSections.some((section) => section.id === "categories")
+    ? visibleSections.filter((section) => section.id === "hero" || section.id === "categories")
+    : [];
+  const hasTechComposition = techCompositionSections.length === 2;
+  const sectionWrapper = (section: (typeof visibleSections)[number], inTechComposition = false) => sections[section.id] ? (
+    <div
+      key={section.id}
+      data-storefront-section={section.id}
+      className={!inTechComposition && usesImmersiveHome && section.id !== "hero" ? "mx-auto w-full max-w-7xl px-3 md:px-6" : undefined}
+    >
+      {sections[section.id]}
+    </div>
+  ) : null;
+  let techCompositionRendered = false;
+
   return (
     <div className={`mx-auto flex w-full flex-col animate-fadeIn ${usesImmersiveHome ? "max-w-none gap-8 py-0" : "max-w-7xl gap-10 px-3 py-6 md:px-6 md:py-10"}`}>
-      {storefrontSectionsOrDefault(config.homeSections).filter((section) => section.visible).map((section) => (
-        sections[section.id] ? (
-          <div key={section.id} data-storefront-section={section.id} className={usesImmersiveHome && section.id !== "hero" ? "mx-auto w-full max-w-7xl px-3 md:px-6" : undefined}>{sections[section.id]}</div>
-        ) : null
-      ))}
+      {visibleSections.map((section) => {
+        if (!hasTechComposition || (section.id !== "hero" && section.id !== "categories")) {
+          return sectionWrapper(section);
+        }
+        if (techCompositionRendered) return null;
+        techCompositionRendered = true;
+        return (
+          <div key="tech-home-composition" className="tech-home-composition" data-tech-home-composition>
+            {techCompositionSections.map((compositionSection) => sectionWrapper(compositionSection, true))}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -98,7 +98,7 @@ export default function ElegantEditorialHeader({
         {visibleCategories.map((category) => (
           <button type="button" key={category} style={{ color: resolvedTokens.ink }} onClick={() => onSelectCategory(category)}>{category}</button>
         ))}
-        <button type="button" data-storefront-nav="products" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "products" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
+        <button type="button" data-storefront-nav="products" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "products" || currentRoute === "product" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
         <button type="button" data-storefront-nav="about" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "about" ? "page" : undefined} onClick={onOpenAbout}>عن المتجر</button>
         <button type="button" data-storefront-nav="contact" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "contact" ? "page" : undefined} onClick={onOpenContact}>تواصل معنا</button>
       </nav>
@@ -116,7 +116,7 @@ export default function ElegantEditorialHeader({
           {renderSearchForm("elegant-editorial-search-mobile")}
           <nav aria-label="التنقل المختصر">
             <button type="button" data-storefront-nav="home" aria-current={currentRoute === "home" ? "page" : undefined} onClick={onOpenHome}>الرئيسية</button>
-            <button type="button" data-storefront-nav="products" aria-current={currentRoute === "products" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
+            <button type="button" data-storefront-nav="products" aria-current={currentRoute === "products" || currentRoute === "product" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
             {visibleCategories.map((category) => (
               <button type="button" key={category} onClick={() => onSelectCategory(category)}>{category}</button>
             ))}
