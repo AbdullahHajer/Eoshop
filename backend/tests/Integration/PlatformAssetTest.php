@@ -5,6 +5,7 @@ namespace Tests\Integration;
 use App\Enums\RoleScope;
 use App\Enums\SystemRole;
 use App\Enums\UserStatus;
+use App\Exceptions\PlatformAssetConflict;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\PlatformAssetService;
@@ -179,6 +180,108 @@ class PlatformAssetTest extends TestCase
         $this->assertDatabaseHas('platform_assets', [
             'id' => $result['id'], 'state' => 'ready', 'uploaded_by_user_id' => $manager->id, 'upload_idempotency_key' => $key,
         ]);
+    }
+
+    public function test_ambiguous_post_commit_failure_preserves_the_ready_row_and_file(): void
+    {
+        $manager = $this->operator('asset-ambiguous-commit@example.test', SystemRole::PlatformSuperAdmin);
+        $source = UploadedFile::fake()->image('committed.png', 640, 360);
+        $content = file_get_contents((string) $source->getRealPath());
+        $this->assertIsString($content);
+        $key = (string) Str::uuid();
+        $service = new class extends PlatformAssetService
+        {
+            /** @return array{id: string, url: string, purpose: string, mimeType: string, byteSize: int, width: int, height: int} */
+            protected function resource(object $row): array
+            {
+                throw new RuntimeException('Injected response failure after commit.');
+            }
+        };
+
+        try {
+            $service->upload($manager, UploadedFile::fake()->createWithContent('committed.png', $content), 'landing_hero', $key);
+            $this->fail('The injected post-commit failure was not raised.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Injected response failure after commit.', $exception->getMessage());
+        }
+
+        $row = DB::table('platform_assets')->where('uploaded_by_user_id', $manager->id)
+            ->where('upload_idempotency_key', $key)->firstOrFail();
+        $this->assertSame('ready', $row->state);
+        Storage::disk((string) $row->disk)->assertExists((string) $row->path);
+
+        $replayed = app(PlatformAssetService::class)->upload(
+            $manager,
+            UploadedFile::fake()->createWithContent('committed.png', $content),
+            'landing_hero',
+            $key,
+        );
+        $this->assertSame($row->id, $replayed['id']);
+    }
+
+    public function test_failed_compensation_verification_preserves_a_possibly_committed_file(): void
+    {
+        $manager = $this->operator('asset-uncertain-commit@example.test', SystemRole::PlatformSuperAdmin);
+        $source = UploadedFile::fake()->image('uncertain.png', 640, 360);
+        $content = file_get_contents((string) $source->getRealPath());
+        $this->assertIsString($content);
+        $key = (string) Str::uuid();
+        $central = (string) config('tenancy.database.central_connection');
+        $service = new class extends PlatformAssetService
+        {
+            /** @return array{id: string, url: string, purpose: string, mimeType: string, byteSize: int, width: int, height: int} */
+            protected function resource(object $row): array
+            {
+                config(['tenancy.database.central_connection' => 'unavailable-platform-asset-verification']);
+
+                throw new RuntimeException('Injected ambiguous database verification failure.');
+            }
+        };
+
+        try {
+            $service->upload($manager, UploadedFile::fake()->createWithContent('uncertain.png', $content), 'authentication', $key);
+            $this->fail('The injected ambiguous verification failure was not raised.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Injected ambiguous database verification failure.', $exception->getMessage());
+        } finally {
+            config(['tenancy.database.central_connection' => $central]);
+        }
+
+        $row = DB::table('platform_assets')->where('uploaded_by_user_id', $manager->id)
+            ->where('upload_idempotency_key', $key)->firstOrFail();
+        $this->assertSame('ready', $row->state);
+        Storage::disk((string) $row->disk)->assertExists((string) $row->path);
+    }
+
+    public function test_idempotent_replay_rejects_a_ready_row_when_its_file_is_missing(): void
+    {
+        $manager = $this->operator('asset-ready-file-missing@example.test', SystemRole::PlatformSuperAdmin);
+        $source = UploadedFile::fake()->image('missing.png', 640, 360);
+        $content = file_get_contents((string) $source->getRealPath());
+        $this->assertIsString($content);
+        $key = (string) Str::uuid();
+        $uploaded = app(PlatformAssetService::class)->upload(
+            $manager,
+            UploadedFile::fake()->createWithContent('missing.png', $content),
+            'landing_hero',
+            $key,
+        );
+        $row = DB::table('platform_assets')->where('id', $uploaded['id'])->firstOrFail();
+        Storage::disk((string) $row->disk)->delete((string) $row->path);
+
+        try {
+            app(PlatformAssetService::class)->upload(
+                $manager,
+                UploadedFile::fake()->createWithContent('missing.png', $content),
+                'landing_hero',
+                $key,
+            );
+            $this->fail('A ready platform asset without its file was replayed.');
+        } catch (PlatformAssetConflict $exception) {
+            $this->assertSame('platform_asset_unavailable', $exception->errorCode);
+        }
+
+        $this->assertDatabaseHas('platform_assets', ['id' => $uploaded['id'], 'state' => 'ready']);
     }
 
     public function test_failed_and_interrupted_moves_are_recoverable_and_purging_is_resumable(): void

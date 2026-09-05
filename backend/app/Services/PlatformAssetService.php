@@ -49,6 +49,10 @@ class PlatformAssetService
                             throw new PlatformAssetConflict('The platform asset is unavailable.', 'platform_asset_unavailable');
                         }
                         if ($existing->state === 'ready') {
+                            if (! $this->exists((string) $existing->disk, (string) $existing->path)) {
+                                throw new PlatformAssetConflict('The platform asset is unavailable.', 'platform_asset_unavailable');
+                            }
+
                             return $existing;
                         }
 
@@ -97,19 +101,15 @@ class PlatformAssetService
                     return $row;
                 },
             );
+
+            return $this->resource($row);
         } catch (Throwable $exception) {
-            if (is_object($pending) && $this->safeRow($pending)) {
-                DB::connection((string) config('tenancy.database.central_connection'))->transaction(function () use ($pending): void {
-                    $this->lockQuota();
-                    DB::table('platform_assets')->where('id', $pending->id)->where('state', 'staging')->delete();
-                });
-                $this->deleteIfOwned((string) $pending->disk, (string) $pending->path);
+            if (is_object($pending)) {
+                $this->compensateFailedUpload($pending);
             }
 
             throw $exception;
         }
-
-        return $this->resource($row);
     }
 
     public function syncReferences(?string $currentLanding, ?string $currentAuth, ?string $nextLanding, ?string $nextAuth): void
@@ -336,7 +336,7 @@ class PlatformAssetService
     }
 
     /** @return array{id: string, url: string, purpose: string, mimeType: string, byteSize: int, width: int, height: int} */
-    private function resource(object $row): array
+    protected function resource(object $row): array
     {
         return ['id' => (string) $row->id, 'url' => PlatformIdentityImageUrl::url((string) $row->id),
             'purpose' => (string) $row->purpose, 'mimeType' => (string) $row->mime_type,
@@ -376,6 +376,40 @@ class PlatformAssetService
     {
         DB::connection((string) config('tenancy.database.central_connection'))
             ->select('SELECT pg_advisory_xact_lock(?)', [self::QUOTA_LOCK_KEY]);
+    }
+
+    private function compensateFailedUpload(object $pending): void
+    {
+        if (! $this->safeRow($pending)) {
+            return;
+        }
+
+        try {
+            $connection = DB::connection((string) config('tenancy.database.central_connection'));
+            $canDeleteFile = $connection->transaction(function () use ($connection, $pending): bool {
+                $this->lockQuota();
+                $current = $connection->table('platform_assets')->where('id', $pending->id)->lockForUpdate()->first();
+                if ($current === null) {
+                    return true;
+                }
+                if ($current->state === 'ready') {
+                    return false;
+                }
+                if ($current->state !== 'staging' || ! $this->safeRow($current)
+                    || $current->disk !== $pending->disk || $current->path !== $pending->path) {
+                    return false;
+                }
+
+                return $connection->table('platform_assets')->where('id', $pending->id)
+                    ->where('state', 'staging')->delete() === 1;
+            });
+        } catch (Throwable) {
+            return;
+        }
+
+        if ($canDeleteFile) {
+            $this->deleteIfOwned((string) $pending->disk, (string) $pending->path);
+        }
     }
 
     /** @param resource $contents */
