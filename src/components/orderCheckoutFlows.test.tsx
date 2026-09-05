@@ -82,6 +82,8 @@ function checkoutProps() {
 async function fillRequiredCheckoutFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "Live Customer");
   await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000009");
+  await user.type(screen.getByPlaceholderText(/مثال: صنعاء/), "Server City");
+  await user.type(screen.getByPlaceholderText(/حي حدة/), "Server Area");
   await user.type(screen.getByPlaceholderText(/اسم الشارع/), "Server Address");
 }
 
@@ -111,7 +113,8 @@ describe("server-backed checkout interface", () => {
     render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
-    await user.click(screen.getByText("الدفع عبر المحافظ الإلكترونية"));
+    await user.click(screen.getByText("التحويل البنكي"));
+    expect(screen.queryByText("الدفع عبر المحافظ الإلكترونية")).toBeNull();
     await user.type(screen.getByPlaceholderText(/رقم مرجع التحويل/), "TRX-94281");
     const submit = screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" });
     fireEvent.click(submit);
@@ -162,7 +165,7 @@ describe("server-backed checkout interface", () => {
     }} mode="live" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
-    await user.click(screen.getByText("الدفع عبر المحافظ الإلكترونية"));
+    await user.click(screen.getByText("التحويل البنكي أو المحافظ الرقمية"));
     await user.type(screen.getByPlaceholderText(/رقم مرجع التحويل/), "WALLET-REF");
     await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
 
@@ -176,7 +179,7 @@ describe("server-backed checkout interface", () => {
     const user = userEvent.setup();
     const { rerender } = render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
 
-    const walletOption = await screen.findByRole("radio", { name: /الدفع عبر المحافظ الإلكترونية/ });
+    const walletOption = await screen.findByRole("radio", { name: /التحويل البنكي/ });
     await waitFor(() => expect(walletOption.getAttribute("aria-checked")).toBe("true"));
 
     rerender(<StorePreview
@@ -230,5 +233,49 @@ describe("server-backed checkout interface", () => {
     render(<StorePreview {...props} config={{ ...props.config, phone: "", whatsapp: "", email: "", address: "", workingHours: "" }} externalPage="contact" mode="preview" />);
     expect(await screen.findByText(/لم يضف المتجر وسيلة تواصل/)).toBeTruthy();
     expect(screen.queryByText(/support@store|الرياض - المملكة|أقل من 24|تم استلام رسالتك/)).toBeNull();
+  });
+
+  it("publishes only safe clickable social profiles on the Tech contact page", async () => {
+    const props = checkoutProps();
+    render(<StorePreview {...props} config={{
+      ...TECH_PRESET,
+      products: [product],
+      phone: "",
+      whatsapp: "",
+      email: "",
+      address: "",
+      workingHours: "",
+      instagram: "@merchant_store",
+      twitter: "not a valid handle",
+      tiktok: "",
+      snapchat: "",
+    }} externalPage="contact" mode="preview" />);
+
+    const instagramLinks = await screen.findAllByRole("link", { name: "فتح Instagram" });
+    expect(instagramLinks.length).toBeGreaterThan(0);
+    expect(instagramLinks.every((link) => link.getAttribute("href") === "https://instagram.com/merchant_store")).toBe(true);
+    expect(screen.queryByText(/لم يضف المتجر وسيلة تواصل مباشرة/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "فتح X" })).toBeNull();
+  });
+
+  it("distinguishes a real Tech order acknowledgement from preview completion", async () => {
+    const props = checkoutProps();
+    const techProps = {
+      ...props,
+      config: { ...TECH_PRESET, products: [product] },
+      isCartDrawerOpen: true,
+      hasOrdered: true,
+      externalPage: undefined,
+    };
+    const view = render(<StorePreview {...techProps} mode="live" />);
+
+    expect(await screen.findByText(/ORDER_RECEIVED/)).toBeTruthy();
+    expect(screen.getByText(/استلم المتجر الطلب/)).toBeTruthy();
+    expect(screen.queryByText(/طلب وهمي/)).toBeNull();
+
+    view.rerender(<StorePreview {...techProps} mode="preview" />);
+    expect(await screen.findByText(/PREVIEW_COMPLETE/)).toBeTruthy();
+    expect(screen.getByText(/هذه معاينة فقط/)).toBeTruthy();
+    expect(screen.queryByText(/استلم المتجر الطلب/)).toBeNull();
   });
 });

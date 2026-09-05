@@ -36,7 +36,7 @@ interface Props {
 
 const NAV_ITEMS = [
   { id: "home", label: "الرئيسية", icon: Zap },
-  { id: "products", label: "الأجهزة", icon: Box },
+  { id: "products", label: "المنتجات", icon: Box },
   { id: "about", label: "عن المتجر", icon: Info },
   { id: "contact", label: "الدعم", icon: MessageSquare },
 ] as const;
@@ -62,7 +62,7 @@ export default function TechStorefrontHeader({
   onOpenContact,
   onOpenCart,
 }: Props) {
-  const safeStoreName = storeName.trim() || "متجر الأجهزة الذكية";
+  const safeStoreName = storeName.trim() || "متجر إلكتروني";
   const navHandlers: Record<(typeof NAV_ITEMS)[number]["id"], () => void> = {
     home: onOpenHome,
     products: onOpenProducts,

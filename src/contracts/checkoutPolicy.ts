@@ -110,7 +110,10 @@ function cleanCoupons(coupons: Coupon[] | undefined): Coupon[] {
   });
 }
 
-export function sanitizeCheckoutConfig(config: StoreConfig): StoreConfig {
+export function sanitizeCheckoutConfig(
+  config: StoreConfig,
+  options: { preserveCouponCapability?: boolean } = {},
+): StoreConfig {
   const wallets = cleanWallets(config.customWallets);
   const coupons = cleanCoupons(config.customCoupons);
   const bankAccount = config.bankAccountNumber?.trim() ?? "";
@@ -132,7 +135,8 @@ export function sanitizeCheckoutConfig(config: StoreConfig): StoreConfig {
     customWallets: wallets,
     enableEWallets: config.enableEWallets === true && wallets.some((wallet) => wallet.active && usableWallet(wallet)),
     customCoupons: coupons,
-    enableCoupons: config.enableCoupons === true && coupons.some((coupon) => coupon.active),
+    enableCoupons: config.enableCoupons === true
+      && (options.preserveCouponCapability === true || coupons.some((coupon) => coupon.active)),
   };
 }
 
@@ -149,7 +153,7 @@ export function escapeHtml(value: unknown): string {
 interface PrintableOrder {
   orderNum: string;
   date: string;
-  customer: { fullName: string; phone: string; city: string; address: string; notes?: string };
+  customer: { fullName: string; phone: string; city: string; area: string; address: string; notes?: string };
   paymentMethod: string;
   transferRefNumber?: string | null;
   items: Array<{ product: { name: string; price: number }; quantity: number }>;
@@ -165,5 +169,6 @@ interface PrintableOrder {
 export function buildPrintableInvoiceHtml(order: PrintableOrder, storeName: string): string {
   const money = (value: number) => `${escapeHtml(value)} ${escapeHtml(order.currency)}`;
   const rows = order.items.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.product.name)}</td><td>${escapeHtml(item.quantity)}</td><td>${money(item.product.price)}</td><td>${money(item.product.price * item.quantity)}</td></tr>`).join("");
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة ${escapeHtml(order.orderNum)}</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#0f172a}.card{max-width:760px;margin:auto;border:1px solid #cbd5e1;border-radius:16px;padding:24px}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:right}.summary{background:#f8fafc;border-radius:12px;padding:14px}.row{display:flex;justify-content:space-between;margin:5px 0}.total{font-weight:800;border-top:1px solid #cbd5e1;padding-top:8px}</style></head><body><main class="card"><h1>${escapeHtml(storeName)}</h1><p>رقم الطلب: <strong>${escapeHtml(order.orderNum)}</strong></p><p>التاريخ: ${escapeHtml(order.date)}</p><section><h2>العميل والتوصيل</h2><p>${escapeHtml(order.customer.fullName)} — ${escapeHtml(order.customer.phone)}</p><p>${escapeHtml(order.customer.city)}، ${escapeHtml(order.customer.address)}</p>${order.customer.notes ? `<p>${escapeHtml(order.customer.notes)}</p>` : ""}</section><section><h2>الدفع</h2><p>${escapeHtml(order.paymentMethod)}</p>${order.transferRefNumber ? `<p>مرجع التحويل: ${escapeHtml(order.transferRefNumber)}</p>` : ""}</section><table><thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div class="row"><span>المجموع</span><span>${money(order.subtotal)}</span></div><div class="row"><span>الخصم</span><span>${money(order.discount)}</span></div><div class="row"><span>الشحن</span><span>${money(order.shipping)}</span></div><div class="row"><span>الضريبة</span><span>${money(order.tax)}</span></div><div class="row"><span>رسوم الدفع</span><span>${money(order.codFee)}</span></div><div class="row total"><span>الإجمالي النهائي</span><span>${money(order.total)}</span></div></section></main><script>window.onload=()=>window.print()</script></body></html>`;
+  const address = [order.customer.city, order.customer.area, order.customer.address].filter((part) => part.trim() !== "").map(escapeHtml).join("، ");
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة ${escapeHtml(order.orderNum)}</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#0f172a}.card{max-width:760px;margin:auto;border:1px solid #cbd5e1;border-radius:16px;padding:24px}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:9px;border-bottom:1px solid #e2e8f0;text-align:right}.summary{background:#f8fafc;border-radius:12px;padding:14px}.row{display:flex;justify-content:space-between;margin:5px 0}.total{font-weight:800;border-top:1px solid #cbd5e1;padding-top:8px}</style></head><body><main class="card"><h1>${escapeHtml(storeName)}</h1><p>رقم الطلب: <strong>${escapeHtml(order.orderNum)}</strong></p><p>التاريخ: ${escapeHtml(order.date)}</p><section><h2>العميل والتوصيل</h2><p>${escapeHtml(order.customer.fullName)} — ${escapeHtml(order.customer.phone)}</p><p>${address}</p>${order.customer.notes ? `<p>${escapeHtml(order.customer.notes)}</p>` : ""}</section><section><h2>الدفع</h2><p>${escapeHtml(order.paymentMethod)}</p>${order.transferRefNumber ? `<p>مرجع التحويل: ${escapeHtml(order.transferRefNumber)}</p>` : ""}</section><table><thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div class="row"><span>المجموع</span><span>${money(order.subtotal)}</span></div><div class="row"><span>الخصم</span><span>${money(order.discount)}</span></div><div class="row"><span>الشحن</span><span>${money(order.shipping)}</span></div><div class="row"><span>الضريبة</span><span>${money(order.tax)}</span></div><div class="row"><span>رسوم الدفع</span><span>${money(order.codFee)}</span></div><div class="row total"><span>الإجمالي النهائي</span><span>${money(order.total)}</span></div></section></main><script>window.onload=()=>window.print()</script></body></html>`;
 }

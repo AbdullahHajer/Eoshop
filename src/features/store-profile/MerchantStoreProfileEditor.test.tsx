@@ -124,6 +124,10 @@ describe("MerchantStoreProfileEditor", () => {
     expect(screen.getByPlaceholderText("https://example.com/image.png")).toHaveProperty("value", "");
     await user.click(screen.getByRole("button", { name: /الألوان والخط/ }));
     expect(screen.getByText("نظام المظهر")).toBeTruthy();
+    const fontSelect = screen.getByRole("combobox", { name: "الخط" });
+    expect(Array.from((fontSelect as HTMLSelectElement).options).map((option) => option.value)).toEqual([
+      "Cairo", "Tajawal", "Almarai", "Alexandria", "IBM Plex Sans Arabic",
+    ]);
     await user.click(screen.getByRole("button", { name: /واجهة الترحيب/ }));
     expect(screen.getByRole("heading", { name: "واجهة الترحيب" })).toBeTruthy();
   });

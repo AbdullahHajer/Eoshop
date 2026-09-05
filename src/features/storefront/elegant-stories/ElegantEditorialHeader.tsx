@@ -7,16 +7,20 @@ import "./elegantStories.css";
 interface Props {
   storeName: string;
   logoUrl?: string;
+  logoIcon?: string;
+  logoType?: "icon" | "image";
+  logoSize?: number;
   categories: string[];
   cartCount: number;
   searchQuery: string;
-  currentRoute?: "home" | "products" | "about" | "contact";
+  currentRoute?: "home" | "products" | "about" | "contact" | "product" | "checkout";
   tokens?: Partial<ElegantStoriesThemeTokens>;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;
   onOpenHome: () => void;
   onOpenProducts: () => void;
   onOpenAbout: () => void;
+  onOpenContact: () => void;
   onOpenCart: (trigger: HTMLElement) => void;
   onSelectCategory: (category: string) => void;
 }
@@ -24,26 +28,35 @@ interface Props {
 export default function ElegantEditorialHeader({
   storeName,
   logoUrl,
+  logoIcon,
+  logoType,
+  logoSize = 40,
   categories,
   cartCount,
   searchQuery,
-  currentRoute = "home",
+  currentRoute,
   tokens,
   onSearchChange,
   onSearchSubmit,
   onOpenHome,
   onOpenProducts,
   onOpenAbout,
+  onOpenContact,
   onOpenCart,
   onSelectCategory,
 }: Props) {
   const visibleCategories = categories.filter((category) => category.trim() !== "").slice(0, 5);
   const resolvedTokens = { ...DEFAULT_ELEGANT_STORIES_TOKENS, ...tokens };
+  const safeLogoSize = Number.isFinite(logoSize) ? Math.min(120, Math.max(24, Math.round(logoSize))) : 40;
+  const trimmedLogoUrl = logoUrl?.trim() ?? "";
+  const useImageLogo = logoType === "image" || (logoType === undefined && trimmedLogoUrl !== "");
   const style = {
     "--elegant-surface": resolvedTokens.surface,
     "--elegant-ink": resolvedTokens.ink,
     "--elegant-muted-ink": resolvedTokens.mutedInk,
     "--elegant-border": resolvedTokens.border,
+    "--elegant-logo-size": `${safeLogoSize}px`,
+    "--elegant-logo-font-size": `${Math.max(16, Math.round(safeLogoSize * 0.5))}px`,
   } as React.CSSProperties;
 
   const renderSearchForm = (id: string) => (
@@ -70,7 +83,13 @@ export default function ElegantEditorialHeader({
   return (
     <header className="elegant-editorial-header" data-elegant-editorial-header style={style}>
       <button type="button" className="elegant-editorial-header__brand" onClick={onOpenHome} aria-label={`العودة إلى الصفحة الرئيسية لمتجر ${storeName}`}>
-        {logoUrl?.trim() ? <img src={logoUrl} alt="" loading="eager" decoding="async" /> : null}
+        {useImageLogo && trimmedLogoUrl ? (
+          <img data-storefront-brand-logo="image" src={trimmedLogoUrl} alt="" loading="eager" decoding="async" referrerPolicy="no-referrer" />
+        ) : (
+          <span data-storefront-brand-logo="icon" className="elegant-editorial-header__brand-icon" aria-hidden="true">
+            {logoIcon?.trim() || "✦"}
+          </span>
+        )}
         <span>{storeName}</span>
       </button>
 
@@ -81,6 +100,7 @@ export default function ElegantEditorialHeader({
         ))}
         <button type="button" data-storefront-nav="products" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "products" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
         <button type="button" data-storefront-nav="about" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "about" ? "page" : undefined} onClick={onOpenAbout}>عن المتجر</button>
+        <button type="button" data-storefront-nav="contact" style={{ color: resolvedTokens.ink }} aria-current={currentRoute === "contact" ? "page" : undefined} onClick={onOpenContact}>تواصل معنا</button>
       </nav>
 
       <div className="elegant-editorial-header__desktop-search">{renderSearchForm("elegant-editorial-search-desktop")}</div>
@@ -95,12 +115,13 @@ export default function ElegantEditorialHeader({
         <div>
           {renderSearchForm("elegant-editorial-search-mobile")}
           <nav aria-label="التنقل المختصر">
-            <button type="button" onClick={onOpenHome}>الرئيسية</button>
-            <button type="button" onClick={onOpenProducts}>المنتجات</button>
+            <button type="button" data-storefront-nav="home" aria-current={currentRoute === "home" ? "page" : undefined} onClick={onOpenHome}>الرئيسية</button>
+            <button type="button" data-storefront-nav="products" aria-current={currentRoute === "products" ? "page" : undefined} onClick={onOpenProducts}>المنتجات</button>
             {visibleCategories.map((category) => (
               <button type="button" key={category} onClick={() => onSelectCategory(category)}>{category}</button>
             ))}
-            <button type="button" onClick={onOpenAbout}>عن المتجر</button>
+            <button type="button" data-storefront-nav="about" aria-current={currentRoute === "about" ? "page" : undefined} onClick={onOpenAbout}>عن المتجر</button>
+            <button type="button" data-storefront-nav="contact" aria-current={currentRoute === "contact" ? "page" : undefined} onClick={onOpenContact}>تواصل معنا</button>
           </nav>
         </div>
       </details>

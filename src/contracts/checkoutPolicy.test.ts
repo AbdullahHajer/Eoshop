@@ -55,7 +55,7 @@ describe("checkout truthfulness contract", () => {
 
   it("escapes every shopper and merchant string in printable invoice HTML", () => {
     const html = buildPrintableInvoiceHtml({
-      orderNum: "<script>order</script>", date: "today", customer: { fullName: "<img src=x>", phone: "+967", city: "Sanaa", address: "<b>home</b>" }, paymentMethod: "COD", items: [{ product: { name: "<svg onload=x>", price: 10 }, quantity: 1 }], subtotal: 10, discount: 0, shipping: 0, tax: 0, codFee: 0, total: 10, currency: "YER",
+      orderNum: "<script>order</script>", date: "today", customer: { fullName: "<img src=x>", phone: "+967", city: "Sanaa", area: "Center", address: "<b>home</b>" }, paymentMethod: "COD", items: [{ product: { name: "<svg onload=x>", price: 10 }, quantity: 1 }], subtotal: 10, discount: 0, shipping: 0, tax: 0, codFee: 0, total: 10, currency: "YER",
     }, "<script>store</script>");
     expect(html).not.toContain("<script>store</script>");
     expect(html).not.toContain("<img src=x>");

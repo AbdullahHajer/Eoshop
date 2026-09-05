@@ -66,6 +66,7 @@ function Preview() {
         onOpenHome={() => window.location.assign("/prototypes/elegant-stories/")}
         onOpenProducts={() => setSelectedProduct(null)}
         onOpenAbout={() => undefined}
+        onOpenContact={() => undefined}
         onOpenCart={() => setDrawerOpen(true)}
         onSelectCategory={(value) => { setCategory(value); setSelectedProduct(null); }}
       />

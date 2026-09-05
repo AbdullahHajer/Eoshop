@@ -108,6 +108,8 @@ describe("public storefront functional vertical slice", () => {
 
     await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "عميل T2");
     await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000009");
+    await user.type(screen.getByPlaceholderText(/مثال: صنعاء/), "صنعاء");
+    await user.type(screen.getByPlaceholderText(/حي حدة/), "حدة");
     await user.type(screen.getByPlaceholderText(/اسم الشارع/), "عنوان محلي غير حساس");
     fireEvent.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
 
@@ -115,6 +117,7 @@ describe("public storefront functional vertical slice", () => {
     expect(submitOrder.mock.calls[0][0]).toMatchObject({
       lines: [{ productId: product.id, quantity: 1 }],
       payment: { method: "cod" },
+      address: { city: "صنعاء", area: "حدة", details: "عنوان محلي غير حساس" },
     });
     expect(await screen.findByText("EO-T2-001")).toBeTruthy();
     expect(screen.getByText("تم تثبيت الطلب من الخادم")).toBeTruthy();
@@ -160,5 +163,43 @@ describe("public storefront functional vertical slice", () => {
 
     expect(await screen.findByRole("heading", { name: "المنتج غير متاح" })).toBeTruthy();
     expect(screen.queryByRole("heading", { level: 1, name: product.name })).toBeNull();
+  });
+
+  it("honors optional address details and hides disabled coupons in the live checkout", async () => {
+    const submitOrder = vi.fn().mockResolvedValue(receipt);
+    const user = userEvent.setup();
+    render(
+      <StorePreview
+        config={{ ...config, requireAddressDetails: false, enableCoupons: false }}
+        cart={[{ product, quantity: 1 }]}
+        addToCart={vi.fn()}
+        updateQuantity={vi.fn()}
+        calculateTotal={vi.fn()}
+        isCartDrawerOpen={false}
+        setIsCartDrawerOpen={vi.fn()}
+        hasOrdered={false}
+        handleCheckout={vi.fn()}
+        selectedCategory="الكل"
+        setSelectedCategory={vi.fn()}
+        externalPage="checkout"
+        mode="live"
+        submitOrder={submitOrder}
+      />,
+    );
+
+    const details = await screen.findByLabelText(/تفاصيل العنوان/);
+    expect(details).not.toHaveProperty("required", true);
+    expect(screen.queryByText("كود الخصم (كوبون):")).toBeNull();
+    await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "عميل دون تفاصيل");
+    await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000008");
+    await user.type(screen.getByPlaceholderText(/مثال: صنعاء/), "صنعاء");
+    await user.type(screen.getByPlaceholderText(/حي حدة/), "الروضة");
+    await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1));
+    expect(submitOrder.mock.calls[0][0]).toMatchObject({
+      couponCode: undefined,
+      address: { city: "صنعاء", area: "الروضة", details: undefined },
+    });
   });
 });

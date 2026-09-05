@@ -79,9 +79,10 @@ export default function StorefrontHome({
         : []),
   ];
   const elegantModel = elegantStoriesHomeModel(config);
-  const hasElegantEditorial = isElegant && (elegantModel.stories.length > 0 || elegantModel.discoveryItems.length > 0);
+  const hasElegantStories = isElegant && elegantModel.stories.length > 0;
+  const hasElegantDiscovery = isElegant && elegantModel.discoveryItems.length > 0;
   const techModel = techBentoHomeModel(config);
-  const usesImmersiveHome = hasElegantEditorial || !isElegant;
+  const usesImmersiveHome = hasElegantStories || hasElegantDiscovery || !isElegant;
   const legacyCategories = (
     <section className="space-y-4">
       <div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>التصنيفات</h2><p className="mt-1 text-xs" style={{ color: pageBodyColor }}>التصنيفات المستخرجة من المنتجات المنشورة.</p></div>
@@ -90,9 +91,10 @@ export default function StorefrontHome({
   );
 
   const sections: Record<StorefrontSectionId, React.ReactNode> = {
-    hero: hasElegantEditorial ? (
+    hero: hasElegantStories ? (
       <ElegantStoriesHome
         model={elegantModel}
+        boundary="hero"
         tokens={{
           background: pageBackground,
           surface: cardBackground,
@@ -109,6 +111,7 @@ export default function StorefrontHome({
     ) : !isElegant ? (
       <TechBentoHome
         model={techModel}
+        boundary="hero"
         tokens={{
           background: pageBackground,
           surface: cardBackground,
@@ -139,7 +142,47 @@ export default function StorefrontHome({
         ) : <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-bold" style={{ borderColor, color: cardBodyColor }}>لم يضف المتجر معلومات الخدمة بعد</div>}
       </section>
     ),
-    categories: hasElegantEditorial || !isElegant ? null : legacyCategories,
+    categories: !isElegant ? (
+      <TechBentoHome
+        model={techModel}
+        boundary="categories"
+        tokens={{
+          background: pageBackground,
+          surface: cardBackground,
+          ink: secondaryPageAccent,
+          mutedInk: pageBodyColor,
+          border: borderColor,
+          accent: primaryPageAccent,
+          accentForeground: readableForeground(primaryColor),
+        }}
+        onOpenHero={(hero) => onOpenMarketingTarget(hero.targetType, hero.targetValue)}
+        onOpenMarketingItem={(item) => onOpenMarketingTarget(item.targetType, item.targetValue)}
+        onOpenProducts={onOpenProducts}
+        onSelectCategory={onSelectCategory}
+      />
+    ) : (
+      <div className="space-y-6">
+        {legacyCategories}
+        {hasElegantDiscovery ? (
+          <ElegantStoriesHome
+            model={elegantModel}
+            boundary="categories"
+            tokens={{
+              background: pageBackground,
+              surface: cardBackground,
+              ink: secondaryPageAccent,
+              mutedInk: pageBodyColor,
+              border: borderColor,
+              accent: primaryPageAccent,
+            }}
+            onOpenStory={(story) => onOpenMarketingTarget(story.targetType, story.targetValue)}
+            onOpenIntro={(intro) => onOpenMarketingTarget(intro.targetType, intro.targetValue)}
+            onOpenDiscovery={(item) => onOpenMarketingTarget(item.targetType, item.targetValue)}
+            onOpenDiscoveryAll={onOpenProducts}
+          />
+        ) : null}
+      </div>
+    ),
     featured_products: (
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-3"><div><h2 className="text-xl font-black" style={{ color: secondaryPageAccent }}>المنتجات المنشورة</h2><p className="mt-1 text-xs" style={{ color: pageBodyColor }}>منتجات من كتالوج المتجر الحالي.</p></div>{products.length > 0 && <button type="button" onClick={onOpenProducts} className="text-xs font-black" style={{ color: primaryPageAccent }}>عرض الكل</button>}</div>
