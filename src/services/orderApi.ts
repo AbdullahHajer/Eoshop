@@ -226,7 +226,7 @@ function mapBootstrap(value: unknown): StorefrontBootstrap {
   return {
     workspaceRevision: nonNegativeIntegerField(dto, "workspaceRevision", "واجهة المتجر"),
     catalogRevision: nonNegativeIntegerField(dto, "catalogRevision", "واجهة المتجر"),
-    config: mapStoreConfig(dto.config),
+    config: mapStoreConfig(dto.config, { preserveCouponCapability: true }),
   };
 }
 

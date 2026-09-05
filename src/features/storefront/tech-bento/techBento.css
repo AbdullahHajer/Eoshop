@@ -6,6 +6,70 @@
   padding: clamp(0.75rem, 2vw, 2rem);
 }
 
+/*
+ * Hero and catalog remain separate home-section boundaries, but form one
+ * presentation surface while both sections are enabled. Flattening only the
+ * layout boxes keeps each section's content owned by its server-driven wrapper.
+ */
+.tech-home-composition {
+  direction: ltr;
+  display: grid;
+  gap: clamp(0.75rem, 1.3vw, 1.2rem);
+  grid-template-columns: minmax(10.5rem, 12.5rem) minmax(0, 1fr) minmax(12rem, 15rem);
+  margin-inline: auto;
+  max-width: 100rem;
+  padding: clamp(0.75rem, 2vw, 2rem);
+  width: 100%;
+}
+
+.tech-home-composition > [data-storefront-section],
+.tech-home-composition .tech-bento-home,
+.tech-home-composition .tech-bento-stage,
+.tech-home-composition .tech-bento-catalog {
+  display: contents;
+}
+
+.tech-home-composition .tech-bento-stage__showcase {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.tech-home-composition .tech-ad-rail {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.tech-home-composition .tech-bento-stage--no-ads > .tech-bento-stage__showcase {
+  grid-column: 2 / -1;
+}
+
+.tech-home-composition .tech-category-rail {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tech-home-composition .tech-discovery {
+  direction: rtl;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-block-start: 0;
+  width: 100%;
+}
+
+@media (min-width: 1200px) {
+  .tech-home-composition .tech-bento-catalog .tech-category-rail__list {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding-block-end: 0;
+    scroll-snap-type: none;
+  }
+
+  .tech-home-composition .tech-bento-catalog .tech-category-rail__item {
+    scroll-snap-align: none;
+  }
+}
+
 .tech-bento-stage {
   direction: ltr;
   display: grid;
@@ -19,6 +83,41 @@
 .tech-bento-stage--no-ads {
   grid-template-areas: "categories showcase";
   grid-template-columns: minmax(10.5rem, 0.72fr) minmax(0, 4.55fr);
+}
+
+.tech-bento-stage--hero-only {
+  grid-template-areas: "showcase ads";
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 15rem);
+}
+
+.tech-bento-stage--hero-only.tech-bento-stage--no-ads {
+  grid-template-areas: "showcase";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tech-bento-catalog {
+  margin-inline: auto;
+  max-width: 96rem;
+}
+
+.tech-bento-catalog .tech-category-rail__list {
+  display: grid;
+  gap: 0.45rem;
+  grid-auto-columns: minmax(8.5rem, 12rem);
+  grid-auto-flow: column;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding-block-end: 0.25rem;
+  scroll-snap-type: inline proximity;
+}
+
+.tech-bento-catalog .tech-category-rail__item {
+  scroll-snap-align: start;
+}
+
+.tech-bento-catalog .tech-category-rail__item > button {
+  background: var(--tech-surface);
+  border-color: var(--tech-border);
 }
 
 .tech-bento-stage__showcase {
@@ -571,11 +670,22 @@
 }
 
 @media (max-width: 1199px) {
+  .tech-home-composition {
+    direction: rtl;
+    display: flex;
+    flex-direction: column;
+  }
   .tech-bento-stage {
     grid-template-areas: "categories" "showcase" "ads";
     grid-template-columns: 1fr;
   }
   .tech-bento-stage--no-ads { grid-template-areas: "categories" "showcase"; }
+  .tech-bento-stage--hero-only,
+  .tech-bento-stage--hero-only.tech-bento-stage--no-ads {
+    grid-template-areas: "showcase" "ads";
+    grid-template-columns: 1fr;
+  }
+  .tech-bento-stage--hero-only.tech-bento-stage--no-ads { grid-template-areas: "showcase"; }
   .tech-category-rail { padding: 0.7rem; }
   .tech-category-rail__heading { padding-block: 0.35rem 0.65rem; }
   .tech-category-rail__list {

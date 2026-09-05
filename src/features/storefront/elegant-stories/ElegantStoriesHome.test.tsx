@@ -128,6 +128,7 @@ describe("ElegantEditorialHeader truthful capabilities", () => {
         onOpenHome={vi.fn()}
         onOpenProducts={vi.fn()}
         onOpenAbout={vi.fn()}
+        onOpenContact={vi.fn()}
         onOpenCart={onOpenCart}
         onSelectCategory={onSelectCategory}
       />,

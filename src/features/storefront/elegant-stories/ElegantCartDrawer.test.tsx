@@ -30,6 +30,7 @@ const themeProps = {
   inkColor: "#1C1917",
   mutedInkColor: "#57534E",
   prefersReducedMotion: true,
+  mode: "live" as const,
 };
 
 afterEach(cleanup);
@@ -114,5 +115,10 @@ describe("ElegantCartDrawer", () => {
     rerender(<ElegantCartDrawer {...commonProps} hasOrdered />);
     expect(screen.getByRole("heading", { name: "وصل طلبك إلى المتجر بنجاح." })).toBeTruthy();
     expect(screen.queryByText(/وهمي|محاكاة/)).toBeNull();
+
+    rerender(<ElegantCartDrawer {...commonProps} mode="preview" hasOrdered />);
+    expect(screen.getByRole("heading", { name: "هذه معاينة فقط ولم يُرسل طلب." })).toBeTruthy();
+    expect(screen.getByText("اكتملت معاينة السلة")).toBeTruthy();
+    expect(screen.queryByText("وصل طلبك إلى المتجر بنجاح.")).toBeNull();
   });
 });

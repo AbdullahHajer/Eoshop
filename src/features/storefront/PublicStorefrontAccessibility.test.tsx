@@ -250,10 +250,12 @@ describe("public storefront acceptance boundary", () => {
     const submit = screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" });
     await user.click(submit);
 
-    expect(screen.getByRole("alert").textContent).toContain("يرجى تعبئة كافة الحقول المطلوبة");
+    expect(screen.getByRole("alert").textContent).toContain("يرجى تعبئة الحقول المطلوبة");
     const name = screen.getByLabelText(/الاسم الكامل الثلاثي/);
     const phone = screen.getByLabelText(/رقم الجوال/);
-    const address = screen.getByLabelText(/عنوان التسليم التفصيلي/);
+    const city = screen.getByLabelText(/المحافظة \/ المدينة/);
+    const area = screen.getByLabelText(/الحي \/ المنطقة/);
+    const address = screen.getByLabelText(/تفاصيل العنوان/);
     expect(document.activeElement).toBe(name);
 
     await user.type(name, "عميل اختبار");
@@ -261,6 +263,14 @@ describe("public storefront acceptance boundary", () => {
     expect(document.activeElement).toBe(phone);
 
     await user.type(phone, "770000001");
+    await user.click(submit);
+    expect(document.activeElement).toBe(city);
+
+    await user.type(city, "صنعاء");
+    await user.click(submit);
+    expect(document.activeElement).toBe(area);
+
+    await user.type(area, "حي الاختبار");
     await user.click(submit);
     expect(document.activeElement).toBe(address);
   });
@@ -289,9 +299,13 @@ describe("public storefront acceptance boundary", () => {
 
     const name = await screen.findByLabelText(/الاسم الكامل الثلاثي/);
     const phone = screen.getByLabelText(/رقم الجوال/);
-    const address = screen.getByLabelText(/عنوان التسليم التفصيلي/);
+    const city = screen.getByLabelText(/المحافظة \/ المدينة/);
+    const area = screen.getByLabelText(/الحي \/ المنطقة/);
+    const address = screen.getByLabelText(/تفاصيل العنوان/);
     await user.type(name, "عميل اختبار");
     await user.type(phone, "770000001");
+    await user.type(city, "صنعاء");
+    await user.type(area, "حي الاختبار");
     await user.type(address, "صنعاء - شارع الاختبار");
     await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
 

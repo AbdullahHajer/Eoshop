@@ -82,6 +82,8 @@ function checkoutProps() {
 async function fillRequiredCheckoutFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "Live Customer");
   await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000009");
+  await user.type(screen.getByPlaceholderText(/مثال: صنعاء/), "Server City");
+  await user.type(screen.getByPlaceholderText(/حي حدة/), "Server Area");
   await user.type(screen.getByPlaceholderText(/اسم الشارع/), "Server Address");
 }
 
@@ -111,7 +113,8 @@ describe("server-backed checkout interface", () => {
     render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
-    await user.click(screen.getByText("الدفع عبر المحافظ الإلكترونية"));
+    await user.click(screen.getByText("التحويل البنكي"));
+    expect(screen.queryByText("الدفع عبر المحافظ الإلكترونية")).toBeNull();
     await user.type(screen.getByPlaceholderText(/رقم مرجع التحويل/), "TRX-94281");
     const submit = screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" });
     fireEvent.click(submit);
@@ -134,22 +137,103 @@ describe("server-backed checkout interface", () => {
     expect(props.handleCheckout).toHaveBeenCalledTimes(1);
   }, 20_000);
 
-  it("keeps preview checkout non-persistent", async () => {
+  it.each([
+    ["Elegant", ELEGANT_PRESET],
+    ["Tech", TECH_PRESET],
+  ])("keeps the %s preview receipt visibly non-persistent", async (_label, preset) => {
     const submitOrder = vi.fn();
     const props = checkoutProps();
     const user = userEvent.setup();
-    render(<StorePreview {...props} mode="preview" submitOrder={submitOrder} />);
+    render(<StorePreview {...props} config={{
+      ...preset,
+      products: [product],
+      currency: "YER",
+      requireEmail: false,
+      enableCashOnDelivery: false,
+      enableEWallets: false,
+      customWallets: [],
+      enableBankTransfer: true,
+      bankName: "Preview Bank",
+      bankAccountName: "Preview Merchant",
+      bankAccountNumber: "SA0380000000608010167519",
+      whatsapp: "+967700000000",
+      enableWhatsAppNotification: true,
+    }} mode="preview" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
     await user.type(await screen.findByPlaceholderText(/رقم مرجع التحويل/), "PREVIEW-REF");
     await user.click(screen.getByRole("button", { name: "معاينة إرسال الطلب" }));
 
     await waitFor(() => expect(screen.getByText(/^PREVIEW-\d+$/)).toBeTruthy());
-    expect(screen.getByText("تم استلام طلبك بنجاح")).toBeTruthy();
+    expect(screen.getByText("معاينة الإيصال — لم يُرسل طلب")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^معاينة —/ })).toBeTruthy();
     expect(screen.getByText(/معاينة تصميمية ولا تنشئ طلبًا فعليًا/)).toBeTruthy();
+    expect(screen.getByText("معاينة غير مرسلة")).toBeTruthy();
+    expect(screen.getByText("إجمالي نموذج المعاينة:")).toBeTruthy();
+    expect(screen.getByText("رقم مرجعي للمعاينة:")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "طباعة نموذج المعاينة" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /مشاركة تفاصيل الفاتورة/ })).toBeNull();
+    expect(screen.queryByText(/قيد التجهيز والتوصيل/)).toBeNull();
+    expect(screen.queryByText("الإجمالي النهائي المستحق:")).toBeNull();
     expect(screen.queryByText(/🎉/)).toBeNull();
     expect(submitOrder).not.toHaveBeenCalled();
   }, 20_000);
+
+  it("exposes the public coupon capability without receiving coupon definitions", async () => {
+    const submitOrder = vi.fn().mockResolvedValue({ ...receipt, paymentState: "due_on_delivery" });
+    const props = checkoutProps();
+    const user = userEvent.setup();
+    render(<StorePreview {...props} config={{
+      ...props.config,
+      enableCashOnDelivery: true,
+      enableBankTransfer: false,
+      enableCoupons: true,
+      customCoupons: [],
+    }} mode="live" submitOrder={submitOrder} />);
+
+    await fillRequiredCheckoutFields(user);
+    const couponInput = screen.getByPlaceholderText("أدخل كود الخصم");
+    await user.type(couponInput, "SERVER25");
+    await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1));
+    expect(submitOrder.mock.calls[0][0].couponCode).toBe("SERVER25");
+    expect(screen.queryByText(/خصم 25%|SAVE25/)).toBeNull();
+  }, 20_000);
+
+  it("clears an applied preview discount when the code changes or coupons are disabled", async () => {
+    const props = checkoutProps();
+    const user = userEvent.setup();
+    const enabledConfig = {
+      ...props.config,
+      enableCashOnDelivery: true,
+      enableBankTransfer: false,
+      enableCoupons: true,
+      customCoupons: [{ code: "SAVE15", discountPercent: 15, active: true }],
+    };
+    const view = render(<StorePreview {...props} config={enabledConfig} mode="preview" />);
+
+    const couponInput = screen.getByPlaceholderText("أدخل كود الخصم");
+    await user.type(couponInput, "SAVE15");
+    await user.click(screen.getByRole("button", { name: "تطبيق" }));
+    expect(screen.getByText(/تم تطبيق كود الخصم.*SAVE15/)).toBeTruthy();
+    expect(screen.getByText("- 1.5 YER")).toBeTruthy();
+
+    await user.clear(couponInput);
+    await user.type(couponInput, "WRONG");
+    expect(screen.queryByText(/تم تطبيق كود الخصم/)).toBeNull();
+    expect(screen.queryByText("- 1.5 YER")).toBeNull();
+
+    await user.clear(couponInput);
+    await user.type(couponInput, "SAVE15");
+    await user.click(screen.getByRole("button", { name: "تطبيق" }));
+    expect(screen.getByText("- 1.5 YER")).toBeTruthy();
+
+    view.rerender(<StorePreview {...props} config={{ ...enabledConfig, enableCoupons: false }} mode="preview" />);
+    await waitFor(() => expect(screen.queryByPlaceholderText("أدخل كود الخصم")).toBeNull());
+    expect(screen.queryByText("- 1.5 YER")).toBeNull();
+    expect(screen.queryByText(/تم تطبيق كود الخصم/)).toBeNull();
+  });
 
   it("keeps a real wallet named bank-transfer distinct from the bank option", async () => {
     const submitOrder = vi.fn().mockResolvedValue(receipt);
@@ -162,7 +246,7 @@ describe("server-backed checkout interface", () => {
     }} mode="live" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
-    await user.click(screen.getByText("الدفع عبر المحافظ الإلكترونية"));
+    await user.click(screen.getByText("التحويل البنكي أو المحافظ الرقمية"));
     await user.type(screen.getByPlaceholderText(/رقم مرجع التحويل/), "WALLET-REF");
     await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
 
@@ -176,7 +260,7 @@ describe("server-backed checkout interface", () => {
     const user = userEvent.setup();
     const { rerender } = render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
 
-    const walletOption = await screen.findByRole("radio", { name: /الدفع عبر المحافظ الإلكترونية/ });
+    const walletOption = await screen.findByRole("radio", { name: /التحويل البنكي/ });
     await waitFor(() => expect(walletOption.getAttribute("aria-checked")).toBe("true"));
 
     rerender(<StorePreview
@@ -200,6 +284,31 @@ describe("server-backed checkout interface", () => {
 
     await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1));
     expect(submitOrder.mock.calls[0][0].payment).toEqual({ method: "cod" });
+  }, 20_000);
+
+  it("does not submit a hidden customer note after the setting is disabled", async () => {
+    const submitOrder = vi.fn().mockResolvedValue({ ...receipt, paymentState: "due_on_delivery" });
+    const props = checkoutProps();
+    const user = userEvent.setup();
+    const initialConfig = {
+      ...props.config,
+      enableCashOnDelivery: true,
+      enableBankTransfer: false,
+      enableCustomerNotes: true,
+    };
+    const view = render(<StorePreview {...props} config={initialConfig} mode="live" submitOrder={submitOrder} />);
+
+    await fillRequiredCheckoutFields(user);
+    expect((screen.getByLabelText(/المحافظة \/ المدينة/) as HTMLInputElement).maxLength).toBe(100);
+    expect((screen.getByLabelText(/الحي \/ المنطقة/) as HTMLInputElement).maxLength).toBe(100);
+    await user.type(screen.getByPlaceholderText(/يرجى الاتصال قبل الوصول/), "اتصل قبل الوصول");
+
+    view.rerender(<StorePreview {...props} config={{ ...initialConfig, enableCustomerNotes: false }} mode="live" submitOrder={submitOrder} />);
+    expect(screen.queryByPlaceholderText(/يرجى الاتصال قبل الوصول/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1));
+    expect(submitOrder.mock.calls[0][0].customer.notes).toBeUndefined();
   }, 20_000);
 
   it("blocks preview completion below the saved post-discount minimum", async () => {
@@ -230,5 +339,49 @@ describe("server-backed checkout interface", () => {
     render(<StorePreview {...props} config={{ ...props.config, phone: "", whatsapp: "", email: "", address: "", workingHours: "" }} externalPage="contact" mode="preview" />);
     expect(await screen.findByText(/لم يضف المتجر وسيلة تواصل/)).toBeTruthy();
     expect(screen.queryByText(/support@store|الرياض - المملكة|أقل من 24|تم استلام رسالتك/)).toBeNull();
+  });
+
+  it("publishes only safe clickable social profiles on the Tech contact page", async () => {
+    const props = checkoutProps();
+    render(<StorePreview {...props} config={{
+      ...TECH_PRESET,
+      products: [product],
+      phone: "",
+      whatsapp: "",
+      email: "",
+      address: "",
+      workingHours: "",
+      instagram: "@merchant_store",
+      twitter: "not a valid handle",
+      tiktok: "",
+      snapchat: "",
+    }} externalPage="contact" mode="preview" />);
+
+    const instagramLinks = await screen.findAllByRole("link", { name: "فتح Instagram" });
+    expect(instagramLinks.length).toBeGreaterThan(0);
+    expect(instagramLinks.every((link) => link.getAttribute("href") === "https://instagram.com/merchant_store")).toBe(true);
+    expect(screen.queryByText(/لم يضف المتجر وسيلة تواصل مباشرة/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "فتح X" })).toBeNull();
+  });
+
+  it("distinguishes a real Tech order acknowledgement from preview completion", async () => {
+    const props = checkoutProps();
+    const techProps = {
+      ...props,
+      config: { ...TECH_PRESET, products: [product] },
+      isCartDrawerOpen: true,
+      hasOrdered: true,
+      externalPage: undefined,
+    };
+    const view = render(<StorePreview {...techProps} mode="live" />);
+
+    expect(await screen.findByText(/ORDER_RECEIVED/)).toBeTruthy();
+    expect(screen.getByText(/استلم المتجر الطلب/)).toBeTruthy();
+    expect(screen.queryByText(/طلب وهمي/)).toBeNull();
+
+    view.rerender(<StorePreview {...techProps} mode="preview" />);
+    expect(await screen.findByText(/PREVIEW_COMPLETE/)).toBeTruthy();
+    expect(screen.getByText(/هذه معاينة فقط/)).toBeTruthy();
+    expect(screen.queryByText(/استلم المتجر الطلب/)).toBeNull();
   });
 });

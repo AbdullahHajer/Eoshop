@@ -122,6 +122,7 @@ function Preview() {
         onOpenHome={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         onOpenProducts={() => document.querySelector("[data-elegant-discovery]")?.scrollIntoView({ behavior: "smooth" })}
         onOpenAbout={() => undefined}
+        onOpenContact={() => undefined}
         onOpenCart={() => undefined}
         onSelectCategory={() => document.querySelector("[data-elegant-discovery]")?.scrollIntoView({ behavior: "smooth" })}
       />

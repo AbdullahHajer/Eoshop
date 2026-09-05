@@ -20,6 +20,7 @@ import { readableAccent, readableForeground } from "../utils/readableForeground"
 import { storefrontAvailableQuantity, storefrontCartLineLimit } from "../workflows/orderState";
 import type { StorefrontMarketingTargetType } from "../contracts/storefrontMarketingBlocks";
 import { ElegantAboutPage, ElegantCartDrawer, ElegantCatalog, ElegantContactPage } from "../features/storefront/elegant-stories";
+import { publishedStorefrontSocialLinks, type StorefrontSocialNetwork } from "../features/storefront/storefrontLinks";
 
 interface StorePreviewProps {
   config: StoreConfig;
@@ -163,7 +164,8 @@ export default function StorePreview({
     fullName: "",
     phone: "",
     email: "",
-    city: "صنعاء",
+    city: "",
+    area: "",
     address: "",
     notes: ""
   });
@@ -283,6 +285,14 @@ export default function StorePreview({
   useEffect(() => {
     if (config.enableCashOnDelivery !== true) setPaymentMethod("wallet");
   }, [config.enableCashOnDelivery]);
+
+  useEffect(() => {
+    if (config.enableCoupons === true) return;
+    setCouponCode("");
+    setCouponDiscount(0);
+    setCouponApplied(false);
+    setCouponMessage("");
+  }, [config.enableCoupons]);
 
   useEffect(() => {
     setActiveImageIndex(0);
@@ -639,6 +649,13 @@ export default function StorePreview({
           const address = config.address?.trim() || null;
           const hours = config.workingHours?.trim() || null;
           const hasDirectContact = Boolean(phone || whatsapp || email || address || hours);
+          const social = publishedStorefrontSocialLinks(config);
+          const socialIcons: Record<StorefrontSocialNetwork, typeof Instagram> = {
+            instagram: Instagram,
+            twitter: Twitter,
+            tiktok: Video,
+            snapchat: Camera,
+          };
           return (
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 text-right animate-fadeIn">
               <header className="space-y-2 text-center">
@@ -654,10 +671,22 @@ export default function StorePreview({
                   {address && <div className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><MapPin className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">العنوان</h3><p className="mt-1 text-sm">{address}</p></div>}
                   {hours && <div className="rounded-2xl border p-5" style={{ backgroundColor: cardBgColor, borderColor, color: secondaryOnCard }}><Clock className="mb-3 h-5 w-5" style={{ color: readableAccent(primaryColor, cardBgColor) }} /><h3 className="text-xs font-black">ساعات العمل</h3><p className="mt-1 text-sm">{hours}</p></div>}
                 </div>
-              ) : (
+              ) : social.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-8 text-center text-sm font-bold" style={{ backgroundColor: cardBgColor, borderColor, color: readableAccent(textColor, cardBgColor) }}>لم يضف المتجر وسيلة تواصل مباشرة بعد.</div>
-              )}
-              {(config.instagram || config.twitter || config.tiktok || config.snapchat) && <div className="flex flex-wrap justify-center gap-2">{([["Instagram", config.instagram], ["X", config.twitter], ["TikTok", config.tiktok], ["Snapchat", config.snapchat]] as const).filter(([, value]) => Boolean(value?.trim())).map(([label, value]) => <span key={label} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold">{label}: @{value}</span>)}</div>}
+              ) : null}
+              {social.length > 0 ? (
+                <div className="flex flex-wrap justify-center gap-2" aria-label="حسابات التواصل الاجتماعي">
+                  {social.map(({ key, label, href }) => {
+                    const SocialIcon = socialIcons[key];
+                    return (
+                      <a key={key} href={href} target="_blank" rel="noreferrer" aria-label={`فتح ${label}`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-800 hover:border-sky-300 hover:text-sky-700">
+                        <SocialIcon className="h-4 w-4" aria-hidden="true" />
+                        {label}
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           );
         })())}
@@ -707,15 +736,34 @@ export default function StorePreview({
             ...(bankWallet ? [{ ...bankWallet, selectionKey: "bank", kind: "bank" as const }] : [])
           ];
           const codAvailable = config.enableCashOnDelivery === true;
+          const hasDigitalWallets = activeWallets.length > 0;
+          const hasBankTransfer = bankWallet !== null;
           const transferAvailable = WALLETS.length > 0;
+          const transferOptionLabel = hasBankTransfer && hasDigitalWallets
+            ? "تحويل ومحافظ"
+            : hasBankTransfer ? "تحويل بنكي" : "محافظ رقمية";
+          const transferOptionTitle = hasBankTransfer && hasDigitalWallets
+            ? "التحويل البنكي أو المحافظ الرقمية"
+            : hasBankTransfer ? "التحويل البنكي" : "الدفع عبر المحافظ الرقمية";
+          const transferSelectorTitle = hasBankTransfer && hasDigitalWallets
+            ? "اختر الحساب البنكي أو المحفظة لإرسال الحوالة:"
+            : hasBankTransfer ? "اختر الحساب البنكي لإرسال الحوالة:" : "اختر المحفظة الرقمية لإرسال الحوالة:";
+          const transferSelectorDescription = hasBankTransfer && hasDigitalWallets
+            ? "حوّل المبلغ الموضح في ملخص الطلب إلى أحد الحسابات أو المحافظ المعتمدة:"
+            : hasBankTransfer
+              ? "حوّل المبلغ الموضح في ملخص الطلب إلى الحساب البنكي المعتمد:"
+              : "حوّل المبلغ الموضح في ملخص الطلب إلى إحدى المحافظ الرقمية المعتمدة:";
           const effectivePaymentMethod = codAvailable && paymentMethod === "cod"
             ? "cod"
             : transferAvailable && paymentMethod === "wallet"
               ? "wallet"
               : codAvailable ? "cod" : "wallet";
           const effectiveWalletId = WALLETS.some((wallet) => wallet.selectionKey === selectedWallet) ? selectedWallet : WALLETS[0]?.selectionKey;
+          const couponsEnabled = config.enableCoupons === true;
+          const requiresAddressDetails = config.requireAddressDetails === true;
 
           const handleApplyCoupon = () => {
+            if (!couponsEnabled) return;
             const code = couponCode.trim().toUpperCase();
             if (!code) return;
 
@@ -746,7 +794,7 @@ export default function StorePreview({
 
           const previewTotals = calculatePreviewCheckout({
             subtotal: cartTotal,
-            discount: couponDiscount,
+            discount: couponsEnabled ? couponDiscount : 0,
             shippingFee: Number(config.shippingFee ?? 0),
             freeShippingThreshold: Number(config.freeShippingThreshold ?? 0),
             taxRate: Number(config.taxRate ?? 0),
@@ -760,15 +808,24 @@ export default function StorePreview({
 
           const handlePlaceOrderSubmit = async (e: React.FormEvent) => {
             e.preventDefault();
-            if (!checkoutForm.fullName.trim() || !checkoutForm.phone.trim() || !checkoutForm.address.trim() || (config.requireEmail && !checkoutForm.email.trim())) {
+            if (!checkoutForm.fullName.trim()
+              || !checkoutForm.phone.trim()
+              || !checkoutForm.city.trim()
+              || !checkoutForm.area.trim()
+              || (requiresAddressDetails && !checkoutForm.address.trim())
+              || (config.requireEmail && !checkoutForm.email.trim())) {
               const firstMissingId = !checkoutForm.fullName.trim()
                 ? "checkout-full-name"
                 : !checkoutForm.phone.trim()
                   ? "checkout-phone"
-                  : config.requireEmail && !checkoutForm.email.trim()
-                    ? "checkout-email"
-                    : "checkout-address";
-              reportCheckoutError("يرجى تعبئة كافة الحقول المطلوبة (الاسم الكامل، رقم الجوال، والعنوان) للمتابعة.", firstMissingId);
+                  : !checkoutForm.city.trim()
+                    ? "checkout-city"
+                    : config.requireEmail && !checkoutForm.email.trim()
+                      ? "checkout-email"
+                      : !checkoutForm.area.trim()
+                        ? "checkout-area"
+                        : "checkout-address";
+              reportCheckoutError("يرجى تعبئة الحقول المطلوبة قبل متابعة الطلب.", firstMissingId);
               return;
             }
             setFormValidationErr("");
@@ -805,27 +862,31 @@ export default function StorePreview({
                     : { method: "wallet" as const, channelId: currentWallet?.id, reference: transferRefNumber || undefined };
                 const receipt = await submitOrder({
                   lines: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
-                  couponCode: couponCode.trim() || undefined,
+                  couponCode: couponsEnabled ? couponCode.trim() || undefined : undefined,
                   payment,
                   customer: {
                     name: checkoutForm.fullName.trim(),
                     phone: checkoutForm.phone.trim(),
                     email: checkoutForm.email.trim() || undefined,
-                    notes: checkoutForm.notes.trim() || undefined,
+                    notes: config.enableCustomerNotes !== false ? checkoutForm.notes.trim() || undefined : undefined,
                   },
                   address: {
                     city: checkoutForm.city.trim(),
-                    area: checkoutForm.address.trim(),
-                    details: checkoutForm.address.trim(),
+                    area: checkoutForm.area.trim(),
+                    details: checkoutForm.address.trim() || undefined,
                   },
                 });
                 const minor = (value: number) => value / 100;
                 const orderObj = {
                   orderNum: receipt.number,
                   date: new Date(receipt.createdAt).toLocaleString("ar-SA"),
-                  customer: { ...checkoutForm },
+                  customer: {
+                    ...checkoutForm,
+                    notes: config.enableCustomerNotes !== false ? checkoutForm.notes : "",
+                  },
                   paymentMethod: receipt.paymentState === "due_on_delivery" ? "الدفع عند الاستلام" : "تحويل بانتظار التحقق",
                   walletName: effectivePaymentMethod === "wallet" ? currentWallet?.name : null,
+                  transferKind: effectivePaymentMethod === "wallet" ? currentWallet?.kind : null,
                   walletAccount: effectivePaymentMethod === "wallet" ? currentWallet?.accountNumber : null,
                   transferRefNumber: effectivePaymentMethod === "wallet" ? transferRefNumber : null,
                   items: (receipt.items || []).map((item) => ({
@@ -857,16 +918,20 @@ export default function StorePreview({
             const orderObj = {
               orderNum,
               date: new Date().toLocaleString("ar-SA"),
-              customer: { ...checkoutForm },
+              customer: {
+                ...checkoutForm,
+                notes: config.enableCustomerNotes !== false ? checkoutForm.notes : "",
+              },
               paymentMethod: effectivePaymentMethod === "cod"
                 ? `${isElegant ? "الدفع عند الاستلام / التوصيل" : "الدفع عند الاستلام / التوصيل 💵"} ${codFee > 0 ? `(+${codFee} ${config.currency} رسوم COD)` : ''}`
                 : `${currentWallet?.kind === "bank" ? "تحويل بنكي" : "محفظة إلكترونية"} (${currentWallet?.name})`,
               walletName: effectivePaymentMethod === "wallet" ? currentWallet?.name : null,
+              transferKind: effectivePaymentMethod === "wallet" ? currentWallet?.kind : null,
               walletAccount: effectivePaymentMethod === "wallet" ? currentWallet?.accountNumber : null,
               transferRefNumber: effectivePaymentMethod === "wallet" ? transferRefNumber.trim() : null,
               items: [...cart],
               subtotal: cartTotal,
-              discount: couponDiscount,
+              discount: couponsEnabled ? couponDiscount : 0,
               shipping: shippingCost,
               tax,
               codFee,
@@ -895,7 +960,11 @@ export default function StorePreview({
             const invoiceWindow = window.open("", "_blank", "width=800,height=900");
             if (!invoiceWindow) return;
             invoiceWindow.document.open();
-            invoiceWindow.document.write(buildPrintableInvoiceHtml(order, config.storeName || "المتجر"));
+            const storeName = config.storeName || "المتجر";
+            invoiceWindow.document.write(buildPrintableInvoiceHtml(
+              order,
+              mode === "preview" ? `نموذج معاينة غير مرسل — ${storeName}` : storeName,
+            ));
             invoiceWindow.document.close();
           };
 
@@ -975,22 +1044,28 @@ export default function StorePreview({
                 >
                   {/* Top Success Banner */}
                   <div className={`p-6 md:p-8 rounded-3xl bg-emerald-900/90 text-white text-center space-y-3 shadow-xl border border-emerald-500/30 ${isElegant ? "elegant-checkout__success" : ""}`}>
-                    {isElegant ? (
-                      <span className="elegant-checkout__success-eyebrow">
-                        {mode === "preview" ? "معاينة الإيصال" : "اكتمل إرسال الطلب"}
+                    {mode === "preview" ? (
+                      <span className={isElegant ? "elegant-checkout__success-eyebrow" : "inline-flex rounded-full border border-emerald-300/50 bg-emerald-950/70 px-3 py-1 text-[11px] font-black text-emerald-100"}>
+                        معاينة الإيصال — لم يُرسل طلب
                       </span>
+                    ) : isElegant ? (
+                      <span className="elegant-checkout__success-eyebrow">اكتمل إرسال الطلب</span>
                     ) : null}
                     <div className={`w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce ${isElegant ? "elegant-checkout__success-icon" : ""}`}>
                       <Check className="w-10 h-10 stroke-[3]" />
                     </div>
-                    <h2 className="text-xl md:text-2xl font-black">{placedOrderDetails.presentation.title}</h2>
-                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">{placedOrderDetails.presentation.message}</p>
+                    <h2 className="text-xl md:text-2xl font-black">
+                      {mode === "preview" ? `معاينة — ${placedOrderDetails.presentation.title}` : placedOrderDetails.presentation.title}
+                    </h2>
+                    <p className="text-xs md:text-sm text-emerald-100 max-w-lg mx-auto leading-relaxed">
+                      {mode === "preview" ? `النص المحفوظ بعد نجاح الطلب: ${placedOrderDetails.presentation.message}` : placedOrderDetails.presentation.message}
+                    </p>
                     <div className={`inline-flex items-center gap-2 bg-emerald-950/80 px-4 py-2 rounded-xl text-xs font-mono text-emerald-300 border border-emerald-600/40 ${isElegant ? "elegant-checkout__reference" : ""}`}>
-                      <span>رقم المرجعية المعتمد:</span>
+                      <span>{mode === "preview" ? "رقم مرجعي للمعاينة:" : "رقم المرجعية المعتمد:"}</span>
                       <strong className="text-white font-bold text-sm">{placedOrderDetails.orderNum}</strong>
                     </div>
-                    {isElegant && mode === "preview" ? (
-                      <p className="elegant-checkout__preview-note">هذه معاينة تصميمية ولا تنشئ طلبًا فعليًا.</p>
+                    {mode === "preview" ? (
+                      <p className={isElegant ? "elegant-checkout__preview-note" : "text-xs font-black text-emerald-100"}>هذه معاينة تصميمية ولا تنشئ طلبًا فعليًا.</p>
                     ) : null}
                   </div>
 
@@ -1002,7 +1077,7 @@ export default function StorePreview({
                     <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-slate-200 ${isElegant ? "elegant-checkout__invoice-header" : ""}`}>
                       <div className="space-y-1">
                         <span className={`text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-0.5 rounded-md font-mono ${isElegant ? "elegant-checkout__invoice-label" : ""}`}>
-                          {isElegant ? "فاتورة طلب إلكترونية" : "فاتورة طلب إلكترونية 🧾"}
+                          {mode === "preview" ? "نموذج إيصال للمعاينة" : isElegant ? "فاتورة طلب إلكترونية" : "فاتورة طلب إلكترونية 🧾"}
                         </span>
                         <h3 className="text-lg font-black text-slate-900">{config.storeName}</h3>
                         <p className="text-xs text-slate-500">{placedOrderDetails.date}</p>
@@ -1011,7 +1086,7 @@ export default function StorePreview({
                       <div className="text-right sm:text-left space-y-1">
                         <span className="text-xs text-slate-500 block">حالة الطلب:</span>
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 ${isElegant ? "elegant-checkout__status" : ""}`}>
-                          {isElegant ? "قيد التجهيز والتوصيل" : "قيد التجهيز والتوصيل ⏳"}
+                          {mode === "preview" ? "معاينة غير مرسلة" : isElegant ? "قيد التجهيز والتوصيل" : "قيد التجهيز والتوصيل ⏳"}
                         </span>
                       </div>
                     </div>
@@ -1026,7 +1101,8 @@ export default function StorePreview({
                         <p><strong>الاسم:</strong> {placedOrderDetails.customer.fullName}</p>
                         <p><strong>الجوال:</strong> <span className="font-mono">{placedOrderDetails.customer.phone}</span></p>
                         <p><strong>المدينة/المحافظة:</strong> {placedOrderDetails.customer.city}</p>
-                        <p><strong>العنوان التفصيلي:</strong> {placedOrderDetails.customer.address}</p>
+                        <p><strong>الحي / المنطقة:</strong> {placedOrderDetails.customer.area}</p>
+                        {placedOrderDetails.customer.address && <p><strong>تفاصيل العنوان:</strong> {placedOrderDetails.customer.address}</p>}
                         {placedOrderDetails.customer.notes && (
                           <p className="text-slate-500"><strong>ملاحظات:</strong> {placedOrderDetails.customer.notes}</p>
                         )}
@@ -1039,7 +1115,7 @@ export default function StorePreview({
                         </h4>
                         <p className="font-bold text-slate-800">{placedOrderDetails.paymentMethod}</p>
                         {placedOrderDetails.walletName && (
-                          <p><strong>المحفظة المختارة:</strong> {placedOrderDetails.walletName}</p>
+                          <p><strong>{placedOrderDetails.transferKind === "bank" ? "الحساب البنكي:" : "المحفظة المختارة:"}</strong> {placedOrderDetails.walletName}</p>
                         )}
                         {placedOrderDetails.transferRefNumber && placedOrderDetails.transferRefNumber !== "غير محدد" && (
                           <p className="text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 w-fit font-mono font-bold">
@@ -1103,14 +1179,14 @@ export default function StorePreview({
                         </div>
                       )}
                       <div className="flex justify-between text-sm font-extrabold text-white pt-2 border-t border-slate-700">
-                        <span>الإجمالي النهائي المستحق:</span>
+                        <span>{mode === "preview" ? "إجمالي نموذج المعاينة:" : "الإجمالي النهائي المستحق:"}</span>
                         <span className="text-sky-400 text-base">{placedOrderDetails.total} {placedOrderDetails.currency}</span>
                       </div>
                     </div>
 
                     {/* Action Buttons Row */}
                     <div className={`flex flex-col sm:flex-row items-center gap-3 pt-2 ${isElegant ? "elegant-checkout__receipt-actions" : ""}`}>
-                      {getWhatsAppInvoiceUrl(placedOrderDetails) && <a
+                      {mode === "live" && getWhatsAppInvoiceUrl(placedOrderDetails) && <a
                         href={getWhatsAppInvoiceUrl(placedOrderDetails)!}
                         target="_blank"
                         rel="noreferrer"
@@ -1125,7 +1201,7 @@ export default function StorePreview({
                         className={`w-full sm:w-auto py-3 px-4 min-h-[44px] rounded-xl border border-slate-300 hover:bg-slate-100 active:scale-95 text-slate-800 font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer touch-manipulation shadow-2xs ${isElegant ? "elegant-checkout__receipt-print" : ""}`}
                       >
                         <Printer className="w-4 h-4 text-sky-600" />
-                        <span>طباعة الفاتورة</span>
+                        <span>{mode === "preview" ? "طباعة نموذج المعاينة" : "طباعة الفاتورة"}</span>
                       </button>
 
                       <button
@@ -1137,7 +1213,7 @@ export default function StorePreview({
                         className={`w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition ${isElegant ? "elegant-checkout__receipt-new" : ""}`}
                       >
                         <ShoppingBag className="w-4 h-4" />
-                        <span>طلب جديد</span>
+                        <span>{mode === "preview" ? "معاينة جديدة" : "طلب جديد"}</span>
                       </button>
                     </div>
                   </div>
@@ -1237,28 +1313,27 @@ export default function StorePreview({
                             <label htmlFor="checkout-city" className="block text-xs font-extrabold text-slate-700">
                               المحافظة / المدينة <span className="text-rose-500">*</span>
                             </label>
-                            <select
+                            <input
+                              type="text"
                               id="checkout-city"
                               name="address-level2"
                               autoComplete="address-level2"
+                              required
+                              list="checkout-city-suggestions"
+                              aria-invalid={Boolean(formValidationErr && !checkoutForm.city.trim())}
+                              aria-describedby={formValidationErr ? "checkout-error" : undefined}
+                              placeholder="مثال: صنعاء"
+                              maxLength={100}
                               value={checkoutForm.city}
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, city: e.target.value })}
-                              className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition cursor-pointer"
-                            >
-                              <option value="صنعاء">صنعاء</option>
-                              <option value="عدن">عدن</option>
-                              <option value="تعز">تعز</option>
-                              <option value="حضرموت (المكلا/سيئون)">حضرموت (المكلا/سيئون)</option>
-                              <option value="إب">إب</option>
-                              <option value="الحديدية">الحديدة</option>
-                              <option value="المهرة">المهرة</option>
-                              <option value="ذمار">ذمار</option>
-                              <option value="الرياض">الرياض</option>
-                              <option value="جدة">جدة</option>
-                              <option value="مكة المكرمة">مكة المكرمة</option>
-                              <option value="الدمام / الخبر">الدمام / الخبر</option>
-                              <option value="مدينة أخرى">مدينة أخرى...</option>
-                            </select>
+                              className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
+                            />
+                            <datalist id="checkout-city-suggestions">
+                              {[
+                                "صنعاء", "عدن", "تعز", "المكلا", "سيئون", "إب", "الحديدة", "المهرة", "ذمار",
+                                "الرياض", "جدة", "مكة المكرمة", "المدينة المنورة", "الدمام", "الخبر"
+                              ].map((city) => <option key={city} value={city} />)}
+                            </datalist>
                           </div>
                         </div>
 
@@ -1283,20 +1358,41 @@ export default function StorePreview({
                           </div>
                         )}
 
+                        {/* Required delivery area */}
+                        <div className="space-y-1">
+                          <label htmlFor="checkout-area" className="block text-xs font-extrabold text-slate-700">
+                            الحي / المنطقة <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            id="checkout-area"
+                            name="address-level3"
+                            autoComplete="address-level3"
+                            required
+                            aria-invalid={Boolean(formValidationErr && !checkoutForm.area.trim())}
+                            aria-describedby={formValidationErr ? "checkout-error" : undefined}
+                            placeholder="مثال: حي حدة"
+                            maxLength={100}
+                            value={checkoutForm.area}
+                            onChange={(e) => setCheckoutForm({ ...checkoutForm, area: e.target.value })}
+                            className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
+                          />
+                        </div>
+
                         {/* Detailed Address */}
                         <div className="space-y-1">
                           <label htmlFor="checkout-address" className="block text-xs font-extrabold text-slate-700">
-                            عنوان التسليم التفصيلي <span className="text-rose-500">*</span>
+                            تفاصيل العنوان {requiresAddressDetails ? <span className="text-rose-500">*</span> : <span className="font-normal text-slate-400">(اختياري)</span>}
                           </label>
                           <input 
                             type="text"
                             id="checkout-address"
                             name="street-address"
                             autoComplete="street-address"
-                            required
-                            aria-invalid={Boolean(formValidationErr && !checkoutForm.address.trim())}
+                            required={requiresAddressDetails}
+                            aria-invalid={Boolean(formValidationErr && requiresAddressDetails && !checkoutForm.address.trim())}
                             aria-describedby={formValidationErr ? "checkout-error" : undefined}
-                            placeholder="اسم الشارع، الحي، المعلم الشهير القريب..."
+                            placeholder="اسم الشارع، رقم المنزل، المعلم القريب..."
                             value={checkoutForm.address}
                             onChange={(e) => setCheckoutForm({ ...checkoutForm, address: e.target.value })}
                             className="w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 bg-slate-50/80 focus:bg-white focus:border-sky-500 focus:outline-none transition"
@@ -1331,7 +1427,11 @@ export default function StorePreview({
                         <div className={`w-8 h-8 rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs ${isElegant ? "elegant-checkout__step" : ""}`}>2</div>
                         <div>
                           <h3 id="checkout-payment-heading" className="font-black text-sm text-slate-900">طريقة الدفع المناسبة</h3>
-                          <p className="text-[11px] text-slate-500">اختر إما الدفع نقداً عند التوصيل أو عبر إحدى المحافظ الإلكترونية المتاحة.</p>
+                          <p className="text-[11px] text-slate-500">
+                            {codAvailable && transferAvailable
+                              ? `اختر الدفع عند الاستلام أو ${transferOptionTitle}.`
+                              : codAvailable ? "الدفع عند الاستلام هو الوسيلة المتاحة لهذا المتجر." : `${transferOptionTitle} هي الوسيلة المتاحة لهذا المتجر.`}
+                          </p>
                         </div>
                       </div>
 
@@ -1385,12 +1485,12 @@ export default function StorePreview({
                           <div className="flex items-center justify-between">
                             <Wallet className="h-5 w-5 text-purple-700" aria-hidden="true" />
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">
-                              محافظ رقمية
+                              {transferOptionLabel}
                             </span>
                           </div>
                           <div>
-                            <h4 className="font-black text-xs text-slate-900">الدفع عبر المحافظ الإلكترونية</h4>
-                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">استخدم فقط الحساب أو المحفظة التي فعّلها هذا المتجر.</p>
+                            <h4 className="font-black text-xs text-slate-900">{transferOptionTitle}</h4>
+                            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">استخدم فقط وسيلة التحويل التي فعّلها هذا المتجر.</p>
                           </div>
                         </button>)}
                       </div>
@@ -1407,9 +1507,9 @@ export default function StorePreview({
                           <div className="space-y-1">
                             <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
                               <Wallet className="w-4 h-4 text-emerald-600" />
-                              <span>اختر المحفظة الإلكترونية لإرسال الحوالة:</span>
+                              <span>{transferSelectorTitle}</span>
                             </h4>
-                            <p className="text-[11px] text-slate-500">قم بتحويل المبلغ الموضح في ملخص الطلب إلى إحدى المحافظ التالية:</p>
+                            <p className="text-[11px] text-slate-500">{transferSelectorDescription}</p>
                           </div>
 
                           {/* Wallets Selector Grid */}
@@ -1459,7 +1559,9 @@ export default function StorePreview({
 
                                 <div className="p-3 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2">
                                   <div>
-                                    <span className="text-[10px] text-slate-500 block">رقم الحساب / المحفظة المعتمد:</span>
+                                    <span className="text-[10px] text-slate-500 block">
+                                      {activeW.kind === "bank" ? "رقم الحساب البنكي المعتمد:" : "رقم المحفظة المعتمدة:"}
+                                    </span>
                                     <strong className="text-sm font-mono text-slate-900 select-all">{activeW.accountNumber}</strong>
                                     <span className="text-[10px] text-slate-500 block">باسم: {activeW.accountName}</span>
                                   </div>
@@ -1534,14 +1636,19 @@ export default function StorePreview({
                       </div>
 
                       {/* Coupon Discount Code Box */}
-                      <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                      {couponsEnabled && <div className="space-y-1.5 pt-2 border-t border-slate-100">
                         <label className="block text-[11px] font-bold text-slate-600">كود الخصم (كوبون):</label>
                         <div className="flex gap-2">
                           <input 
                             type="text"
                             placeholder="أدخل كود الخصم"
                             value={couponCode}
-                            onChange={(e) => setCouponCode(e.target.value)}
+                            onChange={(e) => {
+                              setCouponCode(e.target.value);
+                              setCouponDiscount(0);
+                              setCouponApplied(false);
+                              setCouponMessage("");
+                            }}
                             className="flex-1 border rounded-xl px-3 py-1.5 text-xs uppercase font-mono font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
                           />
                           <button
@@ -1557,7 +1664,7 @@ export default function StorePreview({
                             {couponMessage}
                           </p>
                         )}
-                      </div>
+                      </div>}
 
                       {/* Financial Breakdown */}
                       <div className="space-y-2 pt-3 border-t border-slate-200 text-xs font-bold">
@@ -1579,7 +1686,7 @@ export default function StorePreview({
                           </div>
                         )}
 
-                        {couponDiscount > 0 && (
+                        {couponsEnabled && couponDiscount > 0 && (
                           <div className="flex justify-between text-emerald-600">
                             <span>خصم الكوبون:</span>
                             <span className="font-mono">- {couponDiscount} {config.currency}</span>
@@ -1667,6 +1774,7 @@ export default function StorePreview({
               mutedInkColor={effectiveTextColor}
               prefersReducedMotion={prefersReducedMotion}
               hasOrdered={hasOrdered}
+              mode={mode}
               dialogRef={cartDialogRef}
               closeButtonRef={cartCloseButtonRef}
               onClose={() => closeCart()}
@@ -1728,9 +1836,13 @@ export default function StorePreview({
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 border border-emerald-300 rounded-full flex items-center justify-center shadow-sm">
                       <Check className="w-8 h-8" />
                     </div>
-                    <h3 className="font-extrabold text-xl text-emerald-700">ORDER_TRANSMITTED // تم إرسال الطلب بنجاح!</h3>
+                    <h3 className="font-extrabold text-xl text-emerald-700">
+                      {mode === "live" ? "ORDER_RECEIVED // تم استلام الطلب بنجاح!" : "PREVIEW_COMPLETE // اكتملت معاينة الطلب"}
+                    </h3>
                     <p className="text-slate-600 text-xs max-w-xs leading-relaxed">
-                      شكراً لتجربتك لمتجرنا! لقد تم إرسال الطلب الوهمي وتفريغ السلة لمحاكاة الشراء الحقيقي لمتجرك الجديد بنجاح.
+                      {mode === "live"
+                        ? "شكراً لطلبك. استلم المتجر الطلب وأصبحت متابعته متاحة برقم المرجع الظاهر في الإيصال."
+                        : "هذه معاينة فقط؛ لم يُنشأ طلب فعلي. تم تفريغ السلة لإكمال تجربة تصميم مسار الشراء."}
                     </p>
                   </div>
                 ) : cart.length === 0 ? (
@@ -1857,7 +1969,7 @@ export default function StorePreview({
           { id: "about", label: "عن المتجر", icon: Info },
           { id: "contact", label: "الدعم", icon: Phone }
         ].map((item) => {
-          const isActive = storePage === item.id;
+          const isActive = storePage === item.id || (item.id === "products" && storePage === "product");
           const IconComp = item.icon;
           return (
             <button

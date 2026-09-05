@@ -123,7 +123,10 @@ function mapCoupon(value: unknown): Coupon {
   };
 }
 
-export function mapStoreConfig(value: unknown): StoreConfig {
+export function mapStoreConfig(
+  value: unknown,
+  options: { preserveCouponCapability?: boolean } = {},
+): StoreConfig {
   const dto = record(value, "إعدادات مساحة العمل");
   const config: StoreConfig = {
     storeName: stringField(dto, "storeName", "إعدادات مساحة العمل"),
@@ -169,7 +172,7 @@ export function mapStoreConfig(value: unknown): StoreConfig {
     if (/^(?:data|blob):/i.test(config[key] ?? "")) config[key] = "";
   }
 
-  return sanitizeCheckoutConfig(config);
+  return sanitizeCheckoutConfig(config, options);
 }
 
 function mapWorkspace(value: unknown): StoreWorkspace {

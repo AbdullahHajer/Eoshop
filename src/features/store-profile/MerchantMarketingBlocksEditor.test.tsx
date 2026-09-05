@@ -32,6 +32,19 @@ const storyBlock: StorefrontMarketingBlock = {
   altText: "صورة قصة الموسم",
 };
 
+const discoveryBlock: StorefrontMarketingBlock = {
+  ...storyBlock,
+  id: "00000000-0000-4000-8000-000000000003",
+  placement: "discovery",
+  title: "مختار مشترك",
+  subtitle: "وصف لا يعرضه شريط الاكتشاف",
+  ctaLabel: "زر لا يعرضه شريط الاكتشاف",
+  badge: "مميز",
+  backgroundColor: "#112233",
+  textColor: "#FFFFFF",
+  overlayOpacity: 70,
+};
+
 function renderEditor(overrides: Partial<React.ComponentProps<typeof MerchantMarketingBlocksEditor>> = {}) {
   const props: React.ComponentProps<typeof MerchantMarketingBlocksEditor> = {
     config: { ...ELEGANT_PRESET, marketingBlocks: [techBlock] },
@@ -77,8 +90,50 @@ describe("MerchantMarketingBlocksEditor", () => {
     fireEvent.change(screen.getByDisplayValue("كل المنتجات"), { target: { value: "category" } });
     expect(onChange).toHaveBeenLastCalledWith("marketingBlocks", [
       techBlock,
-      expect.objectContaining({ id: storyBlock.id, targetType: "category", targetValue: "" }),
+      expect.objectContaining({ id: storyBlock.id, targetType: "category", targetValue: "", contentType: "category" }),
     ]);
+  });
+
+  it.each([
+    ["products", "campaign", "category"],
+    ["category", "category", "products"],
+    ["product", "product", "products"],
+    ["external", "campaign", "products"],
+  ] as const)("normalizes %s targets to the matching content type", (targetType, contentType, initialTargetType) => {
+    const onChange = vi.fn();
+    const initialBlock: StorefrontMarketingBlock = {
+      ...storyBlock,
+      targetType: initialTargetType,
+      targetValue: initialTargetType === "products" ? undefined : "تصنيف قديم",
+      contentType: "campaign",
+      disclosure: "none",
+    };
+    renderEditor({ config: { ...ELEGANT_PRESET, marketingBlocks: [techBlock, initialBlock] }, onChange });
+
+    fireEvent.change(screen.getByLabelText("الهدف"), { target: { value: targetType } });
+
+    expect(onChange).toHaveBeenCalledWith("marketingBlocks", [
+      techBlock,
+      expect.objectContaining({
+        id: storyBlock.id,
+        targetType,
+        targetValue: targetType === "products" ? undefined : "",
+        contentType,
+        disclosure: targetType === "external" ? "sponsored" : "none",
+      }),
+    ]);
+  });
+
+  it("prevents an external target from using a missing disclosure", () => {
+    renderEditor({
+      config: {
+        ...ELEGANT_PRESET,
+        marketingBlocks: [{ ...storyBlock, targetType: "external", targetValue: "https://example.test", contentType: "campaign", disclosure: "sponsored" }],
+      },
+    });
+
+    const disclosure = screen.getByLabelText("الإفصاح") as HTMLSelectElement;
+    expect((disclosure.querySelector('option[value="none"]') as HTMLOptionElement).disabled).toBe(true);
   });
 
   it("uploads a bounded managed story image and binds only its slot", async () => {
@@ -98,6 +153,19 @@ describe("MerchantMarketingBlocksEditor", () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("marketingBlocks", [
       expect.objectContaining({ id: storyBlock.id, imageUrl: "/api/store-assets/tenant-a/00000000-0000-4000-8000-000000000099" }),
     ]));
+  });
+
+  it("keeps upload controls disabled until both tenant and media ownership are known", () => {
+    const uploadAsset = vi.fn();
+    renderEditor({
+      config: { ...ELEGANT_PRESET, marketingBlocks: [storyBlock] },
+      mediaOwnerKey: null,
+      uploadAsset,
+    });
+
+    expect((screen.getByLabelText("رفع الصورة الأساسية") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("رفع صورة الجوال") as HTMLInputElement).disabled).toBe(true);
+    expect(uploadAsset).not.toHaveBeenCalled();
   });
 
   it("edits independent story colors and previews unsafe fallback contrast", () => {
@@ -125,5 +193,20 @@ describe("MerchantMarketingBlocksEditor", () => {
     renderEditor({ config: { ...ELEGANT_PRESET, themeStyle: "tech", marketingBlocks: [storyBlock] } });
     expect(screen.getByText(/محتوى Elegant محفوظ ولن يُحذف/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /إضافة/ })).toBeNull();
+  });
+
+  it("describes Discovery as shared image-led content and only exposes controls consumed by its renderers", () => {
+    renderEditor({ config: { ...ELEGANT_PRESET, marketingBlocks: [discoveryBlock] } });
+
+    expect(screen.getByText(/شريط صور مشترك بين Elegant وTech Bento/)).toBeTruthy();
+    expect(screen.getByDisplayValue("مختار مشترك")).toBeTruthy();
+    expect(screen.getByLabelText("وصف الصورة لذوي الإعاقة")).toBeTruthy();
+    expect(screen.getByLabelText("الهدف")).toBeTruthy();
+    expect(screen.getByText("الشارة")).toBeTruthy();
+    expect(screen.getByText(/موضع أفقي:/)).toBeTruthy();
+    expect(screen.queryByText("نص الزر")).toBeNull();
+    expect(screen.queryByText("الوصف المساند")).toBeNull();
+    expect(screen.queryByLabelText("ألوان ومعاينة مختار مشترك")).toBeNull();
+    expect(screen.queryByText(/التعتيم:/)).toBeNull();
   });
 });
