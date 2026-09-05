@@ -106,6 +106,7 @@ describe("public storefront functional vertical slice", () => {
     await user.click(screen.getAllByRole("button", { name: /فتح سلة التسوق، 1 منتج/ })[0]);
     expect(await screen.findByRole("dialog", { name: /سلة التسوق/ })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /إتمام الطلب وتعبئة البيانات/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /سلة التسوق/ })).toBeNull());
 
     await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "عميل T2");
     await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000009");
