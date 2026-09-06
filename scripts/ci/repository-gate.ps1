@@ -59,6 +59,31 @@ try {
         throw 'Docker Compose configuration is invalid.'
     }
 
+    $previousCheckoutEnabled = [Environment]::GetEnvironmentVariable('ORDER_CHECKOUT_ENABLED', 'Process')
+    try {
+        foreach ($checkoutCase in @(
+            @{ Value = $null; Expected = 'false' },
+            @{ Value = 'true'; Expected = 'true' }
+        )) {
+            [Environment]::SetEnvironmentVariable('ORDER_CHECKOUT_ENABLED', $checkoutCase.Value, 'Process')
+            $composeJson = @(& docker compose --env-file .env.example config --format json)
+            if ($LASTEXITCODE -ne 0) {
+                throw 'Unable to resolve the Docker Compose checkout setting.'
+            }
+
+            $compose = ($composeJson -join "`n") | ConvertFrom-Json
+            foreach ($serviceName in @('backend', 'worker', 'scheduler')) {
+                $actual = [string]$compose.services.$serviceName.environment.ORDER_CHECKOUT_ENABLED
+                if ($actual.ToLowerInvariant() -ne $checkoutCase.Expected) {
+                    throw "ORDER_CHECKOUT_ENABLED did not resolve safely for service '$serviceName'."
+                }
+            }
+        }
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable('ORDER_CHECKOUT_ENABLED', $previousCheckoutEnabled, 'Process')
+    }
+
     Write-Output 'Repository gate passed.'
 }
 finally {

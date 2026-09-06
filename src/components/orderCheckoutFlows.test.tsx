@@ -131,6 +131,8 @@ describe("server-backed checkout interface", () => {
     expect(elegantReceipt?.querySelector(".elegant-checkout__success")).toBeTruthy();
     expect(elegantReceipt?.querySelector(".elegant-checkout__invoice")).toBeTruthy();
     expect(elegantReceipt?.querySelector(".elegant-checkout__receipt-total")).toBeTruthy();
+    expect(screen.getByText("تم استلام الطلب")).toBeTruthy();
+    expect(screen.queryByText(/قيد التجهيز والتوصيل/)).toBeNull();
     expect(screen.queryByText(/معاينة تصميمية/)).toBeNull();
     expect(screen.getByRole("link", { name: /مشاركة تفاصيل الفاتورة/ }).getAttribute("href")).toContain("967700000000");
     expect(screen.getByText("20.38 YER")).toBeTruthy();

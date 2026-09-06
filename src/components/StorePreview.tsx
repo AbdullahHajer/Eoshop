@@ -44,6 +44,15 @@ interface StorePreviewProps {
 
 type StorePage = "home" | "products" | "about" | "contact" | "product" | "checkout";
 
+const customerOrderStatusLabels: Record<OrderReceipt["status"], string> = {
+  submitted: "تم استلام الطلب",
+  accepted: "تم قبول الطلب",
+  processing: "قيد التجهيز",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+  expired: "انتهت مهلة الطلب",
+};
+
 const getFontFamilyStyle = (fontName?: string) => {
   switch (fontName) {
     case "Tajawal": return "'Tajawal', sans-serif";
@@ -879,6 +888,7 @@ export default function StorePreview({
                 const minor = (value: number) => value / 100;
                 const orderObj = {
                   orderNum: receipt.number,
+                  status: receipt.status,
                   date: new Date(receipt.createdAt).toLocaleString("ar-SA"),
                   customer: {
                     ...checkoutForm,
@@ -1086,7 +1096,7 @@ export default function StorePreview({
                       <div className="text-right sm:text-left space-y-1">
                         <span className="text-xs text-slate-500 block">حالة الطلب:</span>
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 ${isElegant ? "elegant-checkout__status" : ""}`}>
-                          {mode === "preview" ? "معاينة غير مرسلة" : isElegant ? "قيد التجهيز والتوصيل" : "قيد التجهيز والتوصيل ⏳"}
+                          {mode === "preview" ? "معاينة غير مرسلة" : customerOrderStatusLabels[placedOrderDetails.status as OrderReceipt["status"]]}
                         </span>
                       </div>
                     </div>
