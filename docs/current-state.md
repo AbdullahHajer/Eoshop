@@ -41,12 +41,12 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot, two d
 
 ## Active
 
-- WP 5.28B is implemented and locally verified on `codex/wp5-28b-guest-fulfillment-tracking`: separate manual fulfillment evidence, a private guest capability and a reduced tracking page. It awaits its local commit, Push and Ready PR; no Merge has occurred.
+- WP 5.28B is implemented, locally verified and raised as Ready PR #100 on `codex/wp5-28b-guest-fulfillment-tracking`: separate manual fulfillment evidence, a private guest capability and a reduced tracking page. It awaits protected CI and an explicit merge decision.
 - WP 5.30A marketing campaign core completed its documentation-only T1 on the same baseline. The contract is accepted subject to renumbering its colliding ADR from 0042 to 0043; T2 is assigned as an isolated backend/database slice using tenant migration `000011`.
 
 ## Approved next sequence
 
-1. Commit and raise a Ready PR for the locally verified WP 5.28B branch, then merge only after protected CI succeeds.
+1. Complete protected CI for Ready PR #100 and merge WP 5.28B only after an explicit owner decision.
 2. Keep WP 5.30A T2 limited to its independent campaign backend/database core until the next planned integration point, with ADR 0043 and tenant migration `000011`.
 3. Add the per-merchant payment connection and hosted payment lifecycle after sanitized provider documentation fixes the provider contract; do not store merchant credentials in public or storefront configuration.
 4. Integrate order attribution and the bounded V1 marketing report only after the order, fulfillment and payment contracts are stable.

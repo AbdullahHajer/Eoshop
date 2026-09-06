@@ -3,7 +3,7 @@
 | الحقل | القيمة |
 |---|---|
 | الهدف | إكمال دورة الطلب الأولى بإدارة تجهيز وتوصيل يدوية صادقة ورابط تتبع آمن للضيف حتى إثبات التسليم |
-| الحالة | اكتملت T0–T4 محليًا وأُغلقت أدلة T5؛ جاهزة للـCommit والرفع بعد اعتماد المالك، دون Push أو PR أو Merge |
+| الحالة | اكتملت T0–T5 ورُفعت في PR #100 بحالة Ready؛ لم يحدث Merge |
 | Base SHA | `74430e5294730620e5f71bf6fe2e101aa22ad852` |
 | الفرع | `codex/wp5-28b-guest-fulfillment-tracking` |
 | التاريخ | 2026-09-07 |
@@ -139,4 +139,4 @@
 - T4 — Container integration: ‏187 اختبارًا و2,411 assertion على PostgreSQL، مع نجاح migrations وHTTP والـworker والـscheduler وتنظيف الحاويات والشبكة والـvolumes تلقائيًا.
 - T4 — Security review: ناجحة بلا ملاحظات P0–P3؛ لا يظهر raw capability في DOM أو التخزين أو logs أو path/query، واستجابات 404/429 محمية بـ`no-store` و`no-referrer`.
 - T4 — Build: JavaScript ‏1,128.13 kB (gzip ‏291.56 kB)، وCSS ‏194.22 kB (gzip ‏29.90 kB)، وصورة Hero الثابتة ‏819.42 kB. تحذير chunk الأكبر من 500 kB دين سابق غير مانع.
-- T5: حُدثت وثائق الحزمة والحالة الحالية، ونجح `git diff --check`. بقي العمل محليًا غير ملتزم؛ لا Commit أو Push أو PR أو Merge.
+- T5: حُدثت وثائق الحزمة والحالة الحالية، ونجح `git diff --check`. أُنشئ implementation commit ‏`b7b7eb88d33979347dad6547ba72d3547b59bab0`، ورُفع الفرع وفُتح PR #100 بحالة Ready. لم يحدث Merge.
