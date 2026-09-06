@@ -5,8 +5,10 @@ namespace Tests\Integration;
 use App\Enums\UserStatus;
 use App\Models\Plan;
 use App\Models\User;
+use App\Support\StorefrontSectionLayout;
 use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
+use App\Support\StoreProvisioningConfig;
 use Database\Seeders\IdentitySeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -21,6 +23,60 @@ use Tests\TestCase;
 class AccountOnboardingTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_onboarding_appearance_round_trip_is_bounded_and_provisioning_is_server_owned(): void
+    {
+        $appearance = [
+            'slogan' => 'هوية متصلة',
+            'logoIcon' => 'هـ',
+            'primaryColor' => '#123456',
+            'secondaryColor' => '#234567',
+            'textColor' => '#345678',
+            'bgColor' => '#456789',
+            'cardBgColor' => '#56789A',
+            'borderColor' => '#6789AB',
+            'fontFamily' => 'Alexandria',
+            'bannerText' => 'رسالة مميزة',
+            'showHeroBanner' => true,
+            'heroBannerTitle' => 'عنوان مميز',
+            'heroBannerSubtitle' => 'وصف مميز',
+            'heroBannerBadge' => 'جديد',
+            'heroBannerButtonText' => 'اكتشف',
+            'heroBannerHeight' => 'large',
+            'heroBannerOverlayOpacity' => 61,
+        ];
+        $this->assertSame(StoreOnboardingAppearance::KEYS, array_keys($appearance));
+
+        $merged = StoreOnboardingAppearance::merge(
+            [
+                'storeName' => 'قديم',
+                'themeStyle' => 'elegant',
+                'products' => [],
+                'homeSections' => [['untrusted' => true]],
+                'marketingBlocks' => [['untrusted' => true]],
+            ],
+            'متجر متصل',
+            'tech',
+            $appearance + ['aboutText' => 'must be ignored'],
+        );
+
+        $this->assertSame('متجر متصل', $merged['storeName']);
+        $this->assertSame('tech', $merged['themeStyle']);
+        $this->assertSame($appearance, StoreOnboardingAppearance::extract($merged));
+        $this->assertArrayNotHasKey('aboutText', $merged);
+
+        $central = StoreProvisioningConfig::forCentralDraft($merged, 'متجر متصل', 'tech');
+        $this->assertSame('متجر متصل', $central['storeName']);
+        $this->assertSame('tech', $central['themeStyle']);
+        $this->assertArrayNotHasKey('homeSections', $central);
+        $this->assertArrayNotHasKey('marketingBlocks', $central);
+        $this->assertSame($appearance, StoreOnboardingAppearance::extract($central));
+
+        $provisioning = StoreProvisioningConfig::fromCentralDraft($central, 'متجر متصل', 'tech');
+        $this->assertSame(StorefrontSectionLayout::defaults(), $provisioning['homeSections']);
+        $this->assertSame([], $provisioning['marketingBlocks']);
+        $this->assertSame($appearance, StoreOnboardingAppearance::extract($provisioning));
+    }
 
     public function test_profile_update_is_revisioned_normalized_redacted_and_no_op_safe(): void
     {
@@ -153,6 +209,8 @@ class AccountOnboardingTest extends TestCase
                     'name' => 'منتج لا يجوز حفظه من التهيئة',
                     'price' => 1,
                 ]],
+                'homeSections' => StorefrontSectionLayout::defaults(),
+                'marketingBlocks' => [],
             ],
         ])->assertUnprocessable();
         $this->assertSame(1, (int) $business->json('data.revision'));
@@ -160,6 +218,8 @@ class AccountOnboardingTest extends TestCase
             ->where('owner_user_id', $owner->getKey())
             ->value('config'), true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame([], $storedConfig['products'] ?? null);
+        $this->assertArrayNotHasKey('homeSections', $storedConfig);
+        $this->assertArrayNotHasKey('marketingBlocks', $storedConfig);
 
         $design = $this->putJson('/api/merchant/store-draft/design', [
             'expectedRevision' => 1,

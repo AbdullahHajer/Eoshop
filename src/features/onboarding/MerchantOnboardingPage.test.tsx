@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiAdaptersProvider } from "../../adapters/UiAdaptersContext";
 import { createFakeUiAdapters } from "../../adapters/testing/fakeUiAdapters";
 import type { StoreDraft, UserProfile } from "../../adapters/uiAdapters";
+import { storeOnboardingAppearance } from "../../contracts/storeOnboardingAppearance";
 import MerchantOnboardingPage from "./MerchantOnboardingPage";
 import { createTemplateConfig, ONBOARDING_TEMPLATES } from "./storeTemplates";
 import { ApiError } from "../../services/apiClient";
@@ -81,6 +82,69 @@ describe("MerchantOnboardingPage", () => {
     expect(window.location.pathname).toBe("/app/new/review");
     expect(screen.getByText("اكتب عنوانًا للمتجر من 3 أحرف على الأقل.")).toBeTruthy();
   });
+
+  it("restores the saved template and identity controls exactly after a reload", async () => {
+    window.history.replaceState({}, "", "/app/new/design");
+    const customizedConfig = {
+      ...createTemplateConfig(ONBOARDING_TEMPLATES[1], "Guided Store"),
+      logoIcon: "ن",
+      slogan: "هوية محفوظة من الخادم",
+      bannerText: "إعلان محفوظ للمسودة",
+      primaryColor: "#123456",
+      secondaryColor: "#654321",
+      textColor: "#223344",
+      bgColor: "#F7F8FA",
+      cardBgColor: "#FAFAFB",
+      borderColor: "#DDEEFF",
+      fontFamily: "Almarai",
+      showHeroBanner: true,
+      heroBannerTitle: "عنوان محفوظ لصورة الواجهة",
+      heroBannerSubtitle: "وصف محفوظ",
+      heroBannerBadge: "شارة محفوظة",
+      heroBannerButtonText: "زر محفوظ",
+      heroBannerHeight: "large" as const,
+      heroBannerOverlayOpacity: 27,
+    };
+    const designDraft: StoreDraft = {
+      ...businessDraft,
+      revision: 2,
+      onboardingStage: "design",
+      onboardingReadiness: { business: true, design: true, review: false, blockers: ["domain_unavailable"] },
+      nextRequiredStep: "review",
+      themeStyle: "tech",
+      config: customizedConfig,
+    };
+    const savedDraft: StoreDraft = { ...designDraft, revision: 3 };
+    const saveDesign = vi.fn().mockResolvedValue(savedDraft);
+    const adapters = createFakeUiAdapters({
+      provisioning: { recoverCommittedSubmission: vi.fn().mockResolvedValue(null), currentDraft: vi.fn().mockResolvedValue(designDraft), saveDesign },
+      plans: { list: vi.fn().mockResolvedValue([starter]) },
+    });
+
+    render(<UiAdaptersProvider adapters={adapters}><MerchantOnboardingPage user={user} requestedStep="design" onSessionExpired={vi.fn()} /></UiAdaptersProvider>);
+
+    expect(await screen.findByRole("heading", { name: "اختر قالبًا وشاهد النتيجة" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /التقنية والابتكار/ }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByRole("textbox", { name: "الشعار النصي أو الرمز" }) as HTMLInputElement).value).toBe("ن");
+    expect((screen.getByRole("textbox", { name: "العبارة التعريفية" }) as HTMLInputElement).value).toBe("هوية محفوظة من الخادم");
+    expect((screen.getByRole("textbox", { name: "شريط الإعلان" }) as HTMLInputElement).value).toBe("إعلان محفوظ للمسودة");
+    expect((screen.getByLabelText(/اللون الرئيسي/) as HTMLInputElement).value.toUpperCase()).toBe("#123456");
+    expect((screen.getByLabelText(/اللون المساند/) as HTMLInputElement).value.toUpperCase()).toBe("#654321");
+    expect((screen.getByRole("combobox", { name: "الخط" }) as HTMLSelectElement).value).toBe("Almarai");
+    expect((screen.getByRole("checkbox", { name: /إظهار صورة واجهة الترحيب/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("textbox", { name: "عنوان الواجهة الترحيبية" }) as HTMLInputElement).value).toBe("عنوان محفوظ لصورة الواجهة");
+    expect(screen.getByText(/المنتجات والصور الظاهرة داخل المعاينة أمثلة توضيحية فقط/)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "حفظ التصميم والانتقال للمعاينة النهائية" }));
+    await waitFor(() => expect(saveDesign).toHaveBeenCalledWith({
+      expectedRevision: 2,
+      themeStyle: "tech",
+      config: storeOnboardingAppearance(customizedConfig),
+    }, expect.any(AbortSignal)));
+    expect(saveDesign.mock.calls[0][0].config).not.toHaveProperty("products");
+    expect(saveDesign.mock.calls[0][0].config).not.toHaveProperty("homeSections");
+    expect(saveDesign.mock.calls[0][0].config).not.toHaveProperty("marketingBlocks");
+  }, 30_000);
 
   it("explains missing review requirements when the merchant presses submit instead of disabling it silently", async () => {
     const designDraft: StoreDraft = {

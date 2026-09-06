@@ -273,7 +273,7 @@ class ProvisioningLifecycleTest extends TestCase
         $this->assertSame(0, $tenant->run(static fn (): int => DB::table('store_configs')->count()));
     }
 
-    public function test_worker_ignores_central_layout_claims_and_initializes_the_server_default(): void
+    public function test_worker_ignores_legacy_central_layout_and_marketing_claims(): void
     {
         [$tenant] = $this->submitAndApprove('central-layout-ignored');
         $run = ProvisioningRun::query()->where('tenant_id', $tenant->id)->firstOrFail();
@@ -287,13 +287,19 @@ class ProvisioningLifecycleTest extends TestCase
             ['id' => 'trust', 'visible' => false],
             ['id' => 'hero', 'visible' => false],
         ];
+        $payload['config']['marketingBlocks'] = [['legacy' => 'untrusted central claim']];
+        $payload['config']['storeName'] = 'Untrusted legacy identity';
+        $payload['config']['themeStyle'] = 'tech';
         $submission->forceFill(['payload_snapshot' => $payload])->save();
 
         app(TenantProvisioner::class)->provision((string) $run->id, 1, 3);
 
         $tenant->run(function (): void {
             $stored = json_decode((string) DB::table('store_configs')->where('is_current', true)->value('config_json'), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame('Store central-layout-ignored', $stored['storeName']);
+            $this->assertSame('elegant', $stored['themeStyle']);
             $this->assertSame(StorefrontSectionLayout::defaults(), $stored['homeSections']);
+            $this->assertSame([], $stored['marketingBlocks']);
         });
     }
 

@@ -45,6 +45,7 @@
 - [WP 5.27.6A — Hero customization closure](work-packages/WP-5.27.6A-hero-customization-closure.md)
 - [WP 5.27.6B — Store builder interface polish](work-packages/WP-5.27.6B-store-builder-interface-polish.md)
 - [WP 5.27.6C — Storefront customization parity audit](work-packages/WP-5.27.6C-storefront-customization-parity.md)
+- [WP 5.27.7A — Onboarding customization continuity](work-packages/WP-5.27.7A-onboarding-customization-continuity.md)
 
 ## Architecture decisions
 

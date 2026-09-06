@@ -137,6 +137,9 @@ class StoreDraftLifecycleTest extends TestCase
         ];
         $payload = $this->draftPayload('layout-unbound', 0, 'layout-unbound', 'starter');
         $payload['config']['homeSections'] = $customLayout;
+        $payload['config']['marketingBlocks'] = [['legacy' => true]];
+        $payload['config']['storeName'] = 'Stale config identity';
+        $payload['config']['themeStyle'] = 'tech';
 
         $draft = app(StoreDraftService::class)->saveUnbound(
             $payload,
@@ -145,7 +148,110 @@ class StoreDraftLifecycleTest extends TestCase
         );
 
         $this->assertArrayNotHasKey('homeSections', $draft->config);
+        $this->assertArrayNotHasKey('marketingBlocks', $draft->config);
+        $this->assertSame($payload['storeName'], $draft->config['storeName']);
+        $this->assertSame($payload['themeStyle'], $draft->config['themeStyle']);
         $this->assertSame(StoreDraftStatus::Draft, $draft->status);
+    }
+
+    public function test_guided_appearance_survives_submission_and_provisioning_with_server_owned_collections(): void
+    {
+        $owner = $this->createUser('appearance-continuity-owner@example.test');
+        $this->startBrowserSessionAs($owner);
+        $business = $this->putJson('/api/merchant/store-draft/business', [
+            'expectedRevision' => 0,
+            'storeName' => 'متجر الاستمرارية',
+            'businessType' => 'retail',
+        ])->assertOk();
+        $appearance = $this->distinctAppearance();
+        $design = $this->putJson('/api/merchant/store-draft/design', [
+            'expectedRevision' => (int) $business->json('data.revision'),
+            'themeStyle' => 'tech',
+            'config' => $appearance,
+        ])->assertOk();
+        $review = $this->putJson('/api/merchant/store-draft/review', [
+            'expectedRevision' => (int) $design->json('data.revision'),
+            'handle' => 'appearance-continuity',
+            'planKey' => 'starter',
+        ])->assertOk();
+        $draft = StoreDraft::query()->findOrFail((string) $review->json('data.id'));
+        $this->assertSame('متجر الاستمرارية', $draft->config['storeName']);
+        $this->assertSame('tech', $draft->config['themeStyle']);
+        foreach ($appearance as $key => $value) {
+            $this->assertSame($value, $draft->config[$key], $key.' changed in the review draft.');
+        }
+
+        $legacyConfig = $draft->config;
+        $legacyConfig['storeName'] = 'Legacy stale store name';
+        $legacyConfig['themeStyle'] = 'elegant';
+        $legacyConfig['homeSections'] = array_reverse(StorefrontSectionLayout::defaults());
+        $legacyConfig['marketingBlocks'] = [];
+        $draft->forceFill(['config' => $legacyConfig])->save();
+        $draft->refresh();
+
+        $tenant = $this->submitDraft($owner, $draft, 'appearance-continuity');
+        $submittedDraft = $draft->refresh();
+        $this->assertSame('متجر الاستمرارية', $submittedDraft->config['storeName']);
+        $this->assertSame('tech', $submittedDraft->config['themeStyle']);
+        $this->assertArrayNotHasKey('homeSections', $submittedDraft->config);
+        $this->assertArrayNotHasKey('marketingBlocks', $submittedDraft->config);
+        $submission = StoreSubmission::query()->where('tenant_id', $tenant->id)->firstOrFail();
+        $snapshot = $submission->payload_snapshot;
+        $this->assertSame('متجر الاستمرارية', $snapshot['storeName']);
+        $this->assertSame('tech', $snapshot['themeStyle']);
+        $this->assertSame(StorefrontSectionLayout::defaults(), $snapshot['config']['homeSections']);
+        $this->assertSame([], $snapshot['config']['marketingBlocks']);
+        foreach ($appearance as $key => $value) {
+            $this->assertSame($value, $snapshot['config'][$key], $key.' changed in the submission snapshot.');
+        }
+
+        $reviewer = $this->createPlatformUser('appearance-continuity-reviewer@example.test', SystemRole::PlatformReviewer);
+        $this->startBrowserSessionAs($reviewer);
+        $this->patchJson("/api/admin/stores/{$tenant->id}/status", [
+            'status' => TenantVerificationStatus::Approved->value,
+        ])->assertOk();
+        $this->provision($tenant);
+
+        $stored = $tenant->run(static fn (): array => json_decode(
+            (string) DB::table('store_configs')->where('is_current', true)->value('config_json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        ));
+        $this->assertSame('متجر الاستمرارية', $stored['storeName']);
+        $this->assertSame('tech', $stored['themeStyle']);
+        $this->assertSame(StorefrontSectionLayout::defaults(), $stored['homeSections']);
+        $this->assertSame([], $stored['marketingBlocks']);
+        foreach ($appearance as $key => $value) {
+            $this->assertSame($value, $stored[$key], $key.' changed during provisioning.');
+        }
+
+        $this->startBrowserSessionAs($owner);
+        $workspace = $this->getJson("/api/merchant/stores/{$tenant->id}/workspace")
+            ->assertOk()
+            ->assertJsonPath('data.config.storeName', 'متجر الاستمرارية')
+            ->assertJsonPath('data.config.themeStyle', 'tech')
+            ->assertJsonPath('data.config.marketingBlocks', [])
+            ->assertJsonPath('data.config.products', [])
+            ->json('data.config');
+        foreach ($appearance as $key => $value) {
+            $this->assertSame($value, $workspace[$key], $key.' changed in the merchant workspace projection.');
+        }
+
+        $this->postJson("/api/merchant/stores/{$tenant->id}/publication/publish")
+            ->assertOk()
+            ->assertJsonPath('data.publicationStatus', 'published');
+        $publicHost = 'appearance-continuity.'.config('tenancy.tenant_base_domain');
+        $public = $this->getJson('http://'.$publicHost.'/api/store/config')
+            ->assertOk()
+            ->assertJsonPath('data.config.storeName', 'متجر الاستمرارية')
+            ->assertJsonPath('data.config.themeStyle', 'tech')
+            ->assertJsonPath('data.config.marketingBlocks', [])
+            ->assertJsonPath('data.config.products', [])
+            ->json('data.config');
+        foreach ($appearance as $key => $value) {
+            $this->assertSame($value, $public[$key], $key.' changed in the public storefront projection.');
+        }
     }
 
     public function test_submission_revalidates_the_locked_user_and_enforces_exact_draft_tenant_integrity(): void
@@ -289,11 +395,25 @@ class StoreDraftLifecycleTest extends TestCase
             ['id' => 'trust', 'visible' => false],
             ['id' => 'hero', 'visible' => false],
         ];
+        $correctionPayload['config']['marketingBlocks'] = [];
+        $correctionPayload['config']['storeName'] = 'Stale correction identity';
+        $correctionPayload['config']['themeStyle'] = 'tech';
         $corrected = $this->patchJson("/api/merchant/stores/{$tenant->id}/draft", $correctionPayload)->assertOk()
             ->assertJsonPath('data.revision', $correctionRevision + 1)
-            ->assertJsonPath('data.status', StoreDraftStatus::CorrectionRequired->value);
+            ->assertJsonPath('data.status', StoreDraftStatus::CorrectionRequired->value)
+            ->assertJsonPath('data.config.storeName', 'Store corrected')
+            ->assertJsonPath('data.config.themeStyle', 'elegant');
         $this->assertSame('corrected-shop', $corrected->json('data.handle'));
-        $this->assertArrayNotHasKey('homeSections', $draft->refresh()->config);
+        $correctedDraftConfig = $draft->refresh()->config;
+        $this->assertArrayNotHasKey('homeSections', $correctedDraftConfig);
+        $this->assertArrayNotHasKey('marketingBlocks', $correctedDraftConfig);
+
+        $legacyCorrectionConfig = $draft->config;
+        $legacyCorrectionConfig['storeName'] = 'Legacy stale correction name';
+        $legacyCorrectionConfig['themeStyle'] = 'tech';
+        $legacyCorrectionConfig['homeSections'] = array_reverse(StorefrontSectionLayout::defaults());
+        $legacyCorrectionConfig['marketingBlocks'] = [];
+        $draft->forceFill(['config' => $legacyCorrectionConfig])->save();
 
         $key = (string) Str::uuid();
         $correctedRevision = $correctionRevision + 1;
@@ -314,9 +434,16 @@ class StoreDraftLifecycleTest extends TestCase
         $submission = StoreSubmission::query()->where('tenant_id', $tenant->id)->firstOrFail();
         $this->assertSame(2, $submission->revision);
         $this->assertSame('Store corrected', $submission->payload_snapshot['storeName']);
+        $this->assertSame('Store corrected', $submission->payload_snapshot['config']['storeName']);
+        $this->assertSame('elegant', $submission->payload_snapshot['themeStyle']);
+        $this->assertSame('elegant', $submission->payload_snapshot['config']['themeStyle']);
         $this->assertSame('corrected-shop', $submission->payload_snapshot['handle']);
         $this->assertSame(StorefrontSectionLayout::defaults(), $submission->payload_snapshot['config']['homeSections']);
-        $this->assertArrayNotHasKey('homeSections', $draft->refresh()->config);
+        $submittedDraftConfig = $draft->refresh()->config;
+        $this->assertSame('Store corrected', $submittedDraftConfig['storeName']);
+        $this->assertSame('elegant', $submittedDraftConfig['themeStyle']);
+        $this->assertArrayNotHasKey('homeSections', $submittedDraftConfig);
+        $this->assertArrayNotHasKey('marketingBlocks', $submittedDraftConfig);
         $this->assertDatabaseCount('store_resubmissions', 1);
         $this->assertSame(StoreDraftStatus::Submitted, $draft->refresh()->status);
         $this->assertSame($correctedRevision + 1, $draft->revision);
@@ -687,5 +814,29 @@ class StoreDraftLifecycleTest extends TestCase
             'fontFamily' => 'Cairo',
             'phone' => '+967700000000',
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function distinctAppearance(): array
+    {
+        return [
+            'slogan' => 'هوية محفوظة من التهيئة',
+            'logoIcon' => 'ت',
+            'primaryColor' => '#123456',
+            'secondaryColor' => '#234567',
+            'textColor' => '#345678',
+            'bgColor' => '#456789',
+            'cardBgColor' => '#56789A',
+            'borderColor' => '#6789AB',
+            'fontFamily' => 'Alexandria',
+            'bannerText' => 'رسالة الاستمرارية',
+            'showHeroBanner' => true,
+            'heroBannerTitle' => 'عنوان الاستمرارية',
+            'heroBannerSubtitle' => 'وصف الاستمرارية',
+            'heroBannerBadge' => 'حصري',
+            'heroBannerButtonText' => 'تسوق الآن',
+            'heroBannerHeight' => 'large',
+            'heroBannerOverlayOpacity' => 63,
+        ];
     }
 }

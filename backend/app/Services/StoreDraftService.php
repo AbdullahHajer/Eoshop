@@ -17,6 +17,7 @@ use App\Support\PublicStoreHandle;
 use App\Support\StorefrontSectionLayout;
 use App\Support\StoreOnboardingAppearance;
 use App\Support\StoreOnboardingBaseline;
+use App\Support\StoreProvisioningConfig;
 use App\Support\StoreWorkspaceContract;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -423,7 +424,13 @@ class StoreDraftService
         if (is_string($input['planKey'] ?? null) && $input['planKey'] !== '') {
             $plan = Plan::query()->whereKey($input['planKey'])->where('is_active', true)->lockForUpdate()->firstOrFail();
         }
-        $config = StorefrontSectionLayout::withoutLayout($input['config']);
+        $storeName = trim((string) $input['storeName']);
+        $themeStyle = (string) $input['themeStyle'];
+        $config = StoreProvisioningConfig::forCentralDraft(
+            $input['config'],
+            $storeName,
+            $themeStyle,
+        );
         $validator = StoreWorkspaceContract::validator(
             $config,
             $plan?->getAttribute('max_products') === null ? null : (int) $plan->getAttribute('max_products'),
@@ -433,9 +440,9 @@ class StoreDraftService
         }
 
         return [
-            'store_name' => trim((string) $input['storeName']),
+            'store_name' => $storeName,
             'business_type' => trim((string) $input['businessType']),
-            'theme_style' => $input['themeStyle'],
+            'theme_style' => $themeStyle,
             'handle' => isset($input['handle']) && $input['handle'] !== ''
                 ? PublicStoreHandle::normalize((string) $input['handle'])
                 : null,

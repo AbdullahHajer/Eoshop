@@ -1,7 +1,11 @@
 import { apiClient, ApiError } from "./apiClient";
-import { booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
+import { arrayField, booleanField, enumField, nullableStringField, record, stringArrayField, stringField } from "./apiContract";
+import {
+  STORE_ONBOARDING_APPEARANCE_KEYS,
+  storeOnboardingAppearance,
+  type StoreOnboardingAppearance,
+} from "../contracts/storeOnboardingAppearance";
 import { sanitizeCheckoutConfig } from "../contracts/checkoutPolicy";
-import { storeOnboardingAppearance, type StoreOnboardingAppearance } from "../contracts/storeOnboardingAppearance";
 import type { StoreConfig } from "../types";
 import { randomUuid } from "../utils/randomUuid";
 import { requestFingerprint } from "../utils/requestFingerprint";
@@ -194,8 +198,105 @@ function numberField(dto: Record<string, unknown>, key: string, context: string)
   return value;
 }
 
+const onboardingColorPattern = /^#[0-9a-fA-F]{6}$/;
+const onboardingFonts = ["Cairo", "Tajawal", "Almarai", "Alexandria", "IBM Plex Sans Arabic"] as const;
+
+function invalidDraftConfig(): never {
+  throw new ApiError("استجابة الخادم لا تطابق عقد إعدادات مسودة المتجر.", "unexpected", 200);
+}
+
+function boundedStringField(
+  dto: Record<string, unknown>,
+  key: string,
+  maximum: number,
+  minimum = 1,
+): string {
+  const value = stringField(dto, key, "إعدادات مسودة المتجر");
+  const length = Array.from(value).length;
+  if (length < minimum || length > maximum) return invalidDraftConfig();
+  return value;
+}
+
+function boundedNullableStringField(
+  dto: Record<string, unknown>,
+  key: string,
+  maximum: number,
+): string | null {
+  const value = nullableStringField(dto, key, "إعدادات مسودة المتجر");
+  if (value !== null && Array.from(value).length > maximum) return invalidDraftConfig();
+  return value;
+}
+
+function validColorField(dto: Record<string, unknown>, key: string): string {
+  const value = stringField(dto, key, "إعدادات مسودة المتجر");
+  if (!onboardingColorPattern.test(value)) return invalidDraftConfig();
+  return value;
+}
+
+function validateDraftAppearance(dto: Record<string, unknown>): void {
+  // Reading every canonical key makes a missing nullable field fail closed too.
+  boundedStringField(dto, "slogan", 500);
+  boundedStringField(dto, "logoIcon", 32);
+  validColorField(dto, "primaryColor");
+  validColorField(dto, "secondaryColor");
+  validColorField(dto, "textColor");
+  validColorField(dto, "bgColor");
+  validColorField(dto, "cardBgColor");
+  validColorField(dto, "borderColor");
+  enumField(dto, "fontFamily", onboardingFonts, "إعدادات مسودة المتجر");
+  boundedStringField(dto, "bannerText", 1000);
+  booleanField(dto, "showHeroBanner", "إعدادات مسودة المتجر");
+  boundedNullableStringField(dto, "heroBannerTitle", 500);
+  boundedNullableStringField(dto, "heroBannerSubtitle", 1000);
+  boundedNullableStringField(dto, "heroBannerBadge", 255);
+  boundedNullableStringField(dto, "heroBannerButtonText", 255);
+
+  if (dto.heroBannerHeight !== null) {
+    enumField(dto, "heroBannerHeight", ["compact", "medium", "large"] as const, "إعدادات مسودة المتجر");
+  }
+  const overlayOpacity = dto.heroBannerOverlayOpacity;
+  if (overlayOpacity !== null
+    && (typeof overlayOpacity !== "number" || !Number.isInteger(overlayOpacity) || overlayOpacity < 0 || overlayOpacity > 100)) {
+    invalidDraftConfig();
+  }
+
+  if (STORE_ONBOARDING_APPEARANCE_KEYS.some((key) => !Object.hasOwn(dto, key))) invalidDraftConfig();
+}
+
+function mapDraftConfig(
+  value: unknown,
+  authoritativeStoreName: string,
+  authoritativeThemeStyle: "elegant" | "tech",
+): StoreConfig {
+  const dto = record(value, "إعدادات مسودة المتجر");
+  const configStoreName = boundedStringField(dto, "storeName", 255, 2);
+  const configThemeStyle = enumField(dto, "themeStyle", ["elegant", "tech"] as const, "إعدادات مسودة المتجر");
+  arrayField(dto, "products", "إعدادات مسودة المتجر");
+  boundedStringField(dto, "currency", 20);
+  if (dto.phone !== null
+    && (typeof dto.phone !== "string"
+      || dto.phone.length > 50
+      || (dto.phone !== "" && !/^\+[0-9() \-]{7,30}$/.test(dto.phone)))) {
+    invalidDraftConfig();
+  }
+  validateDraftAppearance(dto);
+  if (configStoreName !== authoritativeStoreName || configThemeStyle !== authoritativeThemeStyle) invalidDraftConfig();
+
+  // The onboarding baseline legitimately projects phone:null. Keep the server-owned
+  // object byte-for-byte equivalent at the value level; no workspace defaults or
+  // checkout sanitization may be injected before its submission fingerprint is used.
+  // If the checkout safety policy would need to rewrite it, fail closed instead of
+  // exposing unsafe demo claims or silently changing the authoritative fingerprint.
+  const config = { ...dto } as unknown as StoreConfig;
+  if (JSON.stringify(sanitizeCheckoutConfig(config)) !== JSON.stringify(config)) invalidDraftConfig();
+
+  return config;
+}
+
 function mapDraft(value: unknown): StoreDraft {
   const dto = record(value, "مسودة المتجر");
+  const storeName = stringField(dto, "storeName", "مسودة المتجر");
+  const themeStyle = enumField(dto, "themeStyle", ["elegant", "tech"] as const, "مسودة المتجر");
   return {
     id: stringField(dto, "id", "مسودة المتجر"),
     tenantId: nullableStringField(dto, "tenantId", "مسودة المتجر"),
@@ -214,12 +315,12 @@ function mapDraft(value: unknown): StoreDraft {
     nextRequiredStep: dto.nextRequiredStep === null
       ? null
       : enumField(dto, "nextRequiredStep", ["business", "design", "review", "submit"] as const, "مسودة المتجر"),
-    storeName: stringField(dto, "storeName", "مسودة المتجر"),
+    storeName,
     businessType: stringField(dto, "businessType", "مسودة المتجر"),
-    themeStyle: enumField(dto, "themeStyle", ["elegant", "tech"] as const, "مسودة المتجر"),
+    themeStyle,
     handle: nullableStringField(dto, "handle", "مسودة المتجر"),
     planKey: nullableStringField(dto, "planKey", "مسودة المتجر"),
-    config: sanitizeCheckoutConfig(record(dto.config, "إعدادات مسودة المتجر") as unknown as StoreConfig),
+    config: mapDraftConfig(dto.config, storeName, themeStyle),
     savedAt: nullableStringField(dto, "savedAt", "مسودة المتجر"),
     submittedAt: nullableStringField(dto, "submittedAt", "مسودة المتجر"),
     application: mapApplication(dto.application),

@@ -374,9 +374,12 @@ export default function MerchantOnboardingPage({ user, requestedStep, onSessionE
                   <ColorField label="اللون المساند" value={config.secondaryColor} onChange={(value) => updateConfig("secondaryColor", value)} />
                 </div>
                 <label className="block text-sm font-bold">الخط<select value={config.fontFamily} onChange={(event) => updateConfig("fontFamily", event.target.value)} className={inputClass}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select></label>
-                <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-sm font-bold"><span>إظهار واجهة ترحيبية كبيرة</span><input type="checkbox" checked={config.showHeroBanner === true} onChange={(event) => updateConfig("showHeroBanner", event.target.checked)} className="h-5 w-5 accent-sky-600" /></label>
+                <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4">
+                  <span><span className="block text-sm font-bold">إظهار صورة واجهة الترحيب</span><span className="mt-1 block text-[11px] leading-5 text-slate-500">يخفي هذا الخيار الصورة فقط؛ يبقى قسم المقدمة ونصه ظاهرين.</span></span>
+                  <input type="checkbox" checked={config.showHeroBanner === true} onChange={(event) => updateConfig("showHeroBanner", event.target.checked)} className="h-5 w-5 shrink-0 accent-sky-600" />
+                </label>
                 {config.showHeroBanner && <label className="block text-sm font-bold">عنوان الواجهة الترحيبية<input value={config.heroBannerTitle ?? ""} onChange={(event) => updateConfig("heroBannerTitle", event.target.value)} maxLength={180} className={inputClass} /></label>}
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">إضافة المنتجات ورفع ملفات الشعار وإعداد الدفع تتم بعد تجهيز المتجر، حتى تبقى البيانات مرتبطة بقاعدة متجر جاهزة.</div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">المنتجات والصور الظاهرة داخل المعاينة أمثلة توضيحية فقط ولن تُنقل إلى متجرك. إضافة منتجاتك ورفع ملفات الشعار والصور وإعداد الدفع تتم بعد تجهيز مساحة المتجر.</div>
               </aside>
               <React.Fragment key={`design-${selectedTemplate.key}`}>
                 <OnboardingStorePreview config={previewConfig} />

@@ -14,12 +14,92 @@ const readyApplication = (draftId: string, draftRevision: number, tenantId: stri
   timeline: [],
 });
 
+const onboardingConfig = (overrides: Record<string, unknown> = {}) => {
+  const config = {
+    ...ELEGANT_PRESET,
+    storeName: "Store Draft",
+    themeStyle: "elegant",
+    phone: null,
+    ...overrides,
+  } as Record<string, unknown>;
+  delete config.homeSections;
+  delete config.marketingBlocks;
+  return config;
+};
+
+const onboardingDraft = (config: Record<string, unknown>, overrides: Record<string, unknown> = {}) => ({
+  id: "draft-contract",
+  tenantId: null,
+  status: "draft",
+  revision: 2,
+  storeName: "Store Draft",
+  businessType: "retail",
+  themeStyle: "elegant",
+  handle: null,
+  planKey: null,
+  onboardingStage: "design",
+  onboardingReadiness: { business: true, design: true, review: false, blockers: ["review_incomplete"] },
+  nextRequiredStep: "review",
+  config,
+  application: readyApplication("draft-contract", 2),
+  savedAt: "2026-09-06T00:00:00Z",
+  submittedAt: null,
+  ...overrides,
+});
+
 afterEach(() => {
   apiClient.clearCsrfToken();
   vi.unstubAllGlobals();
 });
 
 describe("provisioningApi", () => {
+  it("maps a valid onboarding draft without mutating values or injecting layout contracts", async () => {
+    const config = onboardingConfig({
+      enableBankTransfer: true,
+      bankName: "Merchant Bank",
+      bankAccountName: "Merchant Owner",
+      bankAccountNumber: "9988776655",
+      enableCoupons: true,
+      customCoupons: [{ code: "REAL10", discountPercent: 10, active: true }],
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: onboardingDraft(config),
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provisioningApi.currentDraft();
+
+    expect(result?.config).toEqual(config);
+    expect(result?.config).not.toBe(config);
+    expect((result?.config as unknown as { phone: null }).phone).toBeNull();
+    expect(result?.config).not.toHaveProperty("homeSections");
+    expect(result?.config).not.toHaveProperty("marketingBlocks");
+    expect(result?.config.enableBankTransfer).toBe(true);
+    expect(result?.config.customCoupons).toEqual([{ code: "REAL10", discountPercent: 10, active: true }]);
+  });
+
+  it("fails closed when a draft appearance field is malformed", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: onboardingDraft(onboardingConfig({ primaryColor: "blue" })),
+    }), { status: 200 })));
+
+    await expect(provisioningApi.currentDraft()).rejects.toMatchObject({ category: "unexpected" });
+  });
+
+  it("fails closed when top-level draft identity differs from its config", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: onboardingDraft(onboardingConfig({ storeName: "Different Store" })),
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: onboardingDraft(onboardingConfig({ themeStyle: "tech" })),
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provisioningApi.currentDraft()).rejects.toMatchObject({ category: "unexpected" });
+    await expect(provisioningApi.currentDraft()).rejects.toMatchObject({ category: "unexpected" });
+  });
+
   it("forwards merchant lifecycle cancellation to the HTTP request", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -208,20 +288,10 @@ describe("provisioningApi", () => {
     expect(localStorageMock.removeItem).not.toHaveBeenCalledWith(recoveryKey);
   });
 
-  it("saves and maps the authenticated server draft with its optimistic revision", async () => {
-    const legacyConfig = {
+  it("saves and maps the authenticated server draft with its optimistic revision without rewriting its safe config", async () => {
+    const safeConfig = {
       ...ELEGANT_PRESET,
-      enableBankTransfer: true,
-      bankName: "Demo Bank",
-      bankAccountName: "Demo Owner",
-      bankAccountNumber: "123456789012",
-      enableOnlineCard: true,
-      enableApplePay: true,
-      enableStcPay: true,
-      enableEWallets: true,
-      customWallets: [{ id: "Wallet-One", name: "Demo", accountNumber: "0501234567", accountName: "Demo", active: true }],
-      enableCoupons: true,
-      customCoupons: [{ code: "WELCOME10", discountPercent: 10, active: true }],
+      storeName: "Store Draft",
     };
     const draft = {
       data: {
@@ -237,7 +307,7 @@ describe("provisioningApi", () => {
         onboardingStage: "review",
         onboardingReadiness: { business: true, design: true, review: true, blockers: [] },
         nextRequiredStep: "submit",
-        config: legacyConfig,
+        config: safeConfig,
         application: readyApplication("draft-1", 3),
         savedAt: "2026-08-19T12:00:00Z",
         submittedAt: null,
@@ -260,16 +330,7 @@ describe("provisioningApi", () => {
       config: { marker: "server" },
     });
 
-    expect(result.config).toMatchObject({
-      enableBankTransfer: false,
-      enableOnlineCard: false,
-      enableApplePay: false,
-      enableStcPay: false,
-      enableEWallets: false,
-      enableCoupons: false,
-    });
-    expect((result.config.customWallets as Array<{ active: boolean }>)[0].active).toBe(false);
-    expect((result.config.customCoupons as Array<{ active: boolean }>)[0].active).toBe(false);
+    expect(result.config).toEqual(safeConfig);
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/merchant/store-draft/review",
@@ -280,6 +341,21 @@ describe("provisioningApi", () => {
       handle: "store-draft",
       planKey: "starter",
     });
+  });
+
+  it("fails closed instead of silently rewriting an unsafe checkout draft", async () => {
+    const unsafeConfig = onboardingConfig({
+      enableBankTransfer: true,
+      bankName: "Demo Bank",
+      bankAccountName: "Demo Owner",
+      bankAccountNumber: "123456789012",
+      enableOnlineCard: true,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: onboardingDraft(unsafeConfig),
+    }), { status: 200 })));
+
+    await expect(provisioningApi.currentDraft()).rejects.toMatchObject({ category: "unexpected" });
   });
 
   it("reuses the persisted key after an ambiguous network failure", async () => {
