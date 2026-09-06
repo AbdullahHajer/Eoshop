@@ -3,12 +3,14 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Support\CanonicalDomain;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -56,7 +58,17 @@ class AppServiceProvider extends ServiceProvider
             ->by('store-register:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
 
         RateLimiter::for('store.orders', fn (Request $request): Limit => Limit::perMinute(10)
-            ->by('store-orders:'.mb_strtolower($request->getHost()).'|'.$request->ip()));
+            ->by('store-orders:'.$this->rateLimitHost($request).'|'.$request->ip()));
+
+        RateLimiter::for('store.order-tracking', function (Request $request): array {
+            $host = $this->rateLimitHost($request);
+            $digest = hash('sha256', (string) ($request->bearerToken() ?? ''));
+
+            return [
+                Limit::perMinute(30)->by('store-order-tracking-ip:'.$host.'|'.$request->ip()),
+                Limit::perMinute(15)->by('store-order-tracking-token:'.$host.'|'.$digest),
+            ];
+        });
 
         RateLimiter::for('domain.availability', fn (Request $request): Limit => Limit::perMinute(30)
             ->by('domain-availability:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
@@ -67,5 +79,14 @@ class AppServiceProvider extends ServiceProvider
             return $baseUrl.'/reset-password?token='.rawurlencode($token)
                 .'&email='.rawurlencode($user->getEmailForPasswordReset());
         });
+    }
+
+    private function rateLimitHost(Request $request): string
+    {
+        try {
+            return CanonicalDomain::normalize($request->getHost());
+        } catch (InvalidArgumentException) {
+            return 'invalid-host';
+        }
     }
 }

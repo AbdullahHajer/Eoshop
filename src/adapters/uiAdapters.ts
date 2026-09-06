@@ -41,7 +41,19 @@ export type { StoreApplicationDossier, StoreApplicationEvidence, StoreApplicatio
 export type { StoreWorkspace } from "../services/workspaceApi";
 export type { CatalogSnapshot } from "../services/catalogApi";
 export type { StoreAssetUpload } from "../services/storeAssetApi";
-export type { CreateOrderInput, MerchantOrderList, MerchantOrderQuery, MerchantOrderStatus, OrderDetail, OrderReceipt, StorefrontBootstrap } from "../services/orderApi";
+export type {
+  CreateOrderInput,
+  FulfillmentStatus,
+  GuestOrderTracking,
+  GuestTrackingStage,
+  MerchantOrderFulfillment,
+  MerchantOrderList,
+  MerchantOrderQuery,
+  MerchantOrderStatus,
+  OrderDetail,
+  OrderReceipt,
+  StorefrontBootstrap,
+} from "../services/orderApi";
 export type { MerchantDashboardSnapshot, MerchantDashboardTaskCode } from "../services/merchantDashboardApi";
 export type { AdminPlatformSettings, PlatformBrandFont, PlatformNavigationItem, PlatformNavigationKey, PlatformSettings, UpdatePlatformSettingsInput } from "../services/platformSettingsApi";
 export {

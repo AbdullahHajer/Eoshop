@@ -3,6 +3,42 @@ import { apiClient, ApiError } from "./apiClient";
 import { arrayField, enumField, nullableStringField, numberField, record, stringField } from "./apiContract";
 import { mapStoreConfig } from "./workspaceApi";
 import { canonicalContactTarget, neutralCheckoutPresentation } from "../contracts/checkoutPolicy";
+import { isGuestTrackingCapability, normalizeServerTrackingUrl } from "../features/storefront/guestTrackingRoute";
+
+export type FulfillmentStatus = "unfulfilled" | "preparing" | "dispatched" | "delivered" | "legacy_completed";
+
+export type GuestTrackingStage =
+  | "submitted"
+  | "accepted"
+  | "preparing"
+  | "dispatched"
+  | "delivered"
+  | "legacy_completed"
+  | "cancelled"
+  | "expired";
+
+export interface GuestOrderTracking {
+  number: string;
+  orderStatus: OrderReceipt["status"];
+  fulfillmentStatus: FulfillmentStatus;
+  createdAt: string;
+  updatedAt: string;
+  timeline: Array<{
+    stage: GuestTrackingStage;
+    occurredAt: string;
+  }>;
+}
+
+export interface MerchantOrderFulfillment {
+  status: FulfillmentStatus;
+  allowedTransitions: Array<"preparing" | "dispatched" | "delivered">;
+  history: Array<{
+    from: FulfillmentStatus | null;
+    to: FulfillmentStatus;
+    reasonCode: string;
+    createdAt: string;
+  }>;
+}
 
 export interface StorefrontBootstrap {
   workspaceRevision: number;
@@ -33,7 +69,9 @@ export interface OrderReceipt {
     message: string;
     whatsappTarget: string | null;
   };
-  allowedTransitions?: Array<"accepted" | "processing" | "completed" | "cancelled">;
+  fulfillmentStatus?: FulfillmentStatus;
+  trackingUrl?: string;
+  allowedTransitions?: Array<"accepted" | "cancelled">;
   items?: Array<{
     productId: string;
     name: string;
@@ -79,6 +117,7 @@ export interface OrderDetail extends OrderReceipt {
     reasonCode: string;
     createdAt: string;
   }>;
+  fulfillment: MerchantOrderFulfillment;
   items: NonNullable<OrderReceipt["items"]>;
 }
 
@@ -143,13 +182,21 @@ function mapReceipt(value: unknown): OrderReceipt {
   if (dto.customerName !== undefined) receipt.customerName = stringField(dto, "customerName", "إيصال الطلب");
   if (dto.paymentMethod !== undefined) receipt.paymentMethod = enumField(dto, "paymentMethod", ["cod", "bank_transfer", "wallet"] as const, "إيصال الطلب");
   if (dto.couponCode !== undefined) receipt.couponCode = nullableStringField(dto, "couponCode", "إيصال الطلب");
+  if (dto.fulfillmentStatus !== undefined) {
+    receipt.fulfillmentStatus = enumField(dto, "fulfillmentStatus", ["unfulfilled", "preparing", "dispatched", "delivered", "legacy_completed"] as const, "تنفيذ الطلب");
+  }
+  if (dto.trackingUrl !== undefined) {
+    const trackingUrl = stringField(dto, "trackingUrl", "رابط تتبع الطلب");
+    if (normalizeServerTrackingUrl(trackingUrl) !== trackingUrl) return invalid("رابط تتبع الطلب");
+    receipt.trackingUrl = trackingUrl;
+  }
   if (dto.allowedTransitions !== undefined) {
     const transitions = arrayField(dto, "allowedTransitions", "انتقالات الطلب");
     receipt.allowedTransitions = transitions.map((value) => (
       enumField(
         { value },
         "value",
-        ["accepted", "processing", "completed", "cancelled"] as const,
+        ["accepted", "cancelled"] as const,
         "انتقالات الطلب",
       )
     ));
@@ -177,6 +224,30 @@ function optionalNullableString(source: Record<string, unknown>, key: string, co
   return source[key] === undefined ? null : nullableStringField(source, key, contract);
 }
 
+function mapMerchantFulfillment(value: unknown): MerchantOrderFulfillment {
+  const fulfillment = record(value, "تنفيذ الطلب");
+  return {
+    status: enumField(fulfillment, "status", ["unfulfilled", "preparing", "dispatched", "delivered", "legacy_completed"] as const, "تنفيذ الطلب"),
+    allowedTransitions: arrayField(fulfillment, "allowedTransitions", "انتقالات تنفيذ الطلب").map((value) => enumField(
+      { value },
+      "value",
+      ["preparing", "dispatched", "delivered"] as const,
+      "انتقالات تنفيذ الطلب",
+    )),
+    history: arrayField(fulfillment, "history", "سجل تنفيذ الطلب").map((value) => {
+      const event = record(value, "حدث تنفيذ الطلب");
+      return {
+        from: event.from === null
+          ? null
+          : enumField(event, "from", ["unfulfilled", "preparing", "dispatched", "delivered", "legacy_completed"] as const, "حدث تنفيذ الطلب"),
+        to: enumField(event, "to", ["unfulfilled", "preparing", "dispatched", "delivered", "legacy_completed"] as const, "حدث تنفيذ الطلب"),
+        reasonCode: stringField(event, "reasonCode", "حدث تنفيذ الطلب"),
+        createdAt: stringField(event, "createdAt", "حدث تنفيذ الطلب"),
+      };
+    }),
+  };
+}
+
 function mapDetail(value: unknown): OrderDetail {
   const receipt = mapReceipt(value);
   const dto = record(value, "تفاصيل الطلب");
@@ -186,7 +257,7 @@ function mapDetail(value: unknown): OrderDetail {
   const items = receipt.items;
   if (!items) return invalid("تفاصيل الطلب");
 
-  return {
+  const detail: OrderDetail = {
     ...receipt,
     items,
     customer: {
@@ -215,6 +286,28 @@ function mapDetail(value: unknown): OrderDetail {
         to: enumField(event, "to", ["submitted", "accepted", "processing", "completed", "cancelled", "expired"] as const, "حدث الطلب"),
         reasonCode: stringField(event, "reasonCode", "حدث الطلب"),
         createdAt: stringField(event, "createdAt", "حدث الطلب"),
+      };
+    }),
+    fulfillment: mapMerchantFulfillment(dto.fulfillment),
+  };
+
+  return detail;
+}
+
+function mapGuestTracking(value: unknown): GuestOrderTracking {
+  const envelope = record(value, "تتبع طلب الضيف");
+  const dto = record(envelope.data, "تتبع طلب الضيف");
+  return {
+    number: stringField(dto, "number", "تتبع طلب الضيف"),
+    orderStatus: enumField(dto, "orderStatus", ["submitted", "accepted", "processing", "completed", "cancelled", "expired"] as const, "تتبع طلب الضيف"),
+    fulfillmentStatus: enumField(dto, "fulfillmentStatus", ["unfulfilled", "preparing", "dispatched", "delivered", "legacy_completed"] as const, "تتبع طلب الضيف"),
+    createdAt: stringField(dto, "createdAt", "تتبع طلب الضيف"),
+    updatedAt: stringField(dto, "updatedAt", "تتبع طلب الضيف"),
+    timeline: arrayField(dto, "timeline", "تتبع طلب الضيف").map((value) => {
+      const event = record(value, "حدث تتبع طلب الضيف");
+      return {
+        stage: enumField(event, "stage", ["submitted", "accepted", "preparing", "dispatched", "delivered", "legacy_completed", "cancelled", "expired"] as const, "حدث تتبع طلب الضيف"),
+        occurredAt: stringField(event, "occurredAt", "حدث تتبع طلب الضيف"),
       };
     }),
   };
@@ -273,6 +366,16 @@ export const orderApi = {
     }));
   },
 
+  async track(capability: string, signal?: AbortSignal): Promise<GuestOrderTracking> {
+    if (!isGuestTrackingCapability(capability)) {
+      throw new ApiError("رابط التتبع غير صالح أو لم يعد متاحًا.", "not_found", 404);
+    }
+    return mapGuestTracking(await apiClient.request("/api/store/order-tracking", {
+      headers: { Authorization: `Bearer ${capability}` },
+      signal,
+    }));
+  },
+
   async list(tenantId: string, query: MerchantOrderQuery = {}, signal?: AbortSignal): Promise<MerchantOrderList> {
     const params = new URLSearchParams();
     if (query.page !== undefined) params.set("page", String(query.page));
@@ -288,7 +391,7 @@ export const orderApi = {
     return mapDetail(record(envelope.data, "تفاصيل الطلب"));
   },
 
-  async updateStatus(tenantId: string, orderId: string, status: OrderReceipt["status"], reasonCode: string, idempotencyKey: string, signal?: AbortSignal): Promise<OrderMutationResult> {
+  async updateStatus(tenantId: string, orderId: string, status: "accepted" | "cancelled", reasonCode: "merchant_accepted" | "merchant_cancelled", idempotencyKey: string, signal?: AbortSignal): Promise<OrderMutationResult> {
     const envelope = record(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/orders/${encodeURIComponent(orderId)}/status`, {
       method: "PATCH",
       body: { status, reasonCode },
@@ -298,6 +401,19 @@ export const orderApi = {
     }), "تحديث الطلب");
     const data = record(envelope.data, "تحديث الطلب");
     if (typeof data.replayed !== "boolean") return invalid("تحديث الطلب");
+    return { replayed: data.replayed, order: mapReceipt(data.order) };
+  },
+
+  async updateFulfillment(tenantId: string, orderId: string, status: "preparing" | "dispatched" | "delivered", idempotencyKey: string, signal?: AbortSignal): Promise<OrderMutationResult> {
+    const envelope = record(await apiClient.request(`/api/merchant/stores/${encodeURIComponent(tenantId)}/orders/${encodeURIComponent(orderId)}/fulfillment`, {
+      method: "PATCH",
+      body: { status },
+      headers: { "Idempotency-Key": idempotencyKey },
+      retrySafety: "idempotent",
+      signal,
+    }), "تحديث تنفيذ الطلب");
+    const data = record(envelope.data, "تحديث تنفيذ الطلب");
+    if (typeof data.replayed !== "boolean") return invalid("تحديث تنفيذ الطلب");
     return { replayed: data.replayed, order: mapReceipt(data.order) };
   },
 };

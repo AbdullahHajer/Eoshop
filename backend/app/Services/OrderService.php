@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\InventoryActorType;
 use App\Enums\OrderActorType;
+use App\Enums\OrderFulfillmentStatus;
 use App\Enums\OrderOperationKind;
 use App\Enums\OrderStatus;
 use App\Enums\PermissionKey;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Support\CheckoutPresentation;
 use App\Support\OrderIdentity;
 use App\Support\OrderReadiness;
+use App\Support\OrderTrackingToken;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Crypt;
@@ -59,8 +61,11 @@ class OrderService
                     $payload['requestId'] ?? null,
                 );
                 if ($claim['replayed']) {
-                    return $this->withPresentationFallback(
-                        $this->operations->replayResult((string) $claim['operation']->id),
+                    return $this->withGuestTracking(
+                        $this->withPresentationFallback(
+                            $this->operations->replayResult((string) $claim['operation']->id),
+                        ),
+                        (string) $claim['operation']->id,
                     );
                 }
 
@@ -109,6 +114,7 @@ class OrderService
                 ));
                 $reservationId = null;
                 $clock = CarbonImmutable::parse((string) DB::selectOne('SELECT clock_timestamp() AS current_time')->current_time);
+                $tracking = OrderTrackingToken::issue();
                 $expiresAt = $clock->addSeconds((int) config('orders.reservation_ttl_seconds'));
                 if ($trackedLines !== []) {
                     try {
@@ -198,17 +204,72 @@ class OrderService
                     'request_id' => $payload['requestId'] ?? null,
                     'created_at' => $clock,
                 ]);
+                DB::table('order_fulfillments')->insert([
+                    'order_id' => $orderId,
+                    'status' => OrderFulfillmentStatus::Unfulfilled->value,
+                    'revision' => 1,
+                    'preparing_at' => null,
+                    'dispatched_at' => null,
+                    'delivered_at' => null,
+                    'created_at' => $clock,
+                    'updated_at' => $clock,
+                ]);
+                DB::table('order_fulfillment_events')->insert([
+                    'id' => (string) Str::uuid(),
+                    'order_id' => $orderId,
+                    'operation_id' => $claim['operation']->id,
+                    'sequence' => 1,
+                    'from_status' => null,
+                    'to_status' => OrderFulfillmentStatus::Unfulfilled->value,
+                    'actor_type' => OrderActorType::Guest->value,
+                    'actor_user_id' => null,
+                    'reason_code' => 'checkout_submitted',
+                    'request_id' => $payload['requestId'] ?? null,
+                    'created_at' => $clock,
+                ]);
+                DB::table('order_guest_access')->insert([
+                    'order_id' => $orderId,
+                    'token_version' => $tracking['version'],
+                    'token_digest' => $tracking['digest'],
+                    'token_ciphertext' => $tracking['ciphertext'],
+                    'issued_at' => $clock,
+                ]);
 
                 $receipt = $this->resource(DB::table('orders')->where('id', $orderId)->firstOrFail(), false);
                 $receipt['items'] = $quote['items'];
                 $receipt['checkoutPresentation'] = CheckoutPresentation::fromConfig($config);
 
-                return $this->operations->storeResult((string) $claim['operation']->id, [
+                $stored = $this->operations->storeResult((string) $claim['operation']->id, [
                     'replayed' => false,
                     'order' => $receipt,
                 ]);
+
+                return $this->withGuestTracking($stored, (string) $claim['operation']->id);
             }));
         });
+    }
+
+    /** @param array<string, mixed> $result @return array<string, mixed> */
+    private function withGuestTracking(array $result, string $createOperationId): array
+    {
+        if (! isset($result['order']) || ! is_array($result['order'])) {
+            return $result;
+        }
+        $access = DB::table('order_guest_access as access')
+            ->join('orders', 'orders.id', '=', 'access.order_id')
+            ->where('orders.create_operation_id', $createOperationId)
+            ->first(['access.token_ciphertext']);
+        if ($access === null) {
+            return $result;
+        }
+        $token = OrderTrackingToken::decrypt((string) $access->token_ciphertext);
+        $url = $token === null ? null : OrderTrackingToken::relativeUrl($token);
+        if ($url === null) {
+            throw new OrderConflict('The order tracking link is temporarily unavailable.', 'order_not_ready', 503);
+        }
+        $result['order']['trackingUrl'] = $url;
+
+        return $result;
     }
 
     /** @param array<string, mixed> $result @return array<string, mixed> */
@@ -336,6 +397,118 @@ class OrderService
         });
     }
 
+    /** @return array<string, mixed> */
+    public function transitionFulfillment(
+        Tenant $tenant,
+        User $actor,
+        string $orderId,
+        OrderFulfillmentStatus $target,
+        string $idempotencyKey,
+        ?string $requestId,
+    ): array {
+        return $this->withLockedMembership($tenant, $actor, PermissionKey::TenantOrdersManage, function (Tenant $lockedTenant) use ($actor, $orderId, $target, $idempotencyKey, $requestId): array {
+            $this->assertOperationalReady($lockedTenant);
+
+            return $this->inTenant($lockedTenant, fn (): array => DB::transaction(function () use ($actor, $orderId, $target, $idempotencyKey, $requestId): array {
+                $order = DB::table('orders')->where('id', $orderId)->lockForUpdate()->first();
+                $fulfillment = DB::table('order_fulfillments')->where('order_id', $orderId)->lockForUpdate()->first();
+                if ($order === null || $fulfillment === null) {
+                    throw new OrderConflict('The order does not exist.', 'order_missing', 404);
+                }
+                $orderStatus = OrderStatus::from((string) $order->status);
+                $from = OrderFulfillmentStatus::from((string) $fulfillment->status);
+                $payload = [
+                    'axis' => 'fulfillment',
+                    'orderId' => $orderId,
+                    'to' => $target->value,
+                ];
+                $claim = $this->operations->claim(
+                    OrderOperationKind::Transition,
+                    'order:'.$orderId,
+                    $idempotencyKey,
+                    $payload,
+                    OrderActorType::User,
+                    (string) $actor->getKey(),
+                    $requestId,
+                );
+                if ($claim['replayed']) {
+                    return $this->operations->replayResult((string) $claim['operation']->id);
+                }
+                if (! in_array($target, $this->allowedFulfillmentTransitions($orderStatus, $from), true)) {
+                    throw new OrderConflict('The requested fulfillment transition is not allowed.', 'order_fulfillment_transition_invalid', 422);
+                }
+
+                $clock = CarbonImmutable::parse((string) DB::selectOne('SELECT clock_timestamp() AS current_time')->current_time);
+                $reasonCode = match ($target) {
+                    OrderFulfillmentStatus::Preparing => 'merchant_preparing',
+                    OrderFulfillmentStatus::Dispatched => 'merchant_dispatched',
+                    OrderFulfillmentStatus::Delivered => 'merchant_delivered',
+                    default => throw new OrderConflict('The requested fulfillment transition is not allowed.', 'order_fulfillment_transition_invalid', 422),
+                };
+                $coupledOrderStatus = match ($target) {
+                    OrderFulfillmentStatus::Preparing => OrderStatus::Processing,
+                    OrderFulfillmentStatus::Delivered => OrderStatus::Completed,
+                    default => null,
+                };
+
+                if ($coupledOrderStatus instanceof OrderStatus) {
+                    DB::table('order_status_history')->insert([
+                        'id' => (string) Str::uuid(),
+                        'order_id' => $orderId,
+                        'operation_id' => $claim['operation']->id,
+                        'sequence' => ((int) DB::table('order_status_history')->where('order_id', $orderId)->max('sequence')) + 1,
+                        'from_status' => $orderStatus->value,
+                        'to_status' => $coupledOrderStatus->value,
+                        'actor_type' => OrderActorType::User->value,
+                        'actor_user_id' => (string) $actor->getKey(),
+                        'reason_code' => $coupledOrderStatus === OrderStatus::Processing ? 'merchant_processing' : 'merchant_completed',
+                        'request_id' => $requestId,
+                        'created_at' => $clock,
+                    ]);
+                }
+                DB::table('order_fulfillment_events')->insert([
+                    'id' => (string) Str::uuid(),
+                    'order_id' => $orderId,
+                    'operation_id' => $claim['operation']->id,
+                    'sequence' => ((int) DB::table('order_fulfillment_events')->where('order_id', $orderId)->max('sequence')) + 1,
+                    'from_status' => $from->value,
+                    'to_status' => $target->value,
+                    'actor_type' => OrderActorType::User->value,
+                    'actor_user_id' => (string) $actor->getKey(),
+                    'reason_code' => $reasonCode,
+                    'request_id' => $requestId,
+                    'created_at' => $clock,
+                ]);
+
+                if ($coupledOrderStatus instanceof OrderStatus) {
+                    DB::statement("SELECT set_config('eoshop.order_operation_id', ?, true)", [(string) $claim['operation']->id]);
+                    DB::table('orders')->where('id', $orderId)->update([
+                        'status' => $coupledOrderStatus->value,
+                        ...$this->statusTimestamp($coupledOrderStatus, $clock),
+                        'updated_at' => $clock,
+                    ]);
+                }
+                DB::statement("SELECT set_config('eoshop.order_fulfillment_operation_id', ?, true)", [(string) $claim['operation']->id]);
+                DB::table('order_fulfillments')->where('order_id', $orderId)->update([
+                    'status' => $target->value,
+                    'revision' => ((int) $fulfillment->revision) + 1,
+                    ...$this->fulfillmentTimestamp($target, $clock),
+                    'updated_at' => $clock,
+                ]);
+
+                return $this->operations->storeResult((string) $claim['operation']->id, [
+                    'replayed' => false,
+                    'order' => $this->resource(
+                        DB::table('orders')->where('id', $orderId)->firstOrFail(),
+                        false,
+                        true,
+                        true,
+                    ),
+                ]);
+            }));
+        });
+    }
+
     public function expireDueBatch(Tenant $tenant, int $limit = 100): int
     {
         if (! OrderReadiness::maintenanceCheck($tenant)) {
@@ -429,8 +602,17 @@ class OrderService
     {
         return match ($from) {
             OrderStatus::Submitted => [OrderStatus::Accepted, OrderStatus::Cancelled],
-            OrderStatus::Accepted => [OrderStatus::Processing, OrderStatus::Completed],
-            OrderStatus::Processing => [OrderStatus::Completed],
+            default => [],
+        };
+    }
+
+    /** @return list<OrderFulfillmentStatus> */
+    private function allowedFulfillmentTransitions(OrderStatus $orderStatus, OrderFulfillmentStatus $from): array
+    {
+        return match (true) {
+            $orderStatus === OrderStatus::Accepted && $from === OrderFulfillmentStatus::Unfulfilled => [OrderFulfillmentStatus::Preparing],
+            $orderStatus === OrderStatus::Processing && $from === OrderFulfillmentStatus::Preparing => [OrderFulfillmentStatus::Dispatched],
+            $orderStatus === OrderStatus::Processing && $from === OrderFulfillmentStatus::Dispatched => [OrderFulfillmentStatus::Delivered],
             default => [],
         };
     }
@@ -449,12 +631,28 @@ class OrderService
     }
 
     /** @return array<string, mixed> */
+    private function fulfillmentTimestamp(OrderFulfillmentStatus $status, CarbonImmutable $clock): array
+    {
+        return match ($status) {
+            OrderFulfillmentStatus::Preparing => ['preparing_at' => $clock],
+            OrderFulfillmentStatus::Dispatched => ['dispatched_at' => $clock],
+            OrderFulfillmentStatus::Delivered => ['delivered_at' => $clock],
+            default => [],
+        };
+    }
+
+    /** @return array<string, mixed> */
     private function resource(
         object $order,
         bool $includePrivate,
         bool $includeAllowedTransitions = false,
         bool $includeCustomerSummary = false,
     ): array {
+        $fulfillment = DB::table('order_fulfillments')->where('order_id', $order->id)->first();
+        if ($fulfillment === null) {
+            throw new OrderConflict('Order fulfillment is temporarily unavailable.', 'order_not_ready', 503);
+        }
+        $fulfillmentStatus = OrderFulfillmentStatus::from((string) $fulfillment->status);
         $resource = [
             'id' => (string) $order->id,
             'number' => (string) $order->order_number,
@@ -474,8 +672,15 @@ class OrderService
             'couponCode' => $order->coupon_code,
             'paymentMethod' => (string) $order->payment_method,
             'createdAt' => (string) $order->created_at,
+            'fulfillmentStatus' => $fulfillmentStatus->value,
             'allowedTransitions' => $includeAllowedTransitions
                 ? array_map(static fn (OrderStatus $status): string => $status->value, $this->allowedTransitions(OrderStatus::from((string) $order->status)))
+                : [],
+            'allowedFulfillmentTransitions' => $includeAllowedTransitions
+                ? array_map(
+                    static fn (OrderFulfillmentStatus $status): string => $status->value,
+                    $this->allowedFulfillmentTransitions(OrderStatus::from((string) $order->status), $fulfillmentStatus),
+                )
                 : [],
         ];
         $customer = null;
@@ -507,6 +712,17 @@ class OrderService
         $resource['history'] = DB::table('order_status_history')->where('order_id', $order->id)->orderBy('sequence')->get()->map(fn (object $row): array => [
             'from' => $row->from_status, 'to' => (string) $row->to_status, 'reasonCode' => (string) $row->reason_code, 'createdAt' => (string) $row->created_at,
         ])->all();
+        $fulfillmentHistory = DB::table('order_fulfillment_events')->where('order_id', $order->id)->orderBy('sequence')->get()->map(fn (object $row): array => [
+            'from' => $row->from_status,
+            'to' => (string) $row->to_status,
+            'reasonCode' => (string) $row->reason_code,
+            'createdAt' => (string) $row->created_at,
+        ])->all();
+        $resource['fulfillment'] = [
+            'status' => $fulfillmentStatus->value,
+            'allowedTransitions' => $resource['allowedFulfillmentTransitions'],
+            'history' => $fulfillmentHistory,
+        ];
 
         return $resource;
     }

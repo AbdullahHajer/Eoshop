@@ -4,6 +4,8 @@ import type { OrderReceipt } from "../adapters/uiAdapters";
 import {
   addProductToCart,
   changeCartLineQuantity,
+  merchantFulfillmentActions,
+  merchantFulfillmentStatusLabel,
   merchantOrderActions,
   reconcileCartWithStorefront,
   storefrontAvailableQuantity,
@@ -89,7 +91,7 @@ describe("storefront cart boundaries", () => {
 });
 
 describe("merchantOrderActions", () => {
-  it("renders only transitions projected by the server", () => {
+  it("renders only decision transitions projected by the server", () => {
     const order = {
       status: "submitted",
       allowedTransitions: ["cancelled", "accepted"],
@@ -97,7 +99,61 @@ describe("merchantOrderActions", () => {
     expect(merchantOrderActions(order).map((action) => action.status)).toEqual(["cancelled", "accepted"]);
   });
 
+  it("does not expose legacy processing or completion status actions", () => {
+    const order = {
+      status: "accepted",
+      allowedTransitions: ["processing", "completed"],
+    } as unknown as OrderReceipt;
+    expect(merchantOrderActions(order)).toEqual([]);
+    expect(merchantOrderActions({
+      status: "accepted",
+      allowedTransitions: ["cancelled"],
+    } as OrderReceipt)).toEqual([]);
+  });
+
   it("fails closed when the response projects no transitions", () => {
     expect(merchantOrderActions({ status: "submitted" } as OrderReceipt)).toEqual([]);
+  });
+});
+
+describe("merchant fulfillment", () => {
+  it("renders only fulfillment transitions projected by the server", () => {
+    const actions = merchantFulfillmentActions({
+      status: "accepted",
+      fulfillment: {
+        status: "unfulfilled",
+        allowedTransitions: ["preparing"],
+        history: [],
+      },
+    });
+    expect(actions).toEqual([{ status: "preparing", label: "بدء التجهيز", tone: "primary" }]);
+  });
+
+  it("fails closed for terminal orders and labels legacy completion truthfully", () => {
+    expect(merchantFulfillmentActions({
+      status: "cancelled",
+      fulfillment: {
+        status: "preparing",
+        allowedTransitions: ["dispatched"],
+        history: [],
+      },
+    })).toEqual([]);
+    expect(merchantFulfillmentActions({
+      status: "accepted",
+      fulfillment: {
+        status: "unfulfilled",
+        allowedTransitions: ["dispatched"],
+        history: [],
+      },
+    })).toEqual([]);
+    expect(merchantFulfillmentActions({
+      status: "processing",
+      fulfillment: {
+        status: "preparing",
+        allowedTransitions: ["delivered"],
+        history: [],
+      },
+    })).toEqual([]);
+    expect(merchantFulfillmentStatusLabel("legacy_completed")).toBe("مكتمل قبل التتبع");
   });
 });

@@ -292,6 +292,21 @@ describe("apiClient", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("allows a bearer capability while retaining same-origin request protections", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiClient.request("/api/store/order-tracking", {
+      headers: { Authorization: "Bearer eot1_example" },
+    });
+
+    const [path, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/store/order-tracking");
+    expect(new Headers(request.headers).get("Authorization")).toBe("Bearer eot1_example");
+    expect(request.credentials).toBe("same-origin");
+    expect(request.redirect).toBe("error");
+  });
+
   it("forbids fetch redirects for requests carrying credentials and bodies", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

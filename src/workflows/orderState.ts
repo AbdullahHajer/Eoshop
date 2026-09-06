@@ -1,5 +1,5 @@
 import type { Product } from "../types";
-import type { OrderReceipt } from "../adapters/uiAdapters";
+import type { FulfillmentStatus, MerchantOrderFulfillment, OrderReceipt } from "../adapters/uiAdapters";
 
 export type CartLine = { product: Product; quantity: number };
 
@@ -20,9 +20,15 @@ export interface CartMutation {
 export const STOREFRONT_CART_LINE_LIMIT = 99;
 
 export interface MerchantOrderAction {
-  status: OrderReceipt["status"];
+  status: "accepted" | "cancelled";
   label: string;
   tone: "danger" | "primary";
+}
+
+export interface MerchantFulfillmentAction {
+  status: MerchantOrderFulfillment["allowedTransitions"][number];
+  label: string;
+  tone: "primary" | "warning" | "success";
 }
 
 export function merchantOrderStatusLabel(status: OrderReceipt["status"]): string {
@@ -54,18 +60,66 @@ export function merchantOrderReasonLabel(reasonCode: string): string {
   }[reasonCode] ?? "تحديث مسجل من الخادم";
 }
 
+export function merchantFulfillmentStatusLabel(status: FulfillmentStatus): string {
+  return {
+    unfulfilled: "لم يبدأ التنفيذ",
+    preparing: "قيد التجهيز",
+    dispatched: "خرج للتسليم",
+    delivered: "سُجّل كمُسلّم",
+    legacy_completed: "مكتمل قبل التتبع",
+  }[status];
+}
+
+export function merchantFulfillmentReasonLabel(reasonCode: string): string {
+  return {
+    checkout_submitted: "سُجّل الطلب بانتظار بدء التنفيذ",
+    merchant_preparing: "سجّل التاجر بدء التجهيز",
+    merchant_dispatched: "سجّل التاجر خروج الطلب للتسليم",
+    merchant_delivered: "سجّل التاجر تسليم الطلب",
+    migration_unfulfilled_adopted: "نُقلت حالة الطلب السابقة بلا حدث تنفيذ",
+    migration_processing_adopted: "نُقلت حالة التجهيز السابقة إلى السجل",
+    migration_legacy_completed_adopted: "حالة مكتملة سابقة لتفعيل سجل التنفيذ",
+  }[reasonCode] ?? "تحديث تنفيذ مسجل من الخادم";
+}
+
 export function merchantOrderActions(order: OrderReceipt): MerchantOrderAction[] {
-  const labels: Record<NonNullable<OrderReceipt["allowedTransitions"]>[number], string> = {
+  if (order.status !== "submitted") return [];
+  const labels: Record<MerchantOrderAction["status"], string> = {
     accepted: "قبول الطلب",
-    processing: "بدء التجهيز",
-    completed: "إكمال الطلب",
     cancelled: "إلغاء الطلب",
   };
-  return (order.allowedTransitions ?? []).map((status) => ({
+  return (order.allowedTransitions ?? [])
+    .filter((status): status is "accepted" | "cancelled" => status === "accepted" || status === "cancelled")
+    .map((status) => ({
     status,
     label: labels[status],
     tone: status === "cancelled" ? "danger" : "primary",
   }));
+}
+
+export function merchantFulfillmentActions(order: Pick<OrderReceipt, "status"> & { fulfillment?: MerchantOrderFulfillment }): MerchantFulfillmentAction[] {
+  if (!order.fulfillment) return [];
+  const labels: Record<MerchantFulfillmentAction["status"], string> = {
+    preparing: "بدء التجهيز",
+    dispatched: "تسجيل الخروج للتسليم",
+    delivered: "تسجيل الطلب كمُسلّم",
+  };
+  const tones: Record<MerchantFulfillmentAction["status"], MerchantFulfillmentAction["tone"]> = {
+    preparing: "primary",
+    dispatched: "warning",
+    delivered: "success",
+  };
+  return order.fulfillment.allowedTransitions
+    .filter((status) => {
+      if (status === "preparing") return order.status === "accepted" && order.fulfillment?.status === "unfulfilled";
+      if (status === "dispatched") return order.status === "processing" && order.fulfillment?.status === "preparing";
+      return order.status === "processing" && order.fulfillment?.status === "dispatched";
+    })
+    .map((status) => ({
+      status,
+      label: labels[status],
+      tone: tones[status],
+    }));
 }
 
 export function isStorefrontProductPublished(product: Product): boolean {

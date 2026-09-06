@@ -43,7 +43,7 @@ export default function MerchantOrdersWorkspace({ tenantId, canView, onSessionEx
         onOpen={(order) => void orders.openDetail(order)}
       />
       {orders.total !== null && orders.lastPage > 1 && <nav aria-label="صفحات الطلبات" className="flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-3"><button type="button" disabled={orders.loading || orders.page <= 1} onClick={() => orders.goToPage(orders.page - 1)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black disabled:opacity-40">السابق</button><span className="text-xs font-bold text-slate-600">صفحة {orders.page} من {orders.lastPage}</span><button type="button" disabled={orders.loading || orders.page >= orders.lastPage} onClick={() => orders.goToPage(orders.page + 1)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black disabled:opacity-40">التالي</button></nav>}
-      {(orders.detailLoading || orders.detailError || orders.selected) && <MerchantOrderDetail order={orders.selected} loading={orders.detailLoading} error={orders.detailError} pending={orders.pendingOrderIds.size > 0} onClose={orders.closeDetail} onAdvance={(order, nextStatus) => void orders.advance(order, nextStatus)} />}
+      {(orders.detailLoading || orders.detailError || orders.selected) && <MerchantOrderDetail order={orders.selected} loading={orders.detailLoading} error={orders.detailError} pending={orders.pendingOrderIds.size > 0} onClose={orders.closeDetail} onAdvance={(order, nextStatus) => void orders.advance(order, nextStatus)} onAdvanceFulfillment={(order, nextStatus) => void orders.advanceFulfillment(order, nextStatus)} />}
     </section>
   );
 }
