@@ -3,8 +3,9 @@
 | الحقل | القيمة |
 |---|---|
 | الهدف | إكمال دورة الطلب الأولى بإدارة تجهيز وتوصيل يدوية صادقة ورابط تتبع آمن للضيف حتى إثبات التسليم |
-| الحالة | اكتملت T0–T5 ورُفعت في PR #100 بحالة Ready؛ لم يحدث Merge |
+| الحالة | مكتملة ومتحققة ومدمجة عبر PR #100 |
 | Base SHA | `74430e5294730620e5f71bf6fe2e101aa22ad852` |
+| Merge SHA | `08381c9994f861859dc648822ba61856b8d43624` |
 | الفرع | `codex/wp5-28b-guest-fulfillment-tracking` |
 | التاريخ | 2026-09-07 |
 
@@ -139,4 +140,4 @@
 - T4 — Container integration: ‏187 اختبارًا و2,411 assertion على PostgreSQL، مع نجاح migrations وHTTP والـworker والـscheduler وتنظيف الحاويات والشبكة والـvolumes تلقائيًا.
 - T4 — Security review: ناجحة بلا ملاحظات P0–P3؛ لا يظهر raw capability في DOM أو التخزين أو logs أو path/query، واستجابات 404/429 محمية بـ`no-store` و`no-referrer`.
 - T4 — Build: JavaScript ‏1,128.13 kB (gzip ‏291.56 kB)، وCSS ‏194.22 kB (gzip ‏29.90 kB)، وصورة Hero الثابتة ‏819.42 kB. تحذير chunk الأكبر من 500 kB دين سابق غير مانع.
-- T5: حُدثت وثائق الحزمة والحالة الحالية، ونجح `git diff --check`. أُنشئ implementation commit ‏`b7b7eb88d33979347dad6547ba72d3547b59bab0`، ورُفع الفرع وفُتح PR #100 بحالة Ready. لم يحدث Merge.
+- T5: حُدثت وثائق الحزمة والحالة الحالية، ونجح `git diff --check`. أُنشئ implementation commit ‏`b7b7eb88d33979347dad6547ba72d3547b59bab0`، ثم closeout commit ‏`3330bdb5bd7b09e9fe7748e208edcdd549c928ca`. نجحت بوابات GitHub الأربع على الرأس النهائي ودُمج PR #100 في `main` عند `08381c9994f861859dc648822ba61856b8d43624` بتاريخ 2026-09-06T22:58:43Z.
