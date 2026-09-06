@@ -107,6 +107,8 @@ describe("tenant storefront order orchestration", () => {
     await screen.findByRole("heading", { name: /إتمام الطلب/ });
     await user.type(screen.getByPlaceholderText(/عبدالله محمد/), "Stale Customer");
     await user.type(screen.getByPlaceholderText(/0500000000/), "+967700000010");
+    await user.type(screen.getByPlaceholderText(/مثال: صنعاء/), "Stale City");
+    await user.type(screen.getByPlaceholderText(/حي حدة/), "Stale Area");
     await user.type(screen.getByPlaceholderText(/اسم الشارع/), "Stale Address");
     await user.click(screen.getByRole("button", { name: "تأكيد الطلب بالسعر الخادمي" }));
 

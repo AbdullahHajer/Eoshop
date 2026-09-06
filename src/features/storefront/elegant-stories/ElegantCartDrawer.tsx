@@ -19,6 +19,7 @@ interface ElegantCartDrawerProps {
   mutedInkColor: string;
   prefersReducedMotion: boolean;
   hasOrdered: boolean;
+  mode?: "preview" | "live";
   dialogRef: React.RefObject<HTMLDivElement | null>;
   closeButtonRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
@@ -40,6 +41,7 @@ export default function ElegantCartDrawer({
   mutedInkColor,
   prefersReducedMotion,
   hasOrdered,
+  mode = "preview",
   dialogRef,
   closeButtonRef,
   onClose,
@@ -102,9 +104,13 @@ export default function ElegantCartDrawer({
               <span className="elegant-cart-state__icon elegant-cart-state__icon--success">
                 <Check aria-hidden="true" />
               </span>
-              <p>تم إرسال الطلب</p>
-              <h3>وصل طلبك إلى المتجر بنجاح.</h3>
-              <span style={{ color: mutedInkColor }}>يمكنك إغلاق السلة والعودة لتصفح المنتجات.</span>
+              <p>{mode === "live" ? "تم إرسال الطلب" : "اكتملت معاينة السلة"}</p>
+              <h3>{mode === "live" ? "وصل طلبك إلى المتجر بنجاح." : "هذه معاينة فقط ولم يُرسل طلب."}</h3>
+              <span style={{ color: mutedInkColor }}>
+                {mode === "live"
+                  ? "يمكنك إغلاق السلة والعودة لتصفح المنتجات."
+                  : "يمكنك إغلاق السلة ومتابعة مراجعة تجربة المتجر."}
+              </span>
             </section>
           ) : cart.length === 0 ? (
             <section className="elegant-cart-state">

@@ -43,23 +43,24 @@ export default function StorefrontHeaderDispatcher({
   onSelectCategory,
 }: Props) {
   if (isElegant) {
-    const elegantRoute = currentRoute === "home" || currentRoute === "products" || currentRoute === "about" || currentRoute === "contact"
-      ? currentRoute
-      : undefined;
     return (
       <ElegantEditorialHeader
         storeName={config.storeName || "متجر جديد"}
         logoUrl={config.logoUrl}
+        logoIcon={config.logoIcon}
+        logoType={config.logoType}
+        logoSize={config.logoSize}
         categories={categories.filter((category) => category !== "الكل")}
         cartCount={cartCount}
         searchQuery={searchQuery}
-        currentRoute={elegantRoute}
+        currentRoute={currentRoute}
         tokens={tokens}
         onSearchChange={onSearchChange}
         onSearchSubmit={onSearchSubmit}
         onOpenHome={onOpenHome}
         onOpenProducts={onOpenProducts}
         onOpenAbout={onOpenAbout}
+        onOpenContact={onOpenContact}
         onOpenCart={onOpenCart}
         onSelectCategory={onSelectCategory}
       />
@@ -72,6 +73,7 @@ export default function StorefrontHeaderDispatcher({
       slogan={config.slogan}
       logoUrl={config.logoUrl}
       logoIcon={config.logoIcon}
+      logoType={config.logoType}
       logoSize={config.logoSize}
       currency={config.currency || "ر.س"}
       phone={phone}

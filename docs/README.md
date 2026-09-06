@@ -42,6 +42,9 @@
 - [WP 5.27.3B — Elegant customization review](work-packages/WP-5.27.3B-elegant-customization-review.md)
 - [WP 5.27.3C — Tech Bento merchant customization closure](work-packages/WP-5.27.3C-tech-bento-customization.md)
 - [WP 5.27.5B — Platform identity managed assets](work-packages/WP-5.27.5B-platform-identity-managed-assets.md)
+- [WP 5.27.6A — Hero customization closure](work-packages/WP-5.27.6A-hero-customization-closure.md)
+- [WP 5.27.6B — Store builder interface polish](work-packages/WP-5.27.6B-store-builder-interface-polish.md)
+- [WP 5.27.6C — Storefront customization parity audit](work-packages/WP-5.27.6C-storefront-customization-parity.md)
 
 ## Architecture decisions
 

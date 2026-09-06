@@ -68,7 +68,7 @@ afterEach(() => {
 describe("orderApi", () => {
   it("loads the public server workspace with authoritative revisions", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      data: { workspaceRevision: 4, catalogRevision: 7, config, schemaName: "secret" },
+      data: { workspaceRevision: 4, catalogRevision: 7, config: { ...config, enableCoupons: true }, schemaName: "secret" },
     }), { status: 200 })));
 
     const storefront = await orderApi.loadStorefront();
@@ -76,6 +76,8 @@ describe("orderApi", () => {
     expect(storefront.workspaceRevision).toBe(4);
     expect(storefront.catalogRevision).toBe(7);
     expect(storefront.config.products[0].price).toBe(12.5);
+    expect(storefront.config.enableCoupons).toBe(true);
+    expect(storefront.config.customCoupons).toEqual([]);
     expect(storefront).not.toHaveProperty("schemaName");
   });
 

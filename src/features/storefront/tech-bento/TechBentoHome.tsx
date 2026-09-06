@@ -17,6 +17,7 @@ interface Props {
   model: TechBentoHomeViewModel;
   tokens?: Partial<TechBentoThemeTokens>;
   loading?: boolean;
+  boundary?: "all" | "hero" | "categories";
   onOpenHero: (hero: TechHeroViewModel) => void;
   onOpenMarketingItem: (item: TechMarketingTileViewModel) => void;
   onOpenProducts: () => void;
@@ -45,11 +46,14 @@ export default function TechBentoHome({
   model,
   tokens,
   loading = false,
+  boundary = "all",
   onOpenHero,
   onOpenMarketingItem,
   onOpenProducts,
   onSelectCategory,
 }: Props) {
+  const showHero = boundary !== "categories";
+  const showCategories = boundary !== "hero";
   const resolvedTokens = { ...DEFAULT_TECH_BENTO_TOKENS, ...tokens };
   const style: TechCssProperties = {
     "--tech-background": resolvedTokens.background,
@@ -62,11 +66,11 @@ export default function TechBentoHome({
   };
 
   return (
-    <div className="tech-bento-home" data-tech-bento-home dir="rtl" style={style}>
+    <div className={`tech-bento-home tech-bento-home--${boundary}`} data-tech-bento-home data-tech-bento-boundary={boundary} dir="rtl" style={style}>
       {loading ? <LoadingState /> : (
         <>
-          <div className={`tech-bento-stage ${model.sideAds.length === 0 ? "tech-bento-stage--no-ads" : ""}`}>
-            <TechCategoryRail categories={model.categories} onSelectCategory={onSelectCategory} />
+          {showHero ? <div className={`tech-bento-stage ${model.sideAds.length === 0 ? "tech-bento-stage--no-ads" : ""} ${!showCategories ? "tech-bento-stage--hero-only" : ""}`}>
+            {showCategories ? <TechCategoryRail categories={model.categories} onSelectCategory={onSelectCategory} /> : null}
 
             <div className="tech-bento-stage__showcase">
               <TechHeroLead hero={model.hero} onOpen={onOpenHero} />
@@ -94,9 +98,14 @@ export default function TechBentoHome({
                 ))}
               </aside>
             ) : null}
-          </div>
+          </div> : null}
 
-          <TechDiscoveryRail items={model.discoveryItems} onOpen={onOpenMarketingItem} onOpenAll={onOpenProducts} />
+          {showCategories ? (
+            <div className={!showHero ? "tech-bento-catalog" : undefined}>
+              {!showHero ? <TechCategoryRail categories={model.categories} onSelectCategory={onSelectCategory} /> : null}
+              <TechDiscoveryRail items={model.discoveryItems} onOpen={onOpenMarketingItem} onOpenAll={onOpenProducts} />
+            </div>
+          ) : null}
         </>
       )}
     </div>

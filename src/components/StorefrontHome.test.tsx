@@ -57,8 +57,11 @@ describe("StorefrontHome", () => {
       ...ELEGANT_PRESET,
       showHeroBanner: false,
       heroBannerImage: "https://cdn.example.test/hero.jpg",
+      heroBannerMobileImage: "https://cdn.example.test/hero-mobile.jpg",
       heroBannerTitle: "Readable hero",
       heroBannerHeight: "large" as const,
+      heroBannerFocalPointX: 72,
+      heroBannerFocalPointY: 38,
     };
     const props = {
       config: heroConfig,
@@ -84,6 +87,8 @@ describe("StorefrontHome", () => {
     expect(image?.getAttribute("loading")).toBe("eager");
     expect(image?.getAttribute("decoding")).toBe("async");
     expect(image?.getAttribute("fetchpriority")).toBe("high");
+    expect(image?.getAttribute("style")).toContain("object-position: 72% 38%");
+    expect(view.container.querySelector('source[media="(max-width: 767px)"]')?.getAttribute("srcset")).toBe("https://cdn.example.test/hero-mobile.jpg");
     expect(screen.getByRole("heading", { name: "Readable hero" }).style.color).toBe("rgb(255, 255, 255)");
     expect(screen.getByRole("heading", { name: "Readable hero" }).style.textShadow).not.toBe("");
   });
@@ -142,6 +147,45 @@ describe("StorefrontHome", () => {
     const discovery = document.querySelector("[data-elegant-discovery]");
     expect(discovery?.textContent).not.toMatch(/YER|ر\.س/);
     expect(discovery?.querySelector('button[aria-label*="إضافة"]')).toBeNull();
+  });
+
+  it("routes the Elegant intro CTA through its saved hero target", () => {
+    const onOpenMarketingTarget = vi.fn();
+    render(
+      <StorefrontHome
+        config={{
+          ...ELEGANT_PRESET,
+          heroBannerButtonText: "تسوق العطور",
+          heroBannerTargetType: "category",
+          heroBannerTargetValue: "عطور",
+          marketingBlocks: [{
+            id: "00000000-0000-4000-8000-000000000001",
+            placement: "editorial_story",
+            position: 1,
+            enabled: true,
+            contentType: "category",
+            title: "قصة العطور",
+            ctaLabel: "افتح القصة",
+            imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000011",
+            altText: "قصة عطور",
+            targetType: "products",
+            disclosure: "none",
+          }],
+        }}
+        isElegant
+        primaryColor="#7a2e2e"
+        secondaryColor="#171717"
+        onOpenProducts={vi.fn()}
+        onOpenAbout={vi.fn()}
+        onSelectCategory={vi.fn()}
+        onOpenProduct={vi.fn()}
+        onAddProduct={vi.fn()}
+        onOpenMarketingTarget={onOpenMarketingTarget}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "تسوق العطور" }));
+    expect(onOpenMarketingTarget).toHaveBeenCalledWith("category", "عطور");
   });
 
   it("renders the server-owned Tech Bento projection without consuming Elegant stories", () => {
@@ -234,12 +278,159 @@ describe("StorefrontHome", () => {
     expect(screen.getByRole("button", { name: "فتح سماعات" })).toBeTruthy();
     expect(screen.queryByText("قصة Elegant فقط")).toBeNull();
     expect(screen.queryByText("مسودة مخفية")).toBeNull();
-    expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    const heroSection = view.container.querySelector('[data-storefront-section="hero"]');
+    const categoriesSection = view.container.querySelector('[data-storefront-section="categories"]');
+    const composition = view.container.querySelector("[data-tech-home-composition]");
+    expect(composition).not.toBeNull();
+    expect(Array.from(composition?.children ?? []).map((node) => node.getAttribute("data-storefront-section"))).toEqual(["hero", "categories"]);
+    expect(categoriesSection).not.toBeNull();
+    expect(heroSection?.querySelector("[data-tech-category-rail]")).toBeNull();
+    expect(heroSection?.querySelector("[data-tech-discovery]")).toBeNull();
+    expect(categoriesSection?.querySelector("[data-tech-category-rail]")).not.toBeNull();
+    expect(categoriesSection?.querySelector("[data-tech-discovery]")).not.toBeNull();
     expect(view.container.querySelector("[data-tech-trust-ticker]")).not.toBeNull();
     expect(screen.getByText("معلومات الطلب")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "إلكترونيات" }));
     expect(onSelectCategory).toHaveBeenCalledWith("إلكترونيات");
     fireEvent.click(screen.getByRole("button", { name: "افتح القسم: إلكترونيات ذكية" }));
     expect(onOpenMarketingTarget).toHaveBeenCalledWith("category", "إلكترونيات");
+  });
+
+  it("keeps Tech hero and catalog surfaces inside their ordered semantic boundaries", () => {
+    const config = {
+      ...ELEGANT_PRESET,
+      themeStyle: "tech" as const,
+      products: [{ ...ELEGANT_PRESET.products[0], status: "published" as const, category: "أجهزة قابلة للارتداء" }],
+      marketingBlocks: [
+        {
+          id: "00000000-0000-4000-8000-000000000301",
+          placement: "hero_bento" as const,
+          position: 1,
+          enabled: true,
+          contentType: "category" as const,
+          title: "واجهة بنتو",
+          ctaLabel: "افتح الواجهة",
+          imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000401",
+          altText: "صورة واجهة بنتو",
+          targetType: "products" as const,
+          disclosure: "none" as const,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000302",
+          placement: "discovery" as const,
+          position: 1,
+          enabled: true,
+          contentType: "product" as const,
+          title: "مختار تقني",
+          ctaLabel: "افتح المختار",
+          imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000402",
+          altText: "صورة مختار تقني",
+          targetType: "products" as const,
+          disclosure: "none" as const,
+        },
+      ],
+      homeSections: [
+        { id: "categories" as const, visible: true },
+        { id: "hero" as const, visible: true },
+        { id: "featured_products" as const, visible: false },
+        { id: "trust" as const, visible: false },
+        { id: "about" as const, visible: false },
+      ],
+    };
+    const props = {
+      config,
+      isElegant: false,
+      primaryColor: "#0969F0",
+      secondaryColor: "#0F172A",
+      onOpenProducts: vi.fn(),
+      onOpenAbout: vi.fn(),
+      onSelectCategory: vi.fn(),
+      onOpenProduct: vi.fn(),
+      onAddProduct: vi.fn(),
+      onOpenMarketingTarget: vi.fn(),
+    };
+    const view = render(<StorefrontHome {...props} />);
+
+    const sections = Array.from(view.container.querySelectorAll("[data-storefront-section]"));
+    expect(sections.map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
+    const composition = view.container.querySelector("[data-tech-home-composition]");
+    expect(Array.from(composition?.children ?? []).map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
+    expect(sections[0].querySelector("[data-tech-category-rail]")).not.toBeNull();
+    expect(sections[0].querySelector("[data-tech-discovery]")).not.toBeNull();
+    expect(sections[0].querySelector("[data-storefront-hero]")).toBeNull();
+    expect(sections[1].querySelector("[data-storefront-hero]")).not.toBeNull();
+    expect(sections[1].querySelector("[data-tech-marketing-placement=\"hero_bento\"]")).not.toBeNull();
+    expect(sections[1].querySelector("[data-tech-category-rail]")).toBeNull();
+    expect(sections[1].querySelector("[data-tech-discovery]")).toBeNull();
+
+    view.rerender(<StorefrontHome {...props} config={{
+      ...config,
+      homeSections: config.homeSections.map((section) => section.id === "categories" ? { ...section, visible: false } : section),
+    }} />);
+    expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    expect(view.container.querySelector("[data-tech-home-composition]")).toBeNull();
+    expect(view.container.querySelector("[data-tech-category-rail]")).toBeNull();
+    expect(view.container.querySelector("[data-tech-discovery]")).toBeNull();
+    expect(view.container.querySelector('[data-storefront-section="hero"] [data-storefront-hero]')).not.toBeNull();
+  });
+
+  it("uses the standard Elegant hero when only discovery blocks exist and keeps discovery under categories", () => {
+    const discoveryOnlyConfig = {
+      ...ELEGANT_PRESET,
+      heroBannerTitle: "واجهة Elegant الحقيقية",
+      products: [{ ...ELEGANT_PRESET.products[0], status: "published" as const, category: "عطور مستقلة" }],
+      marketingBlocks: [{
+        id: "00000000-0000-4000-8000-000000000501",
+        placement: "discovery" as const,
+        position: 1,
+        enabled: true,
+        contentType: "product" as const,
+        title: "مختار بلا قصة",
+        ctaLabel: "افتح المختار",
+        imageUrl: "/api/store-assets/tenant/00000000-0000-4000-8000-000000000601",
+        altText: "صورة مختار بلا قصة",
+        targetType: "products" as const,
+        disclosure: "none" as const,
+      }],
+      homeSections: [
+        { id: "categories" as const, visible: true },
+        { id: "hero" as const, visible: true },
+        { id: "trust" as const, visible: false },
+        { id: "featured_products" as const, visible: false },
+        { id: "about" as const, visible: false },
+      ],
+    };
+    const props = {
+      config: discoveryOnlyConfig,
+      isElegant: true,
+      primaryColor: "#7a2e2e",
+      secondaryColor: "#171717",
+      onOpenProducts: vi.fn(),
+      onOpenAbout: vi.fn(),
+      onSelectCategory: vi.fn(),
+      onOpenProduct: vi.fn(),
+      onAddProduct: vi.fn(),
+      onOpenMarketingTarget: vi.fn(),
+    };
+    const view = render(<StorefrontHome {...props} />);
+
+    expect(view.container.firstElementChild?.classList.contains("max-w-7xl")).toBe(true);
+    expect(view.container.firstElementChild?.classList.contains("max-w-none")).toBe(false);
+    const sections = Array.from(view.container.querySelectorAll("[data-storefront-section]"));
+    expect(sections.map((node) => node.getAttribute("data-storefront-section"))).toEqual(["categories", "hero"]);
+    expect(sections[0].querySelector("[data-elegant-discovery]")).not.toBeNull();
+    expect(sections[0].textContent).toContain("عطور مستقلة");
+    expect(sections[1].querySelector("[data-storefront-hero]")).not.toBeNull();
+    expect(sections[1].querySelector("[data-elegant-story-count]")).toBeNull();
+    expect(screen.queryByText("لم يضف المتجر قصصًا موسمية بعد.")).toBeNull();
+    expect(screen.getByRole("heading", { name: "واجهة Elegant الحقيقية" })).toBeTruthy();
+
+    view.rerender(<StorefrontHome {...props} config={{
+      ...discoveryOnlyConfig,
+      homeSections: discoveryOnlyConfig.homeSections.map((section) => section.id === "categories" ? { ...section, visible: false } : section),
+    }} />);
+    expect(view.container.querySelector('[data-storefront-section="categories"]')).toBeNull();
+    expect(view.container.querySelector("[data-elegant-discovery]")).toBeNull();
+    expect(view.container.querySelector('[data-storefront-section="hero"] [data-storefront-hero]')).not.toBeNull();
   });
 });

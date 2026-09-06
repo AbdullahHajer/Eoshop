@@ -86,6 +86,44 @@ describe("MerchantTechBentoBlocksEditor", () => {
     ]);
   });
 
+  it("shows only controls that affect image-led discovery items", () => {
+    const discoveryWithUnusedAppearance: StorefrontMarketingBlock = {
+      ...discovery,
+      subtitle: "وصف غير مستخدم",
+      ctaLabel: "دعوة غير مستخدمة",
+      badge: "مختار",
+      sponsorName: "راعٍ موثوق",
+      backgroundColor: "#112233",
+      textColor: "#FFFFFF",
+      overlayOpacity: 63,
+      focalPointX: 38,
+      focalPointY: 62,
+    };
+    renderEditor({
+      config: {
+        ...ELEGANT_PRESET,
+        themeStyle: "tech",
+        marketingBlocks: [discoveryWithUnusedAppearance],
+      },
+    });
+
+    const discoverySection = screen.getByRole("heading", { name: "دوائر الاكتشاف" }).closest("section");
+    expect(discoverySection).not.toBeNull();
+    const controls = within(discoverySection as HTMLElement);
+
+    expect(controls.getByDisplayValue("سماعات")).toBeTruthy();
+    expect(controls.getByDisplayValue("صورة سماعات")).toBeTruthy();
+    expect(controls.getByLabelText("الهدف")).toBeTruthy();
+    expect(controls.getByDisplayValue("مختار")).toBeTruthy();
+    expect(controls.getByDisplayValue("راعٍ موثوق")).toBeTruthy();
+    expect(controls.getByText("موضع أفقي: 38%")).toBeTruthy();
+    expect(controls.getByText("موضع عمودي: 62%")).toBeTruthy();
+    expect(controls.queryByText("نص الزر")).toBeNull();
+    expect(controls.queryByText("الوصف المساند")).toBeNull();
+    expect(controls.queryByRole("region", { name: "ألوان ومعاينة سماعات" })).toBeNull();
+    expect(controls.queryByText("التعتيم: 63%")).toBeNull();
+  });
+
   it("keeps positions contiguous when a Bento block is reordered", () => {
     const onChange = vi.fn();
     renderEditor({

@@ -3,8 +3,9 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ELEGANT_PRESET, TECH_PRESET } from "../../types";
+import { ELEGANT_PRESET, TECH_PRESET, type StoreConfig } from "../../types";
 import StorefrontHeaderDispatcher from "./StorefrontHeaderDispatcher";
+import type { StorefrontHeaderRoute } from "./tech-bento/TechStorefrontHeader";
 
 afterEach(cleanup);
 
@@ -16,7 +17,11 @@ const tokens = {
   accent: "#0969F0",
 };
 
-function renderHeader(theme: "tech" | "elegant") {
+function renderHeader(
+  theme: "tech" | "elegant",
+  configOverrides: Partial<StoreConfig> = {},
+  currentRoute: StorefrontHeaderRoute = "home",
+) {
   const callbacks = {
     onSearchChange: vi.fn(),
     onSearchSubmit: vi.fn(),
@@ -31,13 +36,13 @@ function renderHeader(theme: "tech" | "elegant") {
   return {
     ...render(
       <StorefrontHeaderDispatcher
-        config={{ ...config, themeStyle: theme }}
+        config={{ ...config, ...configOverrides, themeStyle: theme }}
         isElegant={theme === "elegant"}
         categories={["الكل", "إلكترونيات"]}
         cartCount={2}
         cartTotal={2500}
         searchQuery=""
-        currentRoute="home"
+        currentRoute={currentRoute}
         phone="+967700000001"
         tokens={tokens}
         {...callbacks}
@@ -59,7 +64,7 @@ describe("StorefrontHeaderDispatcher", () => {
     fireEvent.submit(search.closest("form") as HTMLFormElement);
     expect(callbacks.onSearchSubmit).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "الأجهزة" }));
+    fireEvent.click(screen.getByRole("button", { name: "المنتجات" }));
     expect(callbacks.onOpenProducts).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getAllByRole("button", { name: /فتح سلة التسوق/ })[0]);
     expect(callbacks.onOpenCart).toHaveBeenCalledTimes(1);
@@ -71,5 +76,106 @@ describe("StorefrontHeaderDispatcher", () => {
     expect(container.querySelector("[data-tech-storefront-header]")).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: "إلكترونيات" })[0]);
     expect(callbacks.onSelectCategory).toHaveBeenCalledWith("إلكترونيات");
+  });
+
+  it("uses the configured Elegant icon and bounded logo size without leaking an unused image", () => {
+    const { container } = renderHeader("elegant", {
+      logoType: "icon",
+      logoIcon: "◈",
+      logoUrl: "https://cdn.example.test/unused-logo.webp",
+      logoSize: 999,
+    });
+
+    const header = container.querySelector<HTMLElement>("[data-elegant-editorial-header]");
+    expect(header?.style.getPropertyValue("--elegant-logo-size")).toBe("120px");
+    expect(container.querySelector('[data-storefront-brand-logo="image"]')).toBeNull();
+    expect(container.querySelector('[data-storefront-brand-logo="icon"]')?.textContent).toBe("◈");
+  });
+
+  it("uses the configured Elegant image logo and preserves its privacy boundary", () => {
+    const { container } = renderHeader("elegant", {
+      logoType: "image",
+      logoIcon: "◈",
+      logoUrl: "https://cdn.example.test/store-logo.webp",
+      logoSize: 64,
+    });
+
+    const logo = container.querySelector<HTMLImageElement>('[data-storefront-brand-logo="image"]');
+    expect(logo?.getAttribute("src")).toBe("https://cdn.example.test/store-logo.webp");
+    expect(logo?.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(container.querySelector<HTMLElement>("[data-elegant-editorial-header]")?.style.getPropertyValue("--elegant-logo-size")).toBe("64px");
+  });
+
+  it("routes Elegant contact navigation and marks it current on desktop and mobile", () => {
+    const { callbacks } = renderHeader("elegant", {}, "contact");
+    const contactItems = screen.getAllByRole("button", { name: "تواصل معنا" });
+    expect(contactItems).toHaveLength(2);
+    expect(contactItems.every((item) => item.getAttribute("aria-current") === "page")).toBe(true);
+    fireEvent.click(contactItems[0]);
+    expect(callbacks.onOpenContact).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["product", "checkout"] as const)("does not mark Elegant home current on the %s route", (route) => {
+    const { container } = renderHeader("elegant", {}, route);
+    const homeItems = container.querySelectorAll('[data-storefront-nav="home"]');
+    expect(homeItems).toHaveLength(2);
+    expect(Array.from(homeItems).every((item) => item.getAttribute("aria-current") === null)).toBe(true);
+  });
+
+  it.each(["tech", "elegant"] as const)("marks products current in the %s product-detail route", (theme) => {
+    const { container } = renderHeader(theme, {}, "product");
+    const productItems = container.querySelectorAll('[data-storefront-nav="products"]');
+    const currentProducts = Array.from(productItems).filter((item) => item.getAttribute("aria-current") === "page");
+    expect(currentProducts.length).toBe(theme === "elegant" ? 2 : 1);
+  });
+
+  it("uses category-neutral Tech navigation and fallback identity", () => {
+    renderHeader("tech", { storeName: "" });
+    expect(screen.getByRole("button", { name: "المنتجات" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "العودة إلى الصفحة الرئيسية لمتجر متجر إلكتروني" })).toBeTruthy();
+    expect(screen.queryByText("الأجهزة")).toBeNull();
+  });
+
+  it("honors the configured Tech logo type and clamps its size", () => {
+    const { container, rerender } = renderHeader("tech", {
+      logoType: "icon",
+      logoIcon: "◈",
+      logoUrl: "https://cdn.example.test/unused-tech-logo.webp",
+      logoSize: 999,
+    });
+
+    const icon = container.querySelector<HTMLElement>('[data-storefront-brand-logo="icon"]');
+    expect(icon?.textContent).toBe("◈");
+    expect(icon?.style.width).toBe("120px");
+    expect(icon?.style.height).toBe("120px");
+    expect(container.querySelector('[data-storefront-brand-logo="image"]')).toBeNull();
+
+    rerender(
+      <StorefrontHeaderDispatcher
+        config={{ ...TECH_PRESET, logoType: "image", logoUrl: "https://cdn.example.test/tech-logo.webp", logoSize: 1 }}
+        isElegant={false}
+        categories={["الكل", "إلكترونيات"]}
+        cartCount={2}
+        cartTotal={2500}
+        searchQuery=""
+        currentRoute="home"
+        phone="+967700000001"
+        tokens={tokens}
+        onSearchChange={vi.fn()}
+        onSearchSubmit={vi.fn()}
+        onOpenHome={vi.fn()}
+        onOpenProducts={vi.fn()}
+        onOpenAbout={vi.fn()}
+        onOpenContact={vi.fn()}
+        onOpenCart={vi.fn()}
+        onSelectCategory={vi.fn()}
+      />,
+    );
+
+    const image = container.querySelector<HTMLImageElement>('[data-storefront-brand-logo="image"]');
+    expect(image?.getAttribute("src")).toBe("https://cdn.example.test/tech-logo.webp");
+    expect(image?.style.height).toBe("24px");
+    expect(image?.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(container.querySelector('[data-storefront-brand-logo="icon"]')).toBeNull();
   });
 });
