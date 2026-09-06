@@ -3,8 +3,10 @@
 | الحقل | القيمة |
 |---|---|
 | الهدف | ضمان انتقال هوية المتجر المختارة في التهيئة من المسودة الخادمية إلى المراجعة والتجهيز ومساحة المتجر والواجهة العامة دون فقد أو مصدر حقيقة موازٍ |
-| الحالة | اكتملت T0–T3 والبوابات الآلية من T4 محليًا؛ المراجعة الحية مؤجلة بطلب المالك، وحُفظ العمل في Commit محلي دون رفع |
+| الحالة | اكتملت T0–T4 الآلية، ورُفع الفرع وفُتح [PR #98](https://github.com/sas-prog1/Eoshop/pull/98) بحالة Ready؛ المراجعة الحية مؤجلة بطلب المالك ولم يُنفذ Merge للحزمة |
 | Baseline SHA | `6247f74ca4fececef1d9323e5c62ba6cc0b8c76a` |
+| آخر `main` مدمج | `8e8be9f7a515d065a5c3e61f65a7d9183f52ced9` بعد دمج PR #94 |
+| رأس التحقق قبل إغلاق التوثيق | `e5cd378d94c53d08499e89a1cdc8467589aecbc9` |
 | الفرع | `codex/wp5-27-7a-onboarding-customization-continuity` |
 | التاريخ | 2026-09-06 |
 | حزم الأساس | [WP 5.14](WP-5.14-visual-onboarding-preview.md)، [WP 5.15](WP-5.15-storefront-section-layout.md)، [WP 5.16](WP-5.16-onboarding-draft-continuity.md)، [WP 5.27.6C](WP-5.27.6C-storefront-customization-parity.md) |
@@ -117,7 +119,7 @@
 - Commit وPush وPR بحالة Ready بعد نجاح البوابات.
 - لا Merge دون اعتماد صريح من المالك.
 
-**الحالة:** حُفظ التنفيذ في Commit محلي. لم يُنفذ Push أو PR أو Merge، وبقي الدليل المرئي مؤجلًا.
+**الحالة:** رُفع التنفيذ وفُتح [PR #98](https://github.com/sas-prog1/Eoshop/pull/98) بحالة Ready بعد مزامنة `origin/main` ونجاح البوابات على الرأس نفسه. لم يُنفذ Merge للحزمة، وبقي الدليل المرئي مؤجلًا.
 
 ## معايير القبول
 
@@ -163,11 +165,11 @@
 | البوابة | النتيجة |
 |---|---|
 | تدقيق العقد والمسار | PASS — 17 مفتاحًا ومسار الخادم والواجهة موثقان |
-| الاختبارات المركزة | PASS — Backend ‏5 اختبارات/197 assertion؛ Frontend ‏3 ملفات/25 اختبارًا، ومنها عقد الحقول الحرفي 2/2 |
-| Frontend quality + audit | PASS — ‏82 ملفًا/468 اختبارًا؛ TypeScript وبناء Vite ناجحان؛ `npm audit` صفر ثغرات |
-| Backend quality | PASS — Pint ‏297 ملفًا؛ Larastan ‏257/257؛ PHPUnit الأساسي 3 اختبارات/6 assertions |
-| Container integration | PASS — ‏176 اختبارًا/2,116 assertion؛ migrations وHTTP وworker وscheduler ناجحة؛ بيئة الاختبار المعزولة نُظفت |
-| حجم بناء Web | JavaScript ‏1,097.13 kB (gzip ‏284.24 kB)؛ CSS ‏193.18 kB (gzip ‏29.85 kB)؛ تحذير chunk الأكبر من 500 kB دين سابق مؤجل |
+| الاختبارات المركزة | PASS — Backend ‏5 اختبارات/197 assertion؛ Frontend بعد مزامنة الأساس ‏9 ملفات/45 اختبارًا، ومنها عقد الحقول الحرفي 2/2 |
+| Frontend quality + audit | PASS — ‏84 ملفًا/475 اختبارًا؛ TypeScript وبناء Vite ناجحان؛ `npm audit` صفر ثغرات |
+| Backend quality | PASS — Pint ‏310 ملفات؛ Larastan ‏267/267؛ PHPUnit الأساسي 3 اختبارات/6 assertions |
+| Container integration | PASS — ‏186 اختبارًا/2,223 assertion؛ migrations ‏1–16 وHTTP وworker وscheduler ناجحة؛ بيئة الاختبار المعزولة نُظفت |
+| حجم بناء Web | JavaScript ‏1,102,108 بايت (gzip ‏285.83 kB)؛ CSS ‏193,217 بايت (gzip ‏29.84 kB)؛ صورة Hero ‏819,418 بايت؛ تحذير chunk الأكبر من 500 kB دين سابق مؤجل |
 | Repository safety / diff | PASS — `repository-gate.ps1` و`git diff --check` |
 | المراجعة الحية | مؤجلة صراحةً بطلب المالك؛ لا دليل مرئي مسجل |
-| Commit / Push / PR / Merge | Commit محلي فقط؛ لم ينفذ Push أو PR أو Merge |
+| Commit / Push / PR / Merge | Commit التنفيذ `bd69478`؛ دمج مزامنة محلي `e5cd378`؛ الفرع مرفوع و[PR #98](https://github.com/sas-prog1/Eoshop/pull/98) Ready؛ لم ينفذ Merge للحزمة |
