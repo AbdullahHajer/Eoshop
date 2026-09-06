@@ -1,10 +1,10 @@
 # Eoshop current delivery state
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 ## Product position
 
-Eoshop has a server-authoritative commerce core, a repeatable local Pilot, two distinct public-storefront templates and a verified journey from onboarding appearance through review, provisioning, customization and publication. The active launch baseline is `d2710c56a02760ec5d0884abd9e466ebefa61e55`, produced by merging PR #98. Launch work now closes truth and operational activation gaps before adding guest fulfillment, per-merchant payments and the bounded marketing center. Automated verification and protected-branch CI remain mandatory.
+Eoshop has a server-authoritative commerce core, a repeatable local Pilot, two distinct public-storefront templates and a verified journey from onboarding appearance through review, provisioning, customization and publication. The active merged launch baseline is `74430e5294730620e5f71bf6fe2e101aa22ad852`, produced by merging PR #99. Secure guest fulfillment tracking is now implemented and verified locally from that baseline, in parallel with the bounded marketing campaign core before per-merchant payment integration. Automated verification and protected-branch CI remain mandatory.
 
 ## Delivered
 
@@ -37,16 +37,17 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot, two d
 - WP 5.27.1–5.27.3C: public storefront foundation, Elegant Stories and Tech Bento journeys, navigation and bounded merchant customization are merged.
 - WP 5.27.5B–5.27.6C: managed platform identity assets, hero customization, store-builder polish and storefront customization parity are merged.
 - WP 5.27.7A: onboarding appearance now continues through the authoritative draft, review snapshot, provisioning, merchant workspace and public storefront; PR #98 is merged at `d2710c56a02760ec5d0884abd9e466ebefa61e55`.
+- WP 5.28A: receipt truth, the rejected-store administration action and safe checkout activation/rollback are verified and merged through PR #99 at `74430e5294730620e5f71bf6fe2e101aa22ad852`.
 
 ## Active
 
-- WP 5.28A is in progress on `codex/wp5-28a-foundation-closeout`: correct receipt truth, remove the invalid direct `rejected → pending` administration action, and document/test safe checkout activation. It is not complete until its gates, evidence, PR and merge facts agree.
-- WP 5.30A marketing campaign core has been handed to the parallel developer from the same merged baseline; its contract checkpoint must be approved before implementation expands.
+- WP 5.28B is implemented and locally verified on `codex/wp5-28b-guest-fulfillment-tracking`: separate manual fulfillment evidence, a private guest capability and a reduced tracking page. It awaits its local commit, Push and Ready PR; no Merge has occurred.
+- WP 5.30A marketing campaign core completed its documentation-only T1 on the same baseline. The contract is accepted subject to renumbering its colliding ADR from 0042 to 0043; T2 is assigned as an isolated backend/database slice using tenant migration `000011`.
 
 ## Approved next sequence
 
-1. Complete and merge the small WP 5.28A foundation closeout from the current `main` baseline.
-2. Start WP 5.28B guest fulfillment and tracking after that merge, while WP 5.30A establishes the independent marketing campaign contract in parallel.
+1. Commit and raise a Ready PR for the locally verified WP 5.28B branch, then merge only after protected CI succeeds.
+2. Keep WP 5.30A T2 limited to its independent campaign backend/database core until the next planned integration point, with ADR 0043 and tenant migration `000011`.
 3. Add the per-merchant payment connection and hosted payment lifecycle after sanitized provider documentation fixes the provider contract; do not store merchant credentials in public or storefront configuration.
 4. Integrate order attribution and the bounded V1 marketing report only after the order, fulfillment and payment contracts are stable.
 5. Finish production acceptance with HTTPS/DNS, secrets, mail/password recovery, backup/restore, monitoring and complete live journeys on one release SHA.

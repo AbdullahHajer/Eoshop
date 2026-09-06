@@ -188,6 +188,7 @@ export default function StorePreview({
   const [orderCompleted, setOrderCompleted] = useState(false);
   const [placedOrderDetails, setPlacedOrderDetails] = useState<any>(null);
   const [copiedWalletNum, setCopiedWalletNum] = useState<string | null>(null);
+  const [trackingCopyState, setTrackingCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [formValidationErr, setFormValidationErr] = useState("");
   const [checkoutErrorRevision, setCheckoutErrorRevision] = useState(0);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
@@ -911,7 +912,9 @@ export default function StorePreview({
                   total: minor(receipt.totals.grandTotalMinor),
                   currency: receipt.currencyCode,
                   presentation: receipt.checkoutPresentation,
+                  trackingUrl: receipt.trackingUrl,
                 };
+                setTrackingCopyState("idle");
                 setPlacedOrderDetails(orderObj);
                 setOrderCompleted(true);
                 handleCheckout();
@@ -963,6 +966,21 @@ export default function StorePreview({
             navigator.clipboard.writeText(num);
             setCopiedWalletNum(num);
             setTimeout(() => setCopiedWalletNum(null), 2500);
+          };
+
+          const handleCopyTrackingUrl = async (url: string) => {
+            try {
+              const absoluteUrl = new URL(url, window.location.origin).toString();
+              await window.navigator.clipboard.writeText(absoluteUrl);
+              setTrackingCopyState("copied");
+              window.setTimeout(() => setTrackingCopyState("idle"), 2_500);
+            } catch {
+              setTrackingCopyState("error");
+            }
+          };
+
+          const handleOpenTracking = (url: string) => {
+            window.location.assign(url);
           };
 
           const handlePrintInvoice = (order: any) => {
@@ -1194,6 +1212,32 @@ export default function StorePreview({
                       </div>
                     </div>
 
+                    {mode === "live" && placedOrderDetails.trackingUrl && (
+                      <section aria-labelledby="guest-tracking-receipt-title" className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <Lock aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
+                          <div className="min-w-0 flex-1">
+                            <h4 id="guest-tracking-receipt-title" className="text-sm font-black text-sky-950">رابط متابعة حالة الطلب</h4>
+                            <p className="mt-1 text-xs leading-6 text-sky-900">احتفظ بهذا الرابط الخاص لعرض الأحداث التي يسجّلها المتجر.</p>
+                            <p className="mt-2 text-[11px] font-bold leading-5 text-amber-900">من يملك الرابط يستطيع رؤية حالة الطلب؛ لا تشاركه إلا مع من تثق به.</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                          <button type="button" onClick={() => handleOpenTracking(placedOrderDetails.trackingUrl)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-3 text-xs font-black text-white">
+                            <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                            فتح صفحة تتبع الطلب
+                          </button>
+                          <button type="button" onClick={() => void handleCopyTrackingUrl(placedOrderDetails.trackingUrl)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-300 bg-white px-4 py-3 text-xs font-black text-sky-900">
+                            <Copy aria-hidden="true" className="h-4 w-4" />
+                            نسخ رابط التتبع
+                          </button>
+                        </div>
+                        <p role="status" aria-live="polite" className="mt-2 min-h-5 text-xs font-bold text-sky-900">
+                          {trackingCopyState === "copied" ? "تم نسخ رابط التتبع." : trackingCopyState === "error" ? "تعذر نسخ الرابط تلقائيًا. افتح صفحة التتبع ثم انسخ الرابط من المتصفح." : ""}
+                        </p>
+                      </section>
+                    )}
+
                     {/* Action Buttons Row */}
                     <div className={`flex flex-col sm:flex-row items-center gap-3 pt-2 ${isElegant ? "elegant-checkout__receipt-actions" : ""}`}>
                       {mode === "live" && getWhatsAppInvoiceUrl(placedOrderDetails) && <a
@@ -1218,6 +1262,7 @@ export default function StorePreview({
                         onClick={() => {
                           setOrderCompleted(false);
                           setPlacedOrderDetails(null);
+                          setTrackingCopyState("idle");
                           navigateToStorePage("products");
                         }}
                         className={`w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition ${isElegant ? "elegant-checkout__receipt-new" : ""}`}
@@ -1851,7 +1896,7 @@ export default function StorePreview({
                     </h3>
                     <p className="text-slate-600 text-xs max-w-xs leading-relaxed">
                       {mode === "live"
-                        ? "شكراً لطلبك. استلم المتجر الطلب وأصبحت متابعته متاحة برقم المرجع الظاهر في الإيصال."
+                        ? "شكراً لطلبك. استلم المتجر الطلب؛ احتفظ بالإيصال ورقم الطلب للرجوع إليهما."
                         : "هذه معاينة فقط؛ لم يُنشأ طلب فعلي. تم تفريغ السلة لإكمال تجربة تصميم مسار الشراء."}
                     </p>
                   </div>

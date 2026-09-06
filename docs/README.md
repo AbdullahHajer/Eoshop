@@ -47,6 +47,7 @@
 - [WP 5.27.6C — Storefront customization parity audit](work-packages/WP-5.27.6C-storefront-customization-parity.md)
 - [WP 5.27.7A — Onboarding customization continuity](work-packages/WP-5.27.7A-onboarding-customization-continuity.md)
 - [WP 5.28A — Launch truth and checkout activation](work-packages/WP-5.28A-launch-truth-and-checkout-activation.md)
+- [WP 5.28B — Guest fulfillment and tracking](work-packages/WP-5.28B-guest-fulfillment-tracking.md)
 
 ## Architecture decisions
 
@@ -73,6 +74,7 @@
 - [ADR 0039 — Server-owned storefront marketing blocks](decisions/ADR-0039-server-owned-storefront-marketing-blocks.md)
 - [ADR 0040 — Elegant editorial stories and discovery images](decisions/ADR-0040-elegant-editorial-stories-and-discovery.md)
 - [ADR 0041 — Platform identity managed assets](decisions/ADR-0041-platform-identity-managed-assets.md)
+- [ADR 0042 — Guest fulfillment and capability tracking](decisions/ADR-0042-guest-fulfillment-and-capability-tracking.md)
 
 ## Evidence
 

@@ -27,6 +27,7 @@ const receipt = {
   id: "22222222-2222-4222-8222-222222222222",
   number: "EO-222222222222",
   status: "submitted",
+  fulfillmentStatus: "unfulfilled",
   allowedTransitions: ["cancelled", "accepted"],
   paymentState: "due_on_delivery",
   paymentMethod: "cod",
@@ -53,6 +54,9 @@ const receipt = {
   createdAt: "2026-08-17T10:00:00Z",
   internalCost: 900,
 };
+
+const trackingCapability = `eot1_${"A".repeat(43)}`;
+const trackingUrl = `/track#token=${trackingCapability}`;
 
 const listData = (items: unknown[]) => ({
   items,
@@ -84,7 +88,7 @@ describe("orderApi", () => {
   it("sends identifiers and quantities only and trusts the returned minor-unit receipt", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "order-csrf" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { replayed: false, order: receipt } }), { status: 201 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { replayed: false, order: { ...receipt, trackingUrl } } }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("crypto", { randomUUID: () => "33333333-3333-4333-8333-333333333333" });
     const input: CreateOrderInput = {
@@ -105,6 +109,7 @@ describe("orderApi", () => {
       message: "احتفظ برقم الطلب للمتابعة مع المتجر.",
       whatsappTarget: null,
     });
+    expect(result.order.trackingUrl).toBe(trackingUrl);
     expect(result.order).not.toHaveProperty("internalCost");
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     const body = JSON.parse(request.body as string);
@@ -152,6 +157,11 @@ describe("orderApi", () => {
       address: { city: "Sanaa", area: "Old City", street: null, details: "Gate 1" },
       payment: { method: "cod", state: "due_on_delivery", channelId: null, channelLabel: null, reference: null },
       history: [{ from: null, to: "submitted", reasonCode: "checkout_submitted", createdAt: "2026-08-17T10:00:00Z" }],
+      fulfillment: {
+        status: "unfulfilled",
+        allowedTransitions: ["preparing"],
+        history: [],
+      },
     } }), { status: 200 })));
 
     const detail = await orderApi.detail("tenant-one", receipt.id);
@@ -160,6 +170,81 @@ describe("orderApi", () => {
     expect(detail.address?.details).toBe("Gate 1");
     expect(detail.items[0].lineTotalMinor).toBe(2500);
     expect(detail.history[0].to).toBe("submitted");
+    expect(detail.fulfillment).toEqual({ status: "unfulfilled", allowedTransitions: ["preparing"], history: [] });
+  });
+
+  it("looks up guest tracking through a fixed URL and keeps the capability out of URLs and the DTO", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {
+      number: "EO-TRACK-1",
+      orderStatus: "processing",
+      fulfillmentStatus: "preparing",
+      createdAt: "2026-09-06T10:00:00Z",
+      updatedAt: "2026-09-06T10:05:00Z",
+      timeline: [
+        { stage: "submitted", occurredAt: "2026-09-06T10:00:00Z", actor: "secret" },
+        { stage: "preparing", occurredAt: "2026-09-06T10:05:00Z", reasonCode: "secret" },
+      ],
+      customer: { name: "لا يجب عرضه" },
+      total: 1_000,
+      orderId: "private-uuid",
+    } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tracked = await orderApi.track(trackingCapability);
+
+    expect(tracked).toEqual({
+      number: "EO-TRACK-1",
+      orderStatus: "processing",
+      fulfillmentStatus: "preparing",
+      createdAt: "2026-09-06T10:00:00Z",
+      updatedAt: "2026-09-06T10:05:00Z",
+      timeline: [
+        { stage: "submitted", occurredAt: "2026-09-06T10:00:00Z" },
+        { stage: "preparing", occurredAt: "2026-09-06T10:05:00Z" },
+      ],
+    });
+    const [path, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/store/order-tracking");
+    expect(path).not.toContain(trackingCapability);
+    expect(request.body).toBeUndefined();
+    expect(new Headers(request.headers).get("Authorization")).toBe(`Bearer ${trackingCapability}`);
+    expect(tracked).not.toHaveProperty("customer");
+    expect(tracked).not.toHaveProperty("orderId");
+    expect(tracked).not.toHaveProperty("total");
+  });
+
+  it("rejects a malformed guest capability before making a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(orderApi.track("eot1_too-short")).rejects.toMatchObject({ category: "not_found", status: 404 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("updates fulfillment through the dedicated idempotent endpoint", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "fulfillment-csrf" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        replayed: false,
+        order: { ...receipt, status: "processing", fulfillmentStatus: "preparing", allowedTransitions: [] },
+      } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await orderApi.updateFulfillment(
+      "tenant-one",
+      receipt.id,
+      "preparing",
+      "55555555-5555-4555-8555-555555555555",
+    );
+
+    expect(result.order).toMatchObject({ status: "processing", fulfillmentStatus: "preparing" });
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/merchant/stores/tenant-one/orders/${receipt.id}/fulfillment`);
+    const request = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toEqual({ status: "preparing" });
+    expect(request.headers).toMatchObject({
+      "Idempotency-Key": "55555555-5555-4555-8555-555555555555",
+      "X-CSRF-TOKEN": "fulfillment-csrf",
+    });
   });
 
   it("rejects a malformed receipt contact target", async () => {

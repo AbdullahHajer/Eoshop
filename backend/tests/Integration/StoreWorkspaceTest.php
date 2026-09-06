@@ -6,6 +6,7 @@ use App\Enums\DomainKind;
 use App\Enums\DomainReservationOrigin;
 use App\Enums\DomainReservationStatus;
 use App\Enums\InventoryActorType;
+use App\Enums\OrderFulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PermissionKey;
 use App\Enums\ProvisioningSchemaOrigin;
@@ -42,6 +43,7 @@ use App\Services\RoleAssignmentService;
 use App\Services\StoreAssetService;
 use App\Services\StoreWorkspaceService;
 use App\Services\TenantProvisioningExecutor;
+use App\Support\OrderReadiness;
 use App\Support\StorefrontSectionLayout;
 use App\Support\TenantWorkspaceReadiness;
 use Carbon\CarbonImmutable;
@@ -449,6 +451,8 @@ class StoreWorkspaceTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.replayed', false)
             ->assertJsonPath('data.order.status', OrderStatus::Submitted->value)
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions', [])
             ->assertJsonPath('data.order.totals.itemsSubtotalMinor', 2500)
             ->assertJsonPath('data.order.totals.discountMinor', 250)
             ->assertJsonPath('data.order.totals.shippingMinor', 500)
@@ -460,6 +464,9 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', '+967700000000')
             ->json('data');
         $orderId = (string) $created['order']['id'];
+        $trackingUrl = (string) $created['order']['trackingUrl'];
+        $this->assertMatchesRegularExpression('#^/track\\#token=eot1_[A-Za-z0-9_-]{43}$#', $trackingUrl);
+        $trackingToken = Str::after($trackingUrl, '#token=');
         $additionalProductId = $this->addInventoryProduct($tenant, 'ORDER-APPEND-GUARD', 5);
 
         $outsider = $this->user('order-outsider@example.test');
@@ -469,26 +476,7 @@ class StoreWorkspaceTest extends TestCase
         Auth::forgetGuards();
         $this->flushSession();
 
-        $foreignTenant = Tenant::query()->create([
-            'id' => 'wp32-order-foreign',
-            'store_name' => 'Foreign order store',
-            'owner_name' => 'Foreign Owner',
-            'owner_email' => 'foreign-order-owner@example.test',
-            'business_type' => 'retail',
-            'verification_status' => TenantVerificationStatus::Approved->value,
-            'provisioning_status' => ProvisioningState::Active->value,
-            'publication_status' => PublicationStatus::Published->value,
-            'theme_style' => 'elegant',
-            'active_at' => now(),
-        ]);
-        $this->tenantIds[] = $foreignTenant->id;
-        $foreignOwner = $this->user('foreign-order-owner@example.test');
-        app(RoleAssignmentService::class)->assignTenantRole(
-            $foreignTenant,
-            $foreignOwner,
-            Role::query()->where('key', SystemRole::MerchantOwner->value)->firstOrFail(),
-            $foreignOwner,
-        );
+        [$foreignTenant, $foreignOwner, $foreignDomain] = $this->readyTenant('order-foreign');
         $this->actingAs($foreignOwner)->getJson($centralOrdersUrl)->assertForbidden();
         $this->actingAs($foreignOwner)
             ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
@@ -512,22 +500,58 @@ class StoreWorkspaceTest extends TestCase
             ]);
         });
 
-        $this->withHeaders(['Idempotency-Key' => $key])
+        $replayed = $this->withHeaders(['Idempotency-Key' => $key])
             ->postJson("http://{$domain}/api/store/orders", $payload)
             ->assertCreated()
             ->assertJsonPath('data.replayed', true)
             ->assertJsonPath('data.order.id', $orderId)
             ->assertJsonPath('data.order.checkoutPresentation.title', 'Original receipt title')
             ->assertJsonPath('data.order.checkoutPresentation.message', 'Original receipt message')
-            ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', '+967700000000');
+            ->assertJsonPath('data.order.checkoutPresentation.whatsappTarget', '+967700000000')
+            ->json('data');
+        $this->assertSame($trackingUrl, $replayed['order']['trackingUrl']);
 
-        $tenant->run(function () use ($orderId, $productId): void {
+        $tenant->run(function () use ($orderId, $productId, $trackingToken): void {
             $this->assertSame(1, DB::table('orders')->where('id', $orderId)->count());
             $this->assertSame(2, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
             $this->assertSame('active', DB::table('inventory_reservations')->where('reference_id', $orderId)->value('status'));
             $this->assertStringNotContainsString('Checkout Customer', (string) DB::table('orders')->where('id', $orderId)->value('customer_encrypted'));
             $this->assertStringNotContainsString('Gate 1', (string) DB::table('order_addresses')->where('order_id', $orderId)->value('encrypted_payload'));
+            $access = DB::table('order_guest_access')->where('order_id', $orderId)->firstOrFail();
+            $this->assertSame(hash('sha256', $trackingToken), $access->token_digest);
+            $this->assertStringNotContainsString($trackingToken, (string) $access->token_ciphertext);
+            $storedResult = (string) DB::table('order_operation_results')
+                ->where('operation_id', DB::table('orders')->where('id', $orderId)->value('create_operation_id'))
+                ->value('response_json');
+            $this->assertStringNotContainsString($trackingToken, $storedResult);
+            $this->assertStringNotContainsString('trackingUrl', $storedResult);
         });
+
+        $tracking = $this->withToken($trackingToken)
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertJsonPath('data.number', $created['order']['number'])
+            ->assertJsonPath('data.orderStatus', OrderStatus::Submitted->value)
+            ->assertJsonPath('data.fulfillmentStatus', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.timeline.0.stage', 'submitted')
+            ->json('data');
+        foreach (['id', 'customer', 'address', 'items', 'payment', 'totals', 'trackingUrl'] as $privateKey) {
+            $this->assertArrayNotHasKey($privateKey, $tracking);
+        }
+        $this->withToken('malformed-capability')
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'order_tracking_not_found');
+        $this->withToken('eot1_'.str_repeat('a', 43))
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'order_tracking_not_found');
+        $this->withToken($trackingToken)
+            ->getJson("http://{$foreignDomain}/api/store/order-tracking")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'order_tracking_not_found');
 
         $list = $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
@@ -580,13 +604,22 @@ class StoreWorkspaceTest extends TestCase
             ->getJson("{$centralOrdersUrl}/{$orderId}")
             ->assertOk()
             ->assertJsonPath('data.customer.name', 'Checkout Customer')
-            ->assertJsonPath('data.allowedTransitions', []);
+            ->assertJsonPath('data.allowedTransitions', [])
+            ->assertJsonPath('data.fulfillment.status', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.fulfillment.allowedTransitions', []);
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($viewer)
             ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
             ->patchJson("{$centralOrdersUrl}/{$orderId}/status", [
                 'status' => OrderStatus::Accepted->value,
                 'reasonCode' => 'viewer_must_not_transition',
+            ])
+            ->assertForbidden();
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($viewer)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->patchJson("{$centralOrdersUrl}/{$orderId}/fulfillment", [
+                'status' => OrderFulfillmentStatus::Preparing->value,
             ])
             ->assertForbidden();
         Auth::forgetGuards();
@@ -601,6 +634,9 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('data.payment.method', 'cod')
             ->assertJsonPath('data.payment.reference', null)
             ->assertJsonPath('data.history.0.to', OrderStatus::Submitted->value)
+            ->assertJsonPath('data.fulfillment.status', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.fulfillment.history.0.to', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.fulfillment.allowedTransitions', [])
             ->assertJsonPath('data.allowedTransitions.0', OrderStatus::Accepted->value)
             ->assertJsonPath('data.allowedTransitions.1', OrderStatus::Cancelled->value);
         $transitionKey = (string) Str::uuid();
@@ -614,8 +650,9 @@ class StoreWorkspaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.replayed', false)
             ->assertJsonPath('data.order.status', OrderStatus::Accepted->value)
-            ->assertJsonPath('data.order.allowedTransitions.0', OrderStatus::Processing->value)
-            ->assertJsonPath('data.order.allowedTransitions.1', OrderStatus::Completed->value);
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.order.allowedTransitions', [])
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions.0', OrderFulfillmentStatus::Preparing->value);
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->withHeaders(['Idempotency-Key' => $transitionKey])
@@ -626,8 +663,9 @@ class StoreWorkspaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.replayed', true)
             ->assertJsonPath('data.order.status', OrderStatus::Accepted->value)
-            ->assertJsonPath('data.order.allowedTransitions.0', OrderStatus::Processing->value)
-            ->assertJsonPath('data.order.allowedTransitions.1', OrderStatus::Completed->value);
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Unfulfilled->value)
+            ->assertJsonPath('data.order.allowedTransitions', [])
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions.0', OrderFulfillmentStatus::Preparing->value);
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->withHeaders(['Idempotency-Key' => $transitionKey])
@@ -643,24 +681,67 @@ class StoreWorkspaceTest extends TestCase
             ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
             ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/status", [
                 'status' => OrderStatus::Processing->value,
-                'reasonCode' => 'merchant_started_processing',
+                'reasonCode' => 'legacy_direct_processing_is_closed',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'order_transition_invalid');
+
+        $fulfillmentUrl = "http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/fulfillment";
+        $preparingKey = (string) Str::uuid();
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $preparingKey])
+            ->patchJson($fulfillmentUrl, [
+                'status' => OrderFulfillmentStatus::Preparing->value,
             ])
             ->assertOk()
             ->assertJsonPath('data.replayed', false)
             ->assertJsonPath('data.order.status', OrderStatus::Processing->value)
-            ->assertJsonPath('data.order.allowedTransitions.0', OrderStatus::Completed->value);
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Preparing->value)
+            ->assertJsonPath('data.order.allowedTransitions', [])
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions.0', OrderFulfillmentStatus::Dispatched->value);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $preparingKey])
+            ->patchJson($fulfillmentUrl, [
+                'status' => OrderFulfillmentStatus::Preparing->value,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.replayed', true)
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Preparing->value);
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => $preparingKey])
+            ->patchJson($fulfillmentUrl, [
+                'status' => OrderFulfillmentStatus::Dispatched->value,
+            ])
+            ->assertConflict()
+            ->assertJsonPath('code', 'order_idempotency_conflict');
 
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
             ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
-            ->patchJson("http://127.0.0.1/api/merchant/stores/{$tenant->id}/orders/{$orderId}/status", [
-                'status' => OrderStatus::Completed->value,
-                'reasonCode' => 'merchant_completed_order',
+            ->patchJson($fulfillmentUrl, [
+                'status' => OrderFulfillmentStatus::Dispatched->value,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.replayed', false)
+            ->assertJsonPath('data.order.status', OrderStatus::Processing->value)
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Dispatched->value)
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions.0', OrderFulfillmentStatus::Delivered->value);
+
+        $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
+            ->actingAs($owner)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->patchJson($fulfillmentUrl, [
+                'status' => OrderFulfillmentStatus::Delivered->value,
             ])
             ->assertOk()
             ->assertJsonPath('data.replayed', false)
             ->assertJsonPath('data.order.status', OrderStatus::Completed->value)
-            ->assertJsonPath('data.order.allowedTransitions', []);
+            ->assertJsonPath('data.order.fulfillmentStatus', OrderFulfillmentStatus::Delivered->value)
+            ->assertJsonPath('data.order.allowedTransitions', [])
+            ->assertJsonPath('data.order.allowedFulfillmentTransitions', []);
 
         $this->withServerVariables(['HTTP_HOST' => '127.0.0.1', 'SERVER_NAME' => '127.0.0.1'])
             ->actingAs($owner)
@@ -669,14 +750,73 @@ class StoreWorkspaceTest extends TestCase
             ->assertJsonPath('data.pagination.total', 1)
             ->assertJsonPath('data.items.0.id', $orderId)
             ->assertJsonPath('data.items.0.status', OrderStatus::Completed->value)
+            ->assertJsonPath('data.items.0.fulfillmentStatus', OrderFulfillmentStatus::Delivered->value)
+            ->assertJsonPath('data.items.0.allowedFulfillmentTransitions', [])
             ->assertJsonPath('data.items.0.allowedTransitions', []);
+
+        $finalTracking = $this->withToken($trackingToken)
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertOk()
+            ->assertJsonPath('data.orderStatus', OrderStatus::Completed->value)
+            ->assertJsonPath('data.fulfillmentStatus', OrderFulfillmentStatus::Delivered->value)
+            ->assertJsonCount(5, 'data.timeline')
+            ->json('data.timeline');
+        $this->assertSame(
+            ['submitted', 'accepted', 'preparing', 'dispatched', 'delivered'],
+            array_column($finalTracking, 'stage'),
+        );
+
+        $tenant->run(function () use ($tenant): void {
+            Schema::drop('product_media');
+            $this->assertTrue(OrderReadiness::trackingCheck($tenant));
+        });
+        $this->withToken($trackingToken)
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertOk()
+            ->assertJsonPath('data.fulfillmentStatus', OrderFulfillmentStatus::Delivered->value);
+
+        $tenant->forceFill([
+            'publication_status' => PublicationStatus::Unpublished->value,
+            'published_at' => null,
+        ])->save();
+        $this->getJson("http://{$domain}/api/store/config")->assertNotFound();
+        $this->withToken($trackingToken)
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertOk()
+            ->assertJsonPath('data.fulfillmentStatus', OrderFulfillmentStatus::Delivered->value);
+        config(['orders.tracking_terminal_ttl_days' => 0]);
+        try {
+            $this->withToken($trackingToken)
+                ->getJson("http://{$domain}/api/store/order-tracking")
+                ->assertNotFound()
+                ->assertJsonPath('code', 'order_tracking_not_found');
+        } finally {
+            config(['orders.tracking_terminal_ttl_days' => 90]);
+        }
+
+        $rateLimitedToken = 'eot1_'.str_repeat('b', 43);
+        for ($attempt = 1; $attempt <= 15; $attempt++) {
+            $this->withToken($rateLimitedToken)
+                ->getJson("http://{$domain}/api/store/order-tracking")
+                ->assertNotFound()
+                ->assertJsonPath('code', 'order_tracking_not_found');
+        }
+        $rateLimited = $this->withToken($rateLimitedToken)
+            ->getJson("http://{$domain}/api/store/order-tracking")
+            ->assertStatus(429)
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertJsonPath('code', 'order_tracking_rate_limited');
+        $this->assertStringNotContainsString($rateLimitedToken, $rateLimited->getContent());
 
         $tenant->run(function () use ($additionalProductId, $orderId, $owner, $productId): void {
             $this->assertSame(8, (int) DB::table('products')->where('id', $productId)->value('stock_quantity'));
             $this->assertSame(0, (int) DB::table('products')->where('id', $productId)->value('reserved_quantity'));
             $this->assertSame('committed', DB::table('inventory_reservations')->value('status'));
             $this->assertSame(OrderStatus::Completed->value, DB::table('orders')->where('id', $orderId)->value('status'));
+            $this->assertSame(OrderFulfillmentStatus::Delivered->value, DB::table('order_fulfillments')->where('order_id', $orderId)->value('status'));
             $this->assertSame([1, 2, 3, 4], DB::table('order_status_history')->where('order_id', $orderId)->orderBy('sequence')->pluck('sequence')->map('intval')->all());
+            $this->assertSame([1, 2, 3, 4], DB::table('order_fulfillment_events')->where('order_id', $orderId)->orderBy('sequence')->pluck('sequence')->map('intval')->all());
             try {
                 DB::table('order_items')->update(['product_name' => 'tampered']);
                 $this->fail('Immutable order snapshots must reject direct database mutation.');
@@ -2987,6 +3127,205 @@ class StoreWorkspaceTest extends TestCase
             $migration->up();
             $this->assertTrue(DB::getSchemaBuilder()->hasTable('order_operations'));
             $this->assertSame(0, DB::table('orders')->count());
+        });
+    }
+
+    public function test_fulfillment_migration_adopts_existing_orders_without_fabricating_guest_access_or_delivery_evidence(): void
+    {
+        $tenant = Tenant::query()->create([
+            'id' => 'wp528b-fulfillment-adoption',
+            'store_name' => 'Fulfillment migration adoption',
+            'owner_name' => 'Migration Owner',
+            'owner_email' => 'wp528b-fulfillment@example.test',
+            'business_type' => 'retail',
+            'verification_status' => TenantVerificationStatus::Pending->value,
+            'provisioning_status' => ProvisioningState::NotStarted->value,
+            'publication_status' => PublicationStatus::Unpublished->value,
+            'theme_style' => 'elegant',
+        ]);
+        $this->tenantIds[] = $tenant->id;
+        $tenant->database()->manager()->createDatabase($tenant);
+        $this->schemas[] = (string) $tenant->database()->getName();
+
+        $tenant->run(function (): void {
+            foreach ([
+                '2026_01_01_000001_create_store_configs_table.php',
+                '2026_01_01_000002_create_products_table.php',
+                '2026_01_01_000003_create_orders_table.php',
+                '2026_08_15_000004_harden_store_workspace.php',
+                '2026_08_16_000005_create_product_catalog_model.php',
+                '2026_08_16_000006_create_inventory_ledger.php',
+                '2026_08_16_000007_create_authoritative_orders.php',
+                '2026_08_20_000008_create_store_assets.php',
+                '2026_08_27_000009_add_merchant_dashboard_indexes.php',
+            ] as $file) {
+                (require database_path('migrations/tenant/'.$file))->up();
+            }
+
+            $clock = CarbonImmutable::parse('2026-09-06T12:00:00Z');
+            $fixtures = [
+                ['submitted', null, null, null, null, null, 'unfulfilled', 'migration_unfulfilled_adopted'],
+                ['accepted', $clock->subHours(5), null, null, null, null, 'unfulfilled', 'migration_unfulfilled_adopted'],
+                ['processing', $clock->subHours(5), $clock->subHours(4), null, null, null, 'preparing', 'migration_processing_adopted'],
+                ['completed', $clock->subHours(5), null, $clock->subHours(2), null, null, 'legacy_completed', 'migration_legacy_completed_adopted'],
+                ['cancelled', null, null, null, $clock->subHours(3), null, 'unfulfilled', 'migration_unfulfilled_adopted'],
+                ['expired', null, null, null, null, $clock->subHours(3), 'unfulfilled', 'migration_unfulfilled_adopted'],
+            ];
+
+            DB::statement('SET session_replication_role = replica');
+            try {
+                foreach ($fixtures as $index => [$status, $acceptedAt, $processingAt, $completedAt, $cancelledAt, $expiredAt]) {
+                    $orderId = (string) Str::uuid();
+                    $operationId = (string) Str::uuid();
+                    DB::table('order_operations')->insert([
+                        'id' => $operationId,
+                        'kind' => 'create',
+                        'idempotency_scope' => 'fixture:fulfillment-adoption:'.$status,
+                        'idempotency_key' => (string) Str::uuid(),
+                        'request_fingerprint' => hash('sha256', 'fixture:fulfillment-adoption:'.$status),
+                        'actor_type' => 'guest',
+                        'actor_user_id' => null,
+                        'request_id' => null,
+                        'created_at' => $clock->subDay(),
+                    ]);
+                    DB::table('orders')->insert([
+                        'id' => $orderId,
+                        'order_number' => 'WP528B-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+                        'status' => $status,
+                        'payment_state' => 'due_on_delivery',
+                        'currency_code' => 'SAR',
+                        'workspace_revision' => 1,
+                        'catalog_revision' => 1,
+                        'items_subtotal_minor' => 0,
+                        'discount_minor' => 0,
+                        'shipping_minor' => 0,
+                        'tax_minor' => 0,
+                        'payment_fee_minor' => 0,
+                        'grand_total_minor' => 0,
+                        'coupon_code' => null,
+                        'coupon_basis_points' => 0,
+                        'payment_method' => 'cod',
+                        'payment_channel_id' => null,
+                        'customer_encrypted' => 'migration-fixture',
+                        'reservation_id' => null,
+                        'create_operation_id' => $operationId,
+                        'expires_at' => null,
+                        'accepted_at' => $acceptedAt,
+                        'processing_at' => $processingAt,
+                        'completed_at' => $completedAt,
+                        'cancelled_at' => $cancelledAt,
+                        'expired_at' => $expiredAt,
+                        'created_at' => $clock->subDay(),
+                        'updated_at' => $clock,
+                    ]);
+                }
+            } finally {
+                DB::statement('SET session_replication_role = origin');
+            }
+
+            $migration = require database_path('migrations/tenant/2026_09_06_000010_create_order_fulfillment_tracking.php');
+            $migration->up();
+
+            $adopted = DB::table('orders')
+                ->join('order_fulfillments', 'order_fulfillments.order_id', '=', 'orders.id')
+                ->join('order_fulfillment_events', 'order_fulfillment_events.order_id', '=', 'orders.id')
+                ->join('order_operations', 'order_operations.id', '=', 'order_fulfillment_events.operation_id')
+                ->get([
+                    'orders.status as order_status',
+                    'orders.processing_at as original_processing_at',
+                    'order_fulfillments.status as fulfillment_status',
+                    'order_fulfillments.preparing_at',
+                    'order_fulfillments.dispatched_at',
+                    'order_fulfillments.delivered_at',
+                    'order_fulfillment_events.sequence',
+                    'order_fulfillment_events.from_status',
+                    'order_fulfillment_events.to_status',
+                    'order_fulfillment_events.reason_code',
+                    'order_operations.kind as operation_kind',
+                    'order_operations.actor_type as operation_actor_type',
+                    'order_operations.idempotency_scope as operation_scope',
+                ])
+                ->keyBy('order_status');
+
+            $this->assertCount(6, $adopted);
+            $this->assertSame(0, DB::table('order_guest_access')->count());
+            foreach ($fixtures as [$status, , , , , , $fulfillmentStatus, $reasonCode]) {
+                $row = $adopted->get($status);
+                $this->assertNotNull($row);
+                $this->assertSame($fulfillmentStatus, $row->fulfillment_status);
+                $this->assertSame($fulfillmentStatus, $row->to_status);
+                $this->assertSame($reasonCode, $row->reason_code);
+                $this->assertSame(1, (int) $row->sequence);
+                $this->assertNull($row->from_status);
+                $this->assertSame('transition', $row->operation_kind);
+                $this->assertSame('system', $row->operation_actor_type);
+                $this->assertStringStartsWith('migration:order-fulfillment:', $row->operation_scope);
+            }
+
+            $processing = $adopted->get('processing');
+            $this->assertSame(
+                CarbonImmutable::parse((string) $processing->original_processing_at)->toIso8601String(),
+                CarbonImmutable::parse((string) $processing->preparing_at)->toIso8601String(),
+            );
+            $legacyCompleted = $adopted->get('completed');
+            $this->assertSame('legacy_completed', $legacyCompleted->fulfillment_status);
+            $this->assertNull($legacyCompleted->preparing_at);
+            $this->assertNull($legacyCompleted->dispatched_at);
+            $this->assertNull($legacyCompleted->delivered_at);
+
+            $constraintNames = collect(DB::select(<<<'SQL'
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid IN (
+                    'order_fulfillments'::regclass,
+                    'order_fulfillment_events'::regclass,
+                    'order_guest_access'::regclass
+                )
+                SQL))->pluck('conname');
+            foreach ([
+                'order_fulfillments_status_valid',
+                'order_fulfillments_revision_positive',
+                'order_fulfillments_timestamps_valid',
+                'order_fulfillment_events_state_valid',
+                'order_fulfillment_events_sequence_positive',
+                'order_fulfillment_events_actor_valid',
+                'order_guest_access_token_version_valid',
+                'order_guest_access_digest_valid',
+                'order_guest_access_ciphertext_valid',
+            ] as $constraintName) {
+                $this->assertContains($constraintName, $constraintNames);
+            }
+
+            $triggerNames = collect(DB::select(<<<'SQL'
+                SELECT tgname
+                FROM pg_trigger
+                WHERE NOT tgisinternal
+                  AND tgrelid IN (
+                    'orders'::regclass,
+                    'order_fulfillments'::regclass,
+                    'order_fulfillment_events'::regclass,
+                    'order_guest_access'::regclass
+                  )
+                SQL))->pluck('tgname');
+            foreach ([
+                'orders_fulfillment_consistent',
+                'order_fulfillments_guarded_update',
+                'order_fulfillments_order_consistent',
+                'order_fulfillment_events_immutable',
+                'order_fulfillment_events_order_consistent',
+                'order_guest_access_immutable',
+                'order_guest_access_order_consistent',
+            ] as $triggerName) {
+                $this->assertContains($triggerName, $triggerNames);
+            }
+
+            try {
+                $migration->down();
+                $this->fail('Fulfillment rollback must refuse to erase adopted evidence.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('Refusing to erase order fulfillment', $exception->getMessage());
+            }
+            $this->assertTrue(Schema::hasTable('order_fulfillments'));
         });
     }
 

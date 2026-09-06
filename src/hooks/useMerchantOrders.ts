@@ -146,7 +146,13 @@ export function useMerchantOrders(tenantId: string, enabled: boolean, onSessionE
   }, []);
 
   const advance = useCallback(async (order: OrderReceipt, target: OrderReceipt["status"]) => {
-    if (!enabled || pendingRef.current.size > 0 || !order.allowedTransitions?.some((allowed) => allowed === target)) return;
+    if (
+      !enabled
+      || pendingRef.current.size > 0
+      || order.status !== "submitted"
+      || (target !== "accepted" && target !== "cancelled")
+      || !order.allowedTransitions?.some((allowed) => allowed === target)
+    ) return;
     loadSequence.current += 1;
     loadController.current?.abort();
     setLoading(false);
@@ -201,6 +207,77 @@ export function useMerchantOrders(tenantId: string, enabled: boolean, onSessionE
     }
   }, [enabled, orders, selected?.id, tenantId]);
 
+  const advanceFulfillment = useCallback(async (
+    order: OrderDetail,
+    target: "preparing" | "dispatched" | "delivered",
+  ) => {
+    const followsSequence = target === "preparing"
+      ? order.status === "accepted" && order.fulfillment.status === "unfulfilled"
+      : target === "dispatched"
+        ? order.status === "processing" && order.fulfillment.status === "preparing"
+        : order.status === "processing" && order.fulfillment.status === "dispatched";
+    if (
+      !enabled
+      || pendingRef.current.size > 0
+      || !followsSequence
+      || !order.fulfillment.allowedTransitions.some((allowed) => allowed === target)
+    ) return;
+
+    loadSequence.current += 1;
+    loadController.current?.abort();
+    setLoading(false);
+    const operation = `${tenantId}:${order.id}:fulfillment:${target}`;
+    const key = transitionKeys.current.get(operation) ?? randomUuid();
+    transitionKeys.current.set(operation, key);
+    const sequence = transitionSequence.current;
+    const controller = new AbortController();
+    transitionControllers.current.set(operation, controller);
+    pendingRef.current.add(order.id);
+    setPendingOrderIds(new Set(pendingRef.current));
+    setError(null);
+    setDetailError(null);
+
+    try {
+      const result = await orders.updateFulfillment(tenantId, order.id, target, key, controller.signal);
+      if (sequence !== transitionSequence.current) return;
+      transitionKeys.current.delete(operation);
+      if (result.replayed) {
+        const authoritative = await orders.list(tenantId, {
+          page: pageRef.current,
+          perPage: 25,
+          status: filtersRef.current.status ?? undefined,
+          query: filtersRef.current.query || undefined,
+        }, controller.signal);
+        if (sequence !== transitionSequence.current) return;
+        setItems(authoritative.items);
+        setTotal(authoritative.total);
+        pageRef.current = authoritative.page;
+        setPage(authoritative.page);
+        setLastPage(authoritative.lastPage);
+      } else {
+        setItems((current) => current.map((candidate) => candidate.id === result.order.id ? result.order : candidate));
+      }
+      if (selected?.id === order.id) {
+        setSelected(await orders.detail(tenantId, order.id, controller.signal));
+      }
+    } catch (caught) {
+      if (sequence !== transitionSequence.current || isUiError(caught, "aborted")) return;
+      if (isUiError(caught, "unauthenticated")) {
+        sessionExpired.current?.();
+        return;
+      }
+      const message = uiErrorMessage(caught, "تعذر تحديث تنفيذ الطلب. يمكنك إعادة المحاولة دون تكرار العملية.");
+      if (selected?.id === order.id) setDetailError(message);
+      else setError(message);
+    } finally {
+      transitionControllers.current.delete(operation);
+      if (sequence === transitionSequence.current) {
+        pendingRef.current.delete(order.id);
+        setPendingOrderIds(new Set(pendingRef.current));
+      }
+    }
+  }, [enabled, orders, selected?.id, tenantId]);
+
   return {
     items,
     total,
@@ -219,5 +296,6 @@ export function useMerchantOrders(tenantId: string, enabled: boolean, onSessionE
     openDetail,
     closeDetail,
     advance,
+    advanceFulfillment,
   };
 }

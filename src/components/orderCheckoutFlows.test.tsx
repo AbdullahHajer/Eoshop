@@ -22,6 +22,7 @@ const receipt: OrderReceipt = {
   id: "22222222-2222-4222-8222-222222222222",
   number: "EO-SERVER-001",
   status: "submitted",
+  fulfillmentStatus: "unfulfilled",
   paymentState: "transfer_submitted_unverified",
   currencyCode: "YER",
   totals: {
@@ -47,9 +48,13 @@ const receipt: OrderReceipt = {
     message: "رسالة الإيصال المثبتة من الخادم.",
     whatsappTarget: "+967700000000",
   },
+  trackingUrl: `/track#token=eot1_${"A".repeat(43)}`,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function checkoutProps() {
   return {
@@ -108,8 +113,10 @@ describe("server-backed checkout interface", () => {
     let resolveOrder!: (value: OrderReceipt) => void;
     const pending = new Promise<OrderReceipt>((resolve) => { resolveOrder = resolve; });
     const submitOrder = vi.fn().mockReturnValue(pending);
+    const writeText = vi.fn().mockResolvedValue(undefined);
     const props = checkoutProps();
     const user = userEvent.setup();
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<StorePreview {...props} mode="live" submitOrder={submitOrder} />);
 
     await fillRequiredCheckoutFields(user);
@@ -135,6 +142,12 @@ describe("server-backed checkout interface", () => {
     expect(screen.queryByText(/قيد التجهيز والتوصيل/)).toBeNull();
     expect(screen.queryByText(/معاينة تصميمية/)).toBeNull();
     expect(screen.getByRole("link", { name: /مشاركة تفاصيل الفاتورة/ }).getAttribute("href")).toContain("967700000000");
+    expect(screen.getByRole("button", { name: "فتح صفحة تتبع الطلب" })).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain("eot1_");
+    expect(window.navigator.clipboard.writeText).toBe(writeText);
+    fireEvent.click(screen.getByRole("button", { name: "نسخ رابط التتبع" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(new URL(receipt.trackingUrl!, window.location.origin).toString()));
+    expect(await screen.findByText("تم نسخ رابط التتبع.")).toBeTruthy();
     expect(screen.getByText("20.38 YER")).toBeTruthy();
     expect(props.handleCheckout).toHaveBeenCalledTimes(1);
   }, 20_000);
@@ -175,6 +188,8 @@ describe("server-backed checkout interface", () => {
     expect(screen.getByText("رقم مرجعي للمعاينة:")).toBeTruthy();
     expect(screen.getByRole("button", { name: "طباعة نموذج المعاينة" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /مشاركة تفاصيل الفاتورة/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "فتح صفحة تتبع الطلب" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "نسخ رابط التتبع" })).toBeNull();
     expect(screen.queryByText(/قيد التجهيز والتوصيل/)).toBeNull();
     expect(screen.queryByText("الإجمالي النهائي المستحق:")).toBeNull();
     expect(screen.queryByText(/🎉/)).toBeNull();
