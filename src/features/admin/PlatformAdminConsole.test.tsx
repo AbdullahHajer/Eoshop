@@ -403,10 +403,9 @@ describe("PlatformAdminConsole", () => {
     expect(screen.queryByText("لا توجد أحداث تدقيق مطابقة.")).toBeNull();
   });
 
-  it("fails closed and removes store actions when a mutation returns 403", async () => {
-    const updateStoreStatus = vi.fn().mockRejectedValue(new UiAdapterError("لم تعد مخولًا", "forbidden"));
+  it("does not expose an invalid rejected-to-pending review transition", async () => {
+    const updateStoreStatus = vi.fn();
     const rejectedStore = { ...pendingStore, verificationStatus: "rejected" as const };
-    const user = userEvent.setup();
 
     render(
       <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
@@ -426,23 +425,20 @@ describe("PlatformAdminConsole", () => {
       </UiAdaptersProvider>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "إعادة للمراجعة" }));
-    await waitFor(() => expect(updateStoreStatus).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("heading", { name: "تم سحب صلاحية هذا القسم" })).toBeTruthy();
+    expect(await screen.findByText(rejectedStore.storeName)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "إعادة للمراجعة" })).toBeNull();
+    expect(updateStoreStatus).not.toHaveBeenCalled();
   });
 
-  it("serializes store mutations globally while a deferred operation is pending", async () => {
-    let resolveMutation!: (store: PlatformStore) => void;
-    const updateStoreStatus = vi.fn(() => new Promise<PlatformStore>((resolve) => { resolveMutation = resolve; }));
-    const rejectedStore = { ...pendingStore, verificationStatus: "rejected" as const };
-    const secondStore = { ...rejectedStore, id: "store-two", storeName: "متجر الاختبار الثاني" };
+  it("fails closed and removes store actions when a mutation returns 403", async () => {
+    const updateStoreStatus = vi.fn().mockRejectedValue(new UiAdapterError("لم تعد مخولًا", "forbidden"));
+    const suspendedStore = { ...pendingStore, verificationStatus: "suspended" as const };
     const user = userEvent.setup();
 
     render(
       <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
         overview: vi.fn().mockResolvedValue(overview),
-        listStores: vi.fn().mockResolvedValue(storePage([rejectedStore, secondStore])),
+        listStores: vi.fn().mockResolvedValue(storePage([suspendedStore])),
         updateStoreStatus,
       } })}>
         <PlatformAdminConsole
@@ -457,14 +453,45 @@ describe("PlatformAdminConsole", () => {
       </UiAdaptersProvider>,
     );
 
-    const reopenButtons = await screen.findAllByRole("button", { name: "إعادة للمراجعة" });
+    await user.click(await screen.findByRole("button", { name: "إعادة التفعيل" }));
+    await waitFor(() => expect(updateStoreStatus).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("heading", { name: "تم سحب صلاحية هذا القسم" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "إعادة التفعيل" })).toBeNull();
+  });
+
+  it("serializes store mutations globally while a deferred operation is pending", async () => {
+    let resolveMutation!: (store: PlatformStore) => void;
+    const updateStoreStatus = vi.fn(() => new Promise<PlatformStore>((resolve) => { resolveMutation = resolve; }));
+    const suspendedStore = { ...pendingStore, verificationStatus: "suspended" as const };
+    const secondStore = { ...suspendedStore, id: "store-two", storeName: "متجر الاختبار الثاني" };
+    const user = userEvent.setup();
+
+    render(
+      <UiAdaptersProvider adapters={createFakeUiAdapters({ administration: {
+        overview: vi.fn().mockResolvedValue(overview),
+        listStores: vi.fn().mockResolvedValue(storePage([suspendedStore, secondStore])),
+        updateStoreStatus,
+      } })}>
+        <PlatformAdminConsole
+          user={operator(["platform.stores.view", "platform.stores.manage"])}
+          section="stores"
+          onNavigate={vi.fn()}
+          onExit={vi.fn()}
+          onLogout={vi.fn().mockResolvedValue(undefined)}
+          onSessionExpired={vi.fn()}
+          onToast={vi.fn()}
+        />
+      </UiAdaptersProvider>,
+    );
+
+    const reopenButtons = await screen.findAllByRole("button", { name: "إعادة التفعيل" });
     await user.click(reopenButtons[0]);
     await waitFor(() => expect(updateStoreStatus).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(reopenButtons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true));
     await user.click(reopenButtons[1]);
     expect(updateStoreStatus).toHaveBeenCalledTimes(1);
 
-    resolveMutation({ ...rejectedStore, verificationStatus: "pending" });
-    await waitFor(() => expect((screen.getAllByRole("button", { name: "إعادة للمراجعة" })[0] as HTMLButtonElement).disabled).toBe(false));
+    resolveMutation({ ...suspendedStore, verificationStatus: "approved" });
+    await waitFor(() => expect((screen.getAllByRole("button", { name: "إعادة التفعيل" })[0] as HTMLButtonElement).disabled).toBe(false));
   });
 });

@@ -46,6 +46,7 @@
 - [WP 5.27.6B — Store builder interface polish](work-packages/WP-5.27.6B-store-builder-interface-polish.md)
 - [WP 5.27.6C — Storefront customization parity audit](work-packages/WP-5.27.6C-storefront-customization-parity.md)
 - [WP 5.27.7A — Onboarding customization continuity](work-packages/WP-5.27.7A-onboarding-customization-continuity.md)
+- [WP 5.28A — Launch truth and checkout activation](work-packages/WP-5.28A-launch-truth-and-checkout-activation.md)
 
 ## Architecture decisions
 
@@ -101,6 +102,10 @@
 
 - [Pilot QA runbook](qa/pilot-test-runbook.md)
 - [Pilot defect issue form](../.github/ISSUE_TEMPLATE/pilot-bug.yml)
+
+## Operations
+
+- [Public checkout rollout and kill switch](operations/checkout-rollout.md)
 
 ## Documentation rules
 
