@@ -43,11 +43,12 @@ Eoshop has a server-authoritative commerce core, a repeatable local Pilot, two d
 ## Active
 
 - WP 5.30A marketing campaign core completed its documentation-only T1 from the former baseline `74430e5294730620e5f71bf6fe2e101aa22ad852`. Before T2 it must renumber its colliding ADR from 0042 to 0043 and merge the current `main` baseline `08381c9994f861859dc648822ba61856b8d43624`; T2 remains an isolated backend/database slice using tenant migration `000011`.
+- WP 5.29A completed its bounded merchant BasGate connection slice locally from `3d712a153d86615812635b4ffdccf12f7beb8d2c`: encrypted central write-only credentials, redacted status and merchant settings UI are verified, but no provider call, verification, customer payment option or financial state transition exists. It remains uncommitted and unmerged pending review, while WP 5.29B is blocked by the remaining provider addendum.
 
 ## Approved next sequence
 
 1. Keep WP 5.30A T2 limited to its independent campaign backend/database core until the next planned integration point, with ADR 0043 and tenant migration `000011`.
-2. Add the per-merchant payment connection and hosted payment lifecycle after sanitized provider documentation fixes the provider contract; do not store merchant credentials in public or storefront configuration.
+2. Review and merge the bounded WP 5.29A connection slice independently. Add the hosted payment lifecycle only after sanitized provider documentation fixes the remaining contract; do not store merchant credentials in public or storefront configuration.
 3. Integrate order attribution and the bounded V1 marketing report only after the order, fulfillment and payment contracts are stable.
 4. Finish production acceptance with HTTPS/DNS, secrets, mail/password recovery, backup/restore, monitoring and complete live journeys on one release SHA.
 

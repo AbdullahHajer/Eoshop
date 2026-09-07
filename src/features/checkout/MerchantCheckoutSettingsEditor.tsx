@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { BadgePercent, CreditCard, Eye, Plus, ReceiptText, Trash2, Truck } from "lucide-react";
 import { canonicalWalletId } from "../../contracts/checkoutPolicy";
+import type { PaymentConnectionActions } from "../../contracts/paymentConnection";
 import type { Coupon, EWallet, StoreConfig } from "../../types";
 import { randomUuid } from "../../utils/randomUuid";
+import BasGatePaymentConnectionCard from "../payments/BasGatePaymentConnectionCard";
 
 interface Props {
   config: StoreConfig;
+  activeTenantId?: string | null;
+  paymentConnections: PaymentConnectionActions;
   onChange: (key: keyof StoreConfig, value: unknown) => void;
   onOpenPreview?: () => void;
 }
@@ -17,7 +21,7 @@ function Toggle({ checked, label, onChange }: { checked: boolean; label: string;
   return <button type="button" role="switch" aria-label={label} aria-checked={checked} onClick={() => onChange(!checked)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-black transition ${checked ? "border-sky-200 bg-sky-50 text-sky-900" : "border-slate-200 bg-slate-50 text-slate-600"}`}><span>{label}</span><span>{checked ? "مفعّل" : "متوقف"}</span></button>;
 }
 
-export default function MerchantCheckoutSettingsEditor({ config, onChange, onOpenPreview }: Props) {
+export default function MerchantCheckoutSettingsEditor({ config, activeTenantId = null, paymentConnections, onChange, onOpenPreview }: Props) {
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(10);
   const [wallet, setWallet] = useState({ name: "", accountNumber: "", accountName: "" });
@@ -74,6 +78,7 @@ export default function MerchantCheckoutSettingsEditor({ config, onChange, onOpe
         <button type="button" onClick={addWallet} className="inline-flex min-h-10 items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-800"><Plus className="h-4 w-4" /> إضافة محفظة</button>
       </>}
       <p className="text-[11px] text-slate-500">الدفع بالبطاقات وApple Pay وSTC Pay غير متاح حتى يتم ربط بوابة دفع حقيقية.</p>
+      <BasGatePaymentConnectionCard activeTenantId={activeTenantId} paymentConnections={paymentConnections} />
     </section>
 
     <section className={card}><h4 className="flex items-center gap-2 text-sm font-black"><BadgePercent className="h-4 w-4 text-amber-600" /> كوبونات الخصم</h4><Toggle checked={config.enableCoupons === true} label="تفعيل الكوبونات" onChange={(value) => set("enableCoupons", value)} />
