@@ -22,6 +22,7 @@ use App\Http\Controllers\MerchantStoreController;
 use App\Http\Controllers\MerchantStoreDraftController;
 use App\Http\Controllers\MerchantStoreLifecycleController;
 use App\Http\Controllers\MerchantWorkspaceController;
+use App\Http\Controllers\Payments\MerchantPaymentConnectionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlatformAssetController;
 use App\Http\Controllers\PlatformController;
@@ -171,6 +172,11 @@ Route::middleware('central.domain')->group(function (): void {
             ->can('viewMerchant', 'tenant');
         Route::patch('/merchant/stores/{tenant}/workspace', [MerchantWorkspaceController::class, 'update'])
             ->can('updateStoreWorkspace', 'tenant')
+            ->middleware('throttle:merchant.mutations');
+        Route::get('/merchant/stores/{tenant}/payment-connections/basgate', [MerchantPaymentConnectionController::class, 'show'])
+            ->can('viewMerchant', 'tenant');
+        Route::put('/merchant/stores/{tenant}/payment-connections/basgate', [MerchantPaymentConnectionController::class, 'update'])
+            ->can('updateStoreConfig', 'tenant')
             ->middleware('throttle:merchant.mutations');
         Route::post('/merchant/stores/{tenant}/assets', [MerchantStoreAssetController::class, 'store'])
             ->can('updateStoreConfig', 'tenant')
