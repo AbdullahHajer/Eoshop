@@ -2,7 +2,7 @@
 
 | الحقل | القيمة |
 |---|---|
-| المرحلة | T1 تصميم وتوثيق فقط — مكتملة بانتظار الاعتماد |
+| المرحلة | T2 نواة Backend وقاعدة البيانات — مكتملة بانتظار الاعتماد |
 | Base SHA | `74430e5294730620e5f71bf6fe2e101aa22ad852` |
 | الفرع | `codex/wp5-30a-marketing-campaign-core` |
 | المستودع الفرعي | `AbdullahHajer/Eoshop` |
@@ -14,7 +14,7 @@
 
 **حملة → رابط قناة موثوق → متجر/تصنيف/منتج → طلب → إيراد مكتمل منسوب.**
 
-لا تملك هذه الحزمة Touch/Attribution أو analytics أو checkout أو الطلب أو الدفع أو المخزون أو `marketingBlocks`. لا تنفذ T1 أي Migration أو Controller أو Service أو UI.
+لا تملك هذه الحزمة Touch/Attribution أو analytics أو checkout أو الطلب أو الدفع أو المخزون أو `marketingBlocks`. أنجز T2 النواة الداخلية فقط دون Controller أو route أو API عام أو UI.
 
 ## 2. Baseline T0/T1
 
@@ -380,12 +380,12 @@ enum CampaignChannel: string
 
 خارج النطاق: Touch/cookies/consent، attribution، order/payment/inventory، analytics/revenue، builders/forms/CRM، منصات Meta/Google، pixels، spend/ROAS، محررات القوالب، أصول المتجر، ونظام كوبونات جديد.
 
-ممنوع في T1 تعديل Migration أو Controllers أو Services أو UI أو routes أو permissions/seeders أو وثائق مشتركة، وبالأخص ملفات الطلب والدفع و`StorePreview.tsx` و`marketingBlocks`. ملفا T1 الوحيدان هما هذه الوثيقة وADR 0043.
+ظلّت الملفات المحمية خارج T2: لم تتغير Controllers أو UI أو routes أو providers أو permissions/seeders أو الوثائق المشتركة، ولا ملفات الطلب والدفع والمخزون و`StorePreview.tsx` و`marketingBlocks`.
 
 ## 14. مراحل العمل ونقطة التوقف
 
-- **T1 (الحالي):** WP + ADR + أمثلة عقود + مصفوفة اختبارات؛ Commit توثيق واحد وPush إلى Fork، ثم توقف بلا PR/Merge.
-- **T2 بعد اعتماد صريح:** migration `_000011`، models/services/state machine/idempotency/events واختبارات Backend.
+- **T1 (مكتمل):** WP + ADR 0043 + أمثلة عقود + مصفوفة اختبارات؛ ثبت تصحيح ترقيم ADR في Commit مستقل عادي.
+- **T2 (الحالي، مكتمل بانتظار الاعتماد):** migration `_000011`، العقد المغلق، services/state machine/idempotency/events/token resolver واختبارات PostgreSQL المركزة. لا توجد routes أو API عام في هذه المرحلة.
 - **T3 بعد اعتماد صريح:** Controllers/contracts/API client وresolver ضمن حدود تكامل معتمدة؛ واجهة المركز في WP 5.30B.
 - **T4:** عزل وصلاحيات وتزامن وبوابات كاملة.
 - **T5:** أدلة وPR Ready وCI؛ لا Merge دون أمر المالك.
@@ -403,3 +403,28 @@ enum CampaignChannel: string
 9. `/c/{opaqueToken}` على نطاق المتجر وfallback `/`.
 10. لا حذف في V1، وحدود 20 غير مؤرشفة و8 روابط طوال العمر.
 11. `tenant.store.manage` للإدارة و`tenant.analytics.view` للتقارير اللاحقة.
+
+## 16. دليل إغلاق T2
+
+### التنفيذ الفعلي
+
+- أنشأت migration tenant رقم `_000011` سجل قفل الحصة والجداول الأربعة: `marketing_campaigns` و`marketing_channel_links` و`marketing_campaign_operations` و`marketing_campaign_events`، مع checks وقيود الاحتفاظ ومنع تعديل سجل الأحداث.
+- أضيفت Enums وعقد تطبيع مغلق للحالة والهدف والقناة والجدولة والكوبون، مع `effectiveState` مشتقة زمنيًا بلا كتابة عند القراءة.
+- تنفذ `MarketingTenantAccess` التحقق من العضوية النشطة و`tenant.store.manage` وقفل المستأجر قبل الدخول إلى schema الخاصة به.
+- تنفذ الخدمات create/update ودورة الحياة وrevision conflict وidempotency receipts وحد 20 حملة غير مؤرشفة و8 روابط طوال عمر الحملة تحت الأقفال.
+- الرابط يستخدم token عشوائي 256-bit؛ يخزن SHA-256 للبحث وciphertext مع `key id`، ويدعم current/previous keys وإعادة التشفير.
+- `MarketingCampaignResolver` خدمة داخلية غير موصولة بمسار HTTP في T2. تقبل نطاق المتجر والوجهات الداخلية فقط، وتعيد 404 للرمز غير المعروف، أو `/` بلا UTM أو كوبون أو معرفات attribution عند فقد الأهلية.
+- غياب migration يعيد `marketing_campaigns_not_ready` من الإدارة، بينما يبقى المتجر وcheckout خارج التأثير. rollback الفارغ يحافظ على جداول التجارة، ويرفض إسقاط أي تاريخ حملات موجود.
+
+### الملفات المشتركة والنطاق
+
+- لم تتغير `docs/README.md` أو `docs/current-state.md` أو routes/providers أو Frontend أو `marketingBlocks`.
+- لم تتغير ملفات الطلبات أو الدفع أو المخزون، ولا أضيف Controller أو API عام.
+- ملفات التنفيذ محصورة في migration `_000011` وEnums/Exception وSupport وخدمات `App\\Services\\Marketing` و`config/marketing_campaigns.php` واختبار التكامل المركّز، إضافة إلى تحديث هذه الوثيقة.
+
+### تحقق نقطة التوقف
+
+- PostgreSQL الحقيقي: 8 اختبارات تكامل ناجحة و81 assertion تغطي العزل والصلاحيات، lifecycle/revision/idempotency، الاشتقاق الزمني، سلامة الهدف والكوبون، fallback، token والتشفير والتدوير، retention/rollback، وتزامن مديرين مختلفين على حدود الحملة والرابط.
+- صورة Docker quality: Pint ناجح على 327 ملفًا، وLarastan ناجح على 282 ملفًا بلا أخطاء، واختبار Composer الأساسي ناجح (3 اختبارات و6 assertions).
+- `git diff --check` وSHA النهائي يثبتان في تقرير نقطة التوقف بعد Commit T2.
+- التوقف بعد Commit وPush إلى `AbdullahHajer/Eoshop` فقط؛ لا PR ولا Merge ولا بدء T3.
