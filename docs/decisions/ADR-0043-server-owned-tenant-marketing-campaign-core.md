@@ -1,4 +1,4 @@
-# ADR 0042 — Server-owned tenant marketing campaign core
+# ADR 0043 — Server-owned tenant marketing campaign core
 
 ## الحالة
 

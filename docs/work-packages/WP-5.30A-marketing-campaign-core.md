@@ -6,7 +6,7 @@
 | Base SHA | `74430e5294730620e5f71bf6fe2e101aa22ad852` |
 | الفرع | `codex/wp5-30a-marketing-campaign-core` |
 | المستودع الفرعي | `AbdullahHajer/Eoshop` |
-| القرار | [ADR 0042](../decisions/ADR-0042-server-owned-tenant-marketing-campaign-core.md) |
+| القرار | [ADR 0043](../decisions/ADR-0043-server-owned-tenant-marketing-campaign-core.md) |
 
 ## 1. الهدف والملكية
 
@@ -86,7 +86,7 @@
 | `campaignId` | UUID | حملة في tenant schema نفسه |
 | `channel` | `instagram \| facebook \| whatsapp \| google \| email \| other` | client allowlist |
 | `url` | HTTPS على نطاق المتجر `/c/{token}` | الخادم، output فقط |
-| `utmSource/utmMedium` | خريطة القنوات في ADR 0042 | الخادم |
+| `utmSource/utmMedium` | خريطة القنوات في ADR 0043 | الخادم |
 | `utmCampaign` | `cmp_{campaignUuid}` | الخادم، ثابت |
 | `utmContent` | `lnk_{linkUuid}` | الخادم، ثابت |
 | `createdBy/createdAt` | ULID/UTC | الخادم |
@@ -380,7 +380,7 @@ enum CampaignChannel: string
 
 خارج النطاق: Touch/cookies/consent، attribution، order/payment/inventory، analytics/revenue، builders/forms/CRM، منصات Meta/Google، pixels، spend/ROAS، محررات القوالب، أصول المتجر، ونظام كوبونات جديد.
 
-ممنوع في T1 تعديل Migration أو Controllers أو Services أو UI أو routes أو permissions/seeders أو وثائق مشتركة، وبالأخص ملفات الطلب والدفع و`StorePreview.tsx` و`marketingBlocks`. ملفا T1 الوحيدان هما هذه الوثيقة وADR 0042.
+ممنوع في T1 تعديل Migration أو Controllers أو Services أو UI أو routes أو permissions/seeders أو وثائق مشتركة، وبالأخص ملفات الطلب والدفع و`StorePreview.tsx` و`marketingBlocks`. ملفا T1 الوحيدان هما هذه الوثيقة وADR 0043.
 
 ## 14. مراحل العمل ونقطة التوقف
 
