@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronLeft, UserRound } from "lucide-react";
 import type { OrderReceipt } from "../../adapters/uiAdapters";
-import { merchantOrderStatusLabel, merchantPaymentMethodLabel } from "../../workflows/orderState";
+import { merchantFulfillmentStatusLabel, merchantOrderStatusLabel, merchantPaymentMethodLabel } from "../../workflows/orderState";
 
 interface MerchantOrdersPanelProps {
   orders: OrderReceipt[];
@@ -25,7 +25,7 @@ export default function MerchantOrdersPanel({ orders, loading, error, onOpen }: 
           <article key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <div className="flex flex-wrap items-center gap-2"><p className="font-mono text-sm font-black text-slate-900">{order.number}</p><span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-700">{merchantOrderStatusLabel(order.status)}</span></div>
+                <div className="flex flex-wrap items-center gap-2"><p className="font-mono text-sm font-black text-slate-900">{order.number}</p><span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-700">{merchantOrderStatusLabel(order.status)}</span>{order.fulfillmentStatus && <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-800">التنفيذ: {merchantFulfillmentStatusLabel(order.fulfillmentStatus)}</span>}</div>
                 <p className="text-[11px] text-slate-500">{new Date(order.createdAt).toLocaleString("ar-SA")}</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-700"><UserRound className="h-4 w-4 text-slate-400" />{order.customerName || "عميل المتجر"}</div>

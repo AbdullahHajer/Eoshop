@@ -23,6 +23,19 @@ final class OrderReadiness
         return TenantWorkspaceReadiness::maintenanceCheck($tenant) && self::tablesReady($tenant);
     }
 
+    public static function trackingCheck(Tenant $tenant): bool
+    {
+        $trackingTablesReady = static fn (): bool => Schema::hasTable('orders')
+            && Schema::hasTable('order_status_history')
+            && Schema::hasTable('order_fulfillments')
+            && Schema::hasTable('order_fulfillment_events')
+            && Schema::hasTable('order_guest_access');
+
+        return tenancy()->initialized && (string) tenant('id') === (string) $tenant->getKey()
+            ? $trackingTablesReady()
+            : $tenant->run($trackingTablesReady);
+    }
+
     private static function tablesReady(Tenant $tenant): bool
     {
 
@@ -33,6 +46,9 @@ final class OrderReadiness
             && Schema::hasTable('payment_attempts')
             && Schema::hasTable('order_status_history')
             && Schema::hasTable('order_operation_results')
+            && Schema::hasTable('order_fulfillments')
+            && Schema::hasTable('order_fulfillment_events')
+            && Schema::hasTable('order_guest_access')
             && DB::table('store_configs')->where('is_current', true)->where('products_materialized', true)->count() === 1
             && DB::table('catalog_settings')->where('id', 1)->count() === 1;
 

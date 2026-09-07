@@ -203,6 +203,10 @@ Route::middleware('central.domain')->group(function (): void {
             ->can('updateOrders', 'tenant')
             ->whereUuid('order')
             ->middleware('throttle:merchant.mutations');
+        Route::patch('/merchant/stores/{tenant}/orders/{order}/fulfillment', [MerchantOrderController::class, 'updateFulfillment'])
+            ->can('updateOrders', 'tenant')
+            ->whereUuid('order')
+            ->middleware('throttle:merchant.mutations');
         Route::post('/generate-store-ideas', [StoreGeneratorController::class, 'generate'])
             ->middleware('throttle:ai.generate');
         Route::post('/register-store', [StoreSubmissionController::class, 'store'])

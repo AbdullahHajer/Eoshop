@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\OrderFulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Exceptions\OrderConflict;
+use App\Http\Requests\UpdateOrderFulfillmentRequest;
 use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Models\Tenant;
 use App\Models\User;
@@ -47,6 +49,20 @@ class MerchantOrderController extends Controller
             $order,
             OrderStatus::from((string) $validated['status']),
             (string) $validated['reasonCode'],
+            (string) $validated['idempotencyKey'],
+            isset($validated['requestId']) ? (string) $validated['requestId'] : null,
+        ));
+    }
+
+    public function updateFulfillment(UpdateOrderFulfillmentRequest $request, Tenant $tenant, string $order, OrderService $orders): JsonResponse
+    {
+        $validated = $request->validated();
+
+        return $this->respond(fn (): array => $orders->transitionFulfillment(
+            $tenant,
+            $this->actor($request),
+            $order,
+            OrderFulfillmentStatus::from((string) $validated['status']),
             (string) $validated['idempotencyKey'],
             isset($validated['requestId']) ? (string) $validated['requestId'] : null,
         ));

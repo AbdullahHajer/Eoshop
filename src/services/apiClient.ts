@@ -285,7 +285,7 @@ class SameOriginApiClient {
   }
 
   private validateHeaders(headers: Record<string, string> | undefined): void {
-    const allowed = new Set(["idempotency-key"]);
+    const allowed = new Set(["authorization", "idempotency-key"]);
     const invalid = Object.keys(headers ?? {}).find((header) => !allowed.has(header.toLowerCase()));
     if (invalid) {
       throw new ApiError("تم رفض ترويسة API غير مسموح بها.", "unexpected", null);

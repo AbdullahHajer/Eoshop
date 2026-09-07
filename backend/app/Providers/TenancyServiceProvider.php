@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Http\Middleware\EnsureCentralDomain;
 use App\Http\Middleware\EnsureKnownApplicationDomain;
+use App\Http\Middleware\InitializeOrderTrackingByDomain;
 use App\Http\Middleware\InitializeTenancyByDomain;
+use App\Http\Middleware\ThrottleOrderTrackingRequest;
 use App\Support\CanonicalDomain;
 use App\Support\TenantSchemaName;
 use Illuminate\Contracts\Http\Kernel;
@@ -40,6 +42,8 @@ class TenancyServiceProvider extends ServiceProvider
             PreventAccessFromCentralDomains::class,
             EnsureCentralDomain::class,
             EnsureKnownApplicationDomain::class,
+            ThrottleOrderTrackingRequest::class,
+            InitializeOrderTrackingByDomain::class,
             InitializeTenancyByDomain::class,
         ]) as $middleware) {
             $this->app[Kernel::class]

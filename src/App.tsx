@@ -1465,6 +1465,7 @@ export default function App() {
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           submitOrder={submitLiveOrder}
+          lookupOrder={orderActions.track}
           retry={() => void loadPublicStorefront()}
         />
       )}

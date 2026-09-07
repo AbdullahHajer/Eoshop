@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import StorePreview from "../../components/StorePreview";
-import type { CreateOrderInput, OrderReceipt, StorefrontBootstrap } from "../../adapters/uiAdapters";
+import type { CreateOrderInput, GuestOrderTracking, OrderReceipt, StorefrontBootstrap } from "../../adapters/uiAdapters";
 import type { Product } from "../../types";
+import GuestOrderTrackingPage from "./GuestOrderTrackingPage";
+import { parseGuestTrackingLocation, type GuestTrackingRoute } from "./guestTrackingRoute";
 
 interface PublicStorefrontScreenProps {
   storefront: StorefrontBootstrap | null;
@@ -18,7 +20,17 @@ interface PublicStorefrontScreenProps {
   selectedCategory: string;
   setSelectedCategory: (category: string) => void;
   submitOrder: (input: Omit<CreateOrderInput, "workspaceRevision" | "catalogRevision">) => Promise<OrderReceipt>;
+  lookupOrder?: (capability: string, signal?: AbortSignal) => Promise<GuestOrderTracking>;
   retry?: () => void;
+}
+
+const unavailableTrackingLookup = async (): Promise<GuestOrderTracking> => {
+  throw new Error("Guest tracking lookup is not configured.");
+};
+
+function currentTrackingRoute(): GuestTrackingRoute | null {
+  if (typeof window === "undefined") return null;
+  return parseGuestTrackingLocation(window.location.pathname, window.location.hash);
 }
 
 export default function PublicStorefrontScreen({
@@ -35,12 +47,24 @@ export default function PublicStorefrontScreen({
   selectedCategory,
   setSelectedCategory,
   submitOrder,
+  lookupOrder,
   retry = () => window.location.reload(),
 }: PublicStorefrontScreenProps) {
   const contentRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const previousStateRef = useRef<"loading" | "error" | "ready" | "empty">("loading");
+  const [trackingRoute, setTrackingRoute] = useState<GuestTrackingRoute | null>(currentTrackingRoute);
   const viewState = storefront ? "ready" : loading ? "loading" : error ? "error" : "empty";
+
+  useEffect(() => {
+    const syncRoute = () => setTrackingRoute(currentTrackingRoute());
+    window.addEventListener("hashchange", syncRoute);
+    window.addEventListener("popstate", syncRoute);
+    return () => {
+      window.removeEventListener("hashchange", syncRoute);
+      window.removeEventListener("popstate", syncRoute);
+    };
+  }, []);
 
   useEffect(() => {
     if (previousStateRef.current === viewState) return;
@@ -48,6 +72,17 @@ export default function PublicStorefrontScreen({
     if (viewState === "ready") contentRef.current?.focus();
     if (viewState === "error" || viewState === "empty") errorRef.current?.focus();
   }, [viewState]);
+
+  if (trackingRoute) {
+    return (
+      <GuestOrderTrackingPage
+        capability={trackingRoute.capability}
+        invalidCapability={trackingRoute.invalidCapability}
+        lookupOrder={lookupOrder ?? unavailableTrackingLookup}
+        storeName={storefront?.config.storeName}
+      />
+    );
+  }
 
   if (storefront) {
     return (
