@@ -98,6 +98,10 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
     storeAssets: {
       upload: async () => unexpected("storeAssets.upload"),
     },
+    paymentConnections: {
+      load: async () => unexpected("paymentConnections.load"),
+      configure: async () => unexpected("paymentConnections.configure"),
+    },
   };
 
   return {
@@ -113,5 +117,6 @@ export function createFakeUiAdapters(overrides: AdapterOverrides = {}): UiAdapte
     orders: { ...adapters.orders, ...overrides.orders },
     merchantDashboard: { ...adapters.merchantDashboard, ...overrides.merchantDashboard },
     storeAssets: { ...adapters.storeAssets, ...overrides.storeAssets },
+    paymentConnections: { ...adapters.paymentConnections, ...overrides.paymentConnections },
   };
 }

@@ -4,9 +4,11 @@ use App\Http\Middleware\EnsureActiveUserSession;
 use App\Http\Middleware\EnsureCentralDomain;
 use App\Http\Middleware\EnsureKnownApplicationDomain;
 use App\Http\Middleware\EnsureTenantPermission;
+use App\Http\Middleware\TrimStrings;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\TrimStrings as FrameworkTrimStrings;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -16,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->replace(FrameworkTrimStrings::class, TrimStrings::class);
         $middleware->redirectGuestsTo(
             fn (Request $request) => $request->expectsJson() ? null : '/'
         );

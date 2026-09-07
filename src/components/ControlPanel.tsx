@@ -30,7 +30,7 @@ export default function ControlPanel({
   completionDisabled = false,
   completionLoading = false,
 }: ControlPanelProps) {
-  const { assistant, catalog, storeAssets } = useUiAdapters();
+  const { assistant, catalog, storeAssets, paymentConnections } = useUiAdapters();
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
   const [copyOutput, setCopyOutput] = useState<CopywriterOutput | null>(null);
@@ -86,7 +86,7 @@ export default function ControlPanel({
             onOpenInventory={onOpenInventory}
           />
         )}
-        {activeTab === "checkout" && <MerchantCheckoutSettingsEditor config={config} onChange={handleConfigChange} onOpenPreview={onOpenCheckoutPreview} />}
+        {activeTab === "checkout" && <MerchantCheckoutSettingsEditor config={config} activeTenantId={activeTenantId} paymentConnections={paymentConnections} onChange={handleConfigChange} onOpenPreview={onOpenCheckoutPreview} />}
         {activeTab === "pages" && <MerchantStoreContentEditor config={config} activeTenantId={activeTenantId} mediaOwnerKey={mediaOwnerKey} onChange={handleConfigChange} uploadAsset={storeAssets.upload} />}
         {activeTab === "ai" && <AiCopywriterPanel prompt={assistantPrompt} loading={isGeneratingCopy} output={copyOutput} onPromptChange={setAssistantPrompt} onSubmit={triggerCopyWrite} />}
         {activeTab === "export" && (

@@ -48,6 +48,7 @@
 - [WP 5.27.7A — Onboarding customization continuity](work-packages/WP-5.27.7A-onboarding-customization-continuity.md)
 - [WP 5.28A — Launch truth and checkout activation](work-packages/WP-5.28A-launch-truth-and-checkout-activation.md)
 - [WP 5.28B — Guest fulfillment and tracking](work-packages/WP-5.28B-guest-fulfillment-tracking.md)
+- [WP 5.29A — Merchant payment connection](work-packages/WP-5.29A-merchant-payment-connection.md)
 
 ## Architecture decisions
 
@@ -75,6 +76,7 @@
 - [ADR 0040 — Elegant editorial stories and discovery images](decisions/ADR-0040-elegant-editorial-stories-and-discovery.md)
 - [ADR 0041 — Platform identity managed assets](decisions/ADR-0041-platform-identity-managed-assets.md)
 - [ADR 0042 — Guest fulfillment and capability tracking](decisions/ADR-0042-guest-fulfillment-and-capability-tracking.md)
+- [ADR 0044 — Per-merchant BasGate connection boundary](decisions/ADR-0044-per-merchant-basgate-connection-boundary.md)
 
 ## Evidence
 

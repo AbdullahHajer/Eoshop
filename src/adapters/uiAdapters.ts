@@ -10,6 +10,7 @@ import { orderApi } from "../services/orderApi";
 import { merchantDashboardApi } from "../services/merchantDashboardApi";
 import { storeAssetApi } from "../services/storeAssetApi";
 import { platformSettingsApi } from "../services/platformSettingsApi";
+import { paymentConnectionApi } from "../services/paymentConnectionApi";
 
 export type {
   AdminAuditEvent,
@@ -56,6 +57,7 @@ export type {
 } from "../services/orderApi";
 export type { MerchantDashboardSnapshot, MerchantDashboardTaskCode } from "../services/merchantDashboardApi";
 export type { AdminPlatformSettings, PlatformBrandFont, PlatformNavigationItem, PlatformNavigationKey, PlatformSettings, UpdatePlatformSettingsInput } from "../services/platformSettingsApi";
+export type { PaymentConnection, PaymentConnectionActions, PaymentConnectionEnvironment, PaymentConnectionState } from "../contracts/paymentConnection";
 export {
   UiAdapterError,
   isUiError,
@@ -104,6 +106,7 @@ export interface UiAdapters {
   orders: typeof orderApi;
   merchantDashboard: typeof merchantDashboardApi;
   storeAssets: typeof storeAssetApi;
+  paymentConnections: typeof paymentConnectionApi;
 }
 
 export const productionUiAdapters: UiAdapters = {
@@ -137,4 +140,5 @@ export const productionUiAdapters: UiAdapters = {
   orders: orderApi,
   merchantDashboard: merchantDashboardApi,
   storeAssets: storeAssetApi,
+  paymentConnections: paymentConnectionApi,
 };

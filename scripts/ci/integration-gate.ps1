@@ -777,6 +777,8 @@ VALUES ('$longLegacyLabel.example.test', 'wp21-long-label', now(), now());
     $applicationDossierMigration = 'database/migrations/system/2026_08_27_000014_create_store_application_dossiers.php'
     $platformVisualIdentityMigration = 'database/migrations/system/2026_08_28_000015_add_platform_visual_identity.php'
     $platformAssetsMigration = 'database/migrations/system/2026_09_02_000016_create_platform_assets.php'
+    $paymentConnectionMigration = 'database/migrations/system/2026_09_07_000017_create_merchant_payment_connections.php'
+    Invoke-Compose exec -T backend php artisan migrate:rollback --path=$paymentConnectionMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$platformAssetsMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$platformVisualIdentityMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate:rollback --path=$applicationDossierMigration --force --no-interaction
@@ -872,6 +874,7 @@ VALUES (
     Invoke-Compose exec -T backend php artisan migrate --path=$applicationDossierMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$platformVisualIdentityMigration --force --no-interaction
     Invoke-Compose exec -T backend php artisan migrate --path=$platformAssetsMigration --force --no-interaction
+    Invoke-Compose exec -T backend php artisan migrate --path=$paymentConnectionMigration --force --no-interaction
     $adoptionResult = (Get-ComposeOutput -Arguments @(
         'exec', '-T', 'db', 'psql', '-U', $env:POSTGRES_USER, '-d', $env:POSTGRES_DB,
         '-tAc', "SELECT t.provisioning_status || ':' || r.schema_origin FROM tenants t JOIN provisioning_runs r ON r.tenant_id = t.id WHERE t.id = '$adoptionTenantId';"
