@@ -2,8 +2,8 @@
 
 | الحقل | القيمة |
 |---|---|
-| المرحلة | T2 نواة Backend وقاعدة البيانات — مكتملة بانتظار الاعتماد |
-| Base SHA | `74430e5294730620e5f71bf6fe2e101aa22ad852` |
+| المرحلة | T2 نواة Backend وقاعدة البيانات — مكتملة ومغلقة بانتظار اعتماد الانتقال إلى T3 |
+| Base SHA المدمج | `3d712a153d86615812635b4ffdccf12f7beb8d2c` |
 | الفرع | `codex/wp5-30a-marketing-campaign-core` |
 | المستودع الفرعي | `AbdullahHajer/Eoshop` |
 | القرار | [ADR 0043](../decisions/ADR-0043-server-owned-tenant-marketing-campaign-core.md) |
@@ -319,8 +319,8 @@ enum CampaignChannel: string
 
 - توليد 32 bytes عبر CSPRNG، Base64URL دون padding.
 - hash ثنائي/hex ثابت لـSHA-256 وفهرس unique.
-- ciphertext authenticated مع `kid` من إعدادات تشغيل منفصلة: current + previous.
-- خطة التدوير: نشر current جديد مع إبقاء previous، إعادة تشفير batches تحت القفل، قياس عدم بقاء old kid، ثم إزالة السابق.
+- ciphertext authenticated مع `kid` من إعدادات تشغيل مستقلة تمامًا عن `APP_KEY`. يلزم `MARKETING_LINK_TOKEN_KEY_CURRENT_ID` و`MARKETING_LINK_TOKEN_KEY_CURRENT` لإنشاء الروابط أو قراءتها، ويغلق المسار بالفشل عند غيابهما أو فساد المفتاح.
+- التدوير: انقل قيم current القديمة إلى `MARKETING_LINK_TOKEN_KEY_PREVIOUS_ID` و`MARKETING_LINK_TOKEN_KEY_PREVIOUS`، وانشر current جديدًا، ثم أعد تشفير batches تحت قفل السجل. بعد قياس عدم بقاء أي صف يحمل previous `kid` يمكن حذف متغيرَي previous؛ لا يزال current مستقلًا ومطلوبًا.
 - يمنع token/URL الكامل من application logs، query logging، audit metadata، exception context وanalytics. يسمح بتسجيل link UUID وآخر 8 أحرف من hash فقط عند الحاجة التشغيلية.
 
 ## 9. سجل الأحداث وRetention
@@ -373,7 +373,7 @@ enum CampaignChannel: string
 
 - T1 توثيق فقط؛ التراجع هو Revert لملفي الوثائق ولا توجد بيانات أو schema.
 - بعد T2 يكون التراجع الإنتاجي بتعطيل surface الجديد مع إبقاء الجداول، لا إسقاط تاريخ الحملة.
-- غياب schema لا يعطل storefront أو checkout. resolver لا يسمح لاستثناء tenant DB بأن يصبح 500.
+- غياب schema أو تعطل اتصال/استعلام tenant المتوقع لا يعطل storefront أو checkout؛ resolver يحوله إلى `/` دون معلمات أو attribution بدل 500. يبقى token غير الصحيح والنطاق غير المطابق 404.
 - لا إعادة توجيه خارجي في أي حالة، وfallback الوحيد `/`.
 
 ## 13. خارج النطاق والملفات المحمية
@@ -408,23 +408,26 @@ enum CampaignChannel: string
 
 ### التنفيذ الفعلي
 
-- أنشأت migration tenant رقم `_000011` سجل قفل الحصة والجداول الأربعة: `marketing_campaigns` و`marketing_channel_links` و`marketing_campaign_operations` و`marketing_campaign_events`، مع checks وقيود الاحتفاظ ومنع تعديل سجل الأحداث.
+- أنشأت migration tenant رقم `_000011` سجل قفل الحصة والجداول الأربعة: `marketing_campaigns` و`marketing_channel_links` و`marketing_campaign_operations` و`marketing_campaign_events`، مع checks وقيود الاحتفاظ ومنع تعديل سجل الأحداث. يقفل `down()` كل الجداول الموجودة بترتيب ثابت عبر `ACCESS EXCLUSIVE` داخل transaction قبل فحص البيانات أو الإسقاط، ويرفض التراجع عند وجود أي تاريخ محتفظ به.
 - أضيفت Enums وعقد تطبيع مغلق للحالة والهدف والقناة والجدولة والكوبون، مع `effectiveState` مشتقة زمنيًا بلا كتابة عند القراءة.
 - تنفذ `MarketingTenantAccess` التحقق من العضوية النشطة و`tenant.store.manage` وقفل المستأجر قبل الدخول إلى schema الخاصة به.
 - تنفذ الخدمات create/update ودورة الحياة وrevision conflict وidempotency receipts وحد 20 حملة غير مؤرشفة و8 روابط طوال عمر الحملة تحت الأقفال.
-- الرابط يستخدم token عشوائي 256-bit؛ يخزن SHA-256 للبحث وciphertext مع `key id`، ويدعم current/previous keys وإعادة التشفير.
-- `MarketingCampaignResolver` خدمة داخلية غير موصولة بمسار HTTP في T2. تقبل نطاق المتجر والوجهات الداخلية فقط، وتعيد 404 للرمز غير المعروف، أو `/` بلا UTM أو كوبون أو معرفات attribution عند فقد الأهلية.
+- الرابط يستخدم token عشوائي 256-bit؛ يخزن SHA-256 للبحث وciphertext مع `key id`، ويدعم current/previous keys وإعادة التشفير. لا يوجد fallback إلى `APP_KEY`، وغياب مفتاح التسويق المستقل أو فساده يفشل مغلقًا بلا رابط أو إيصال جزئي.
+- `MarketingCampaignResolver` خدمة داخلية غير موصولة بمسار HTTP في T2. تقبل نطاق المتجر والوجهات الداخلية فقط، وتعيد 404 للرمز غير الصحيح أو غير المعروف وللنطاق غير المطابق. أعطال اتصال/مخطط/استعلام tenant المتوقعة وفقد الأهلية تهبط إلى `/` بلا UTM أو كوبون أو معرفات attribution، ودون تسجيل token.
 - غياب migration يعيد `marketing_campaigns_not_ready` من الإدارة، بينما يبقى المتجر وcheckout خارج التأثير. rollback الفارغ يحافظ على جداول التجارة، ويرفض إسقاط أي تاريخ حملات موجود.
 
 ### الملفات المشتركة والنطاق
 
 - لم تتغير `docs/README.md` أو `docs/current-state.md` أو routes/providers أو Frontend أو `marketingBlocks`.
 - لم تتغير ملفات الطلبات أو الدفع أو المخزون، ولا أضيف Controller أو API عام.
-- ملفات التنفيذ محصورة في migration `_000011` وEnums/Exception وSupport وخدمات `App\\Services\\Marketing` و`config/marketing_campaigns.php` واختبار التكامل المركّز، إضافة إلى تحديث هذه الوثيقة.
+- ملفات التنفيذ محصورة في migration `_000011` وEnums/Exception وSupport وخدمات `App\\Services\\Marketing` و`config/marketing_campaigns.php` واختبار التكامل المركّز، إضافة إلى `backend/.env.example` بأسماء متغيرات المفاتيح فقط وتحديث وثيقتي WP/ADR.
 
 ### تحقق نقطة التوقف
 
-- PostgreSQL الحقيقي: 8 اختبارات تكامل ناجحة و81 assertion تغطي العزل والصلاحيات، lifecycle/revision/idempotency، الاشتقاق الزمني، سلامة الهدف والكوبون، fallback، token والتشفير والتدوير، retention/rollback، وتزامن مديرين مختلفين على حدود الحملة والرابط.
-- صورة Docker quality: Pint ناجح على 327 ملفًا، وLarastan ناجح على 282 ملفًا بلا أخطاء، واختبار Composer الأساسي ناجح (3 اختبارات و6 assertions).
-- `git diff --check` وSHA النهائي يثبتان في تقرير نقطة التوقف بعد Commit T2.
+- PostgreSQL الحقيقي المركّز: 11 اختبار تكامل ناجحًا و104 assertions تغطي العزل والصلاحيات، lifecycle/revision/idempotency، الاشتقاق الزمني، سلامة الهدف والكوبون، fallback لأعطال tenant المتوقعة، استقلال مفتاح التشفير وفشله المغلق، retention/rollback، وقفل `ACCESS EXCLUSIVE` المتزامن.
+- Repository safety: ناجحة عبر `scripts/ci/repository-gate.ps1`.
+- Frontend quality: ناجحة على Node 22.23.1 المطابق لـCI؛ TypeScript و501/501 اختبارًا والبناء الإنتاجي ناجحة، و`npm audit` أعاد صفر ثغرات.
+- Backend quality: Composer validate/audit ناجحان، وPint ناجح على 336 ملفًا، وLarastan ناجح على 291 ملفًا بلا أخطاء، واختبار Composer الأساسي ناجح (3 اختبارات و6 assertions).
+- Container integration: ناجحة كاملة؛ مجموعة PostgreSQL شملت 198 اختبارًا و2515 assertions، مع نجاح migration `_000011` واختبارات التبني والعزل وHTTP/worker/scheduler.
+- `git diff --check`: ناجح، ويثبت SHA النهائي في تقرير نقطة التوقف بعد Commit الإغلاق.
 - التوقف بعد Commit وPush إلى `AbdullahHajer/Eoshop` فقط؛ لا PR ولا Merge ولا بدء T3.

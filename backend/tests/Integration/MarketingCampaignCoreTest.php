@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
+use RuntimeException;
 use Tests\TestCase;
 use Throwable;
 
@@ -59,6 +60,12 @@ class MarketingCampaignCoreTest extends TestCase
         parent::setUp();
         $this->seed(IdentitySeeder::class);
         $this->originalConfig = (array) config('marketing_campaigns');
+        config([
+            'marketing_campaigns.link_token.current_key_id' => 'test-current',
+            'marketing_campaigns.link_token.current_key' => 'base64:'.base64_encode(str_repeat('t', 32)),
+            'marketing_campaigns.link_token.previous_key_id' => null,
+            'marketing_campaigns.link_token.previous_key' => null,
+        ]);
     }
 
     protected function tearDown(): void
@@ -270,6 +277,37 @@ class MarketingCampaignCoreTest extends TestCase
         }
     }
 
+    public function test_resolver_fails_safe_for_missing_or_broken_tenant_campaign_storage(): void
+    {
+        [$tenant, $owner, $host] = $this->readyTenant('campaign-resolver-storage');
+        $campaigns = app(MarketingCampaignService::class);
+        $campaign = $campaigns->create($tenant, $owner, $this->campaignPayload(), (string) Str::uuid());
+        $campaign = $campaigns->activate($tenant, $owner, $campaign['id'], 1);
+        $link = app(MarketingCampaignLinkService::class)->create(
+            $tenant, $owner, $campaign['id'], 'google', (string) Str::uuid(),
+        );
+        $token = basename((string) parse_url($link['url'], PHP_URL_PATH));
+        $resolver = app(MarketingCampaignResolver::class);
+
+        $tenant->run(fn () => DB::statement(
+            'ALTER TABLE marketing_channel_links RENAME COLUMN token_hash TO unavailable_token_hash',
+        ));
+        try {
+            $broken = $resolver->resolve($tenant->refresh(), $host, $token);
+            $this->assertSafeCampaignFallback($broken);
+        } finally {
+            $tenant->run(fn () => DB::statement(
+                'ALTER TABLE marketing_channel_links RENAME COLUMN unavailable_token_hash TO token_hash',
+            ));
+        }
+
+        $tenant->run(fn () => DB::statement('DROP TABLE marketing_campaign_registry'));
+        $missing = $resolver->resolve($tenant->refresh(), $host, $token);
+        $this->assertSafeCampaignFallback($missing);
+        $this->assertSame(404, $resolver->resolve($tenant->refresh(), 'wrong.example.test', $token)['status']);
+        $this->assertSame(404, $resolver->resolve($tenant->refresh(), $host, 'not-a-valid-token')['status']);
+    }
+
     public function test_link_replay_digest_ciphertext_and_key_rotation(): void
     {
         [$tenant, $owner] = $this->readyTenant('campaign-token');
@@ -319,6 +357,119 @@ class MarketingCampaignCoreTest extends TestCase
                 $this->addToAssertionCount(1);
             }
         });
+    }
+
+    public function test_link_encryption_key_is_independent_and_fails_closed(): void
+    {
+        [$tenant, $owner] = $this->readyTenant('campaign-key-required');
+        $campaign = app(MarketingCampaignService::class)->create(
+            $tenant, $owner, $this->campaignPayload(), (string) Str::uuid(),
+        );
+        $links = app(MarketingCampaignLinkService::class);
+
+        foreach ([null, 'base64:not-valid-key-material'] as $key) {
+            config([
+                'marketing_campaigns.link_token.current_key_id' => 'required-test-key',
+                'marketing_campaigns.link_token.current_key' => $key,
+            ]);
+            try {
+                $links->create($tenant, $owner, $campaign['id'], 'other', (string) Str::uuid());
+                $this->fail('Link creation must fail closed without an independent valid marketing key.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('marketing link token key', strtolower($exception->getMessage()));
+            }
+        }
+
+        $tenant->run(function (): void {
+            $this->assertSame(0, DB::table('marketing_channel_links')->count());
+            $this->assertSame(0, DB::table('marketing_campaign_operations')
+                ->where('operation_kind', 'channel_link.create')->count());
+        });
+    }
+
+    public function test_down_waits_for_concurrent_writes_then_refuses_retained_history(): void
+    {
+        if (! function_exists('pcntl_fork') || ! function_exists('stream_socket_pair')) {
+            $this->fail('The database gate requires pcntl and socket pairs for migration locking.');
+        }
+        [$tenant, $owner] = $this->readyTenant('campaign-rollback-lock');
+        $schema = (string) $tenant->database()->getName();
+        $centralName = (string) config('tenancy.database.central_connection');
+        $connection = (array) config("database.connections.{$centralName}");
+        $connection['search_path'] = $schema;
+        $readerName = 'campaign_rollback_reader';
+        $writerName = 'campaign_rollback_writer';
+        config([
+            "database.connections.{$readerName}" => $connection,
+            "database.connections.{$writerName}" => $connection,
+        ]);
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            $this->fail('Unable to create the migration locking socket.');
+        }
+        [$parentSocket, $childSocket] = $sockets;
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            $this->fail('Unable to fork the migration locking worker.');
+        }
+        if ($pid === 0) {
+            fclose($parentSocket);
+            DB::purge('tenant');
+            DB::purge($centralName);
+            DB::setDefaultConnection($readerName);
+            fwrite($childSocket, 'ready');
+            fread($childSocket, 1);
+            try {
+                $migration = require database_path('migrations/tenant/2026_09_07_000011_create_marketing_campaign_core.php');
+                $migration->down();
+                $result = 'dropped';
+            } catch (RuntimeException $exception) {
+                $result = str_contains($exception->getMessage(), 'Refusing to erase retained')
+                    ? 'refused'
+                    : 'error:'.$exception->getMessage();
+            } catch (Throwable $exception) {
+                $result = 'error:'.$exception::class.':'.$exception->getMessage();
+            }
+            fwrite($childSocket, $result);
+            fclose($childSocket);
+            exit(0);
+        }
+
+        fclose($childSocket);
+        $this->assertSame('ready', fread($parentSocket, 5));
+        $writer = DB::connection($writerName);
+        $writer->beginTransaction();
+        $campaignId = (string) Str::uuid();
+        $now = now('UTC');
+        $writer->table('marketing_campaigns')->insert([
+            'id' => $campaignId,
+            'name' => 'Concurrent retained campaign',
+            'objective' => 'traffic',
+            'state' => 'draft',
+            'target_type' => 'store',
+            'target_value' => null,
+            'revision' => 1,
+            'created_by_ulid' => (string) $owner->getKey(),
+            'updated_by_ulid' => (string) $owner->getKey(),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        fwrite($parentSocket, '1');
+        usleep(250_000);
+        $writer->commit();
+        $result = (string) stream_get_contents($parentSocket);
+        fclose($parentSocket);
+        pcntl_waitpid($pid, $status);
+        $this->assertTrue(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);
+        $this->assertSame('refused', $result, $result);
+        $this->assertSame(1, DB::connection($writerName)->table('marketing_campaigns')
+            ->where('id', $campaignId)->count());
+        DB::purge($readerName);
+        DB::purge($writerName);
+        config([
+            "database.connections.{$readerName}" => null,
+            "database.connections.{$writerName}" => null,
+        ]);
     }
 
     public function test_empty_core_rollback_preserves_commerce_tables_and_fails_management_safely(): void
@@ -510,6 +661,16 @@ class MarketingCampaignCoreTest extends TestCase
         $this->userIds[] = (string) $user->getKey();
 
         return $user;
+    }
+
+    /** @param array{status: int, location: ?string, linkId: ?string, campaignId: ?string, eligible: bool} $decision */
+    private function assertSafeCampaignFallback(array $decision): void
+    {
+        $this->assertSame(302, $decision['status']);
+        $this->assertSame('/', $decision['location']);
+        $this->assertNull($decision['linkId']);
+        $this->assertNull($decision['campaignId']);
+        $this->assertFalse($decision['eligible']);
     }
 
     /** @return array<string, mixed> */

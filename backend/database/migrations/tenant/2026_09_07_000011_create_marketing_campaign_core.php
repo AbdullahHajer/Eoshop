@@ -96,19 +96,37 @@ return new class extends Migration
 
     public function down(): void
     {
-        foreach (['marketing_campaign_events', 'marketing_channel_links', 'marketing_campaign_operations', 'marketing_campaigns'] as $table) {
-            if (Schema::hasTable($table) && DB::table($table)->exists()) {
-                throw new RuntimeException('Refusing to erase retained marketing campaign history.');
+        DB::transaction(function (): void {
+            $tables = [
+                'marketing_campaign_registry',
+                'marketing_campaigns',
+                'marketing_channel_links',
+                'marketing_campaign_operations',
+                'marketing_campaign_events',
+            ];
+            $existingTables = [];
+            foreach ($tables as $table) {
+                if (Schema::hasTable($table)) {
+                    $existingTables[] = $table;
+                }
             }
-        }
+            foreach ($existingTables as $table) {
+                DB::statement(sprintf('LOCK TABLE "%s" IN ACCESS EXCLUSIVE MODE', $table));
+            }
+            foreach (['marketing_campaign_events', 'marketing_channel_links', 'marketing_campaign_operations', 'marketing_campaigns'] as $table) {
+                if (in_array($table, $existingTables, true) && DB::table($table)->exists()) {
+                    throw new RuntimeException('Refusing to erase retained marketing campaign history.');
+                }
+            }
 
-        DB::unprepared('DROP FUNCTION IF EXISTS marketing_campaign_prevent_event_mutation() CASCADE');
-        DB::unprepared('DROP FUNCTION IF EXISTS marketing_campaign_prevent_retained_delete() CASCADE');
-        Schema::dropIfExists('marketing_campaign_events');
-        Schema::dropIfExists('marketing_campaign_operations');
-        Schema::dropIfExists('marketing_channel_links');
-        Schema::dropIfExists('marketing_campaigns');
-        Schema::dropIfExists('marketing_campaign_registry');
+            DB::unprepared('DROP FUNCTION IF EXISTS marketing_campaign_prevent_event_mutation() CASCADE');
+            DB::unprepared('DROP FUNCTION IF EXISTS marketing_campaign_prevent_retained_delete() CASCADE');
+            Schema::dropIfExists('marketing_campaign_events');
+            Schema::dropIfExists('marketing_campaign_operations');
+            Schema::dropIfExists('marketing_channel_links');
+            Schema::dropIfExists('marketing_campaigns');
+            Schema::dropIfExists('marketing_campaign_registry');
+        });
     }
 
     private function addChecks(): void
